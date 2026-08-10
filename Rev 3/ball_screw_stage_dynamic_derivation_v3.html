@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dynamic Modeling of a Precision Ball Screw Drive Stage</title>
+<script>
+window.MathJax = {tex: {inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]']]}, svg: {fontCache: 'global'}};
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+:root { --bg:#eef2f5; --card:#fff; --text:#20262d; --muted:#65717d; --line:#d9e0e6; --accent:#1f6f8b; --soft:#f4f8fa; --code:#17212b; --assumed:#fff0b8; --assumed-line:#d49b00; }
+html[data-theme="dark"] { --bg:#11171d; --card:#182129; --text:#e9eef2; --muted:#aab5be; --line:#33414c; --accent:#73c2df; --soft:#202c35; --code:#0d1217; --assumed:#5b4810; --assumed-line:#f1bf36; }
+* { box-sizing:border-box; } html { scroll-behavior:smooth; }
+body { margin:0; background:var(--bg); color:var(--text); font:16px/1.67 Inter,Segoe UI,system-ui,sans-serif; }
+.topbar { position:sticky; top:0; z-index:20; display:flex; gap:.75rem; align-items:center; padding:.65rem 1rem; background:color-mix(in srgb,var(--card) 94%,transparent); border-bottom:1px solid var(--line); backdrop-filter:blur(9px); }
+.topbar .name { font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:auto; }
+button { color:var(--text); background:var(--soft); border:1px solid var(--line); border-radius:7px; padding:.42rem .7rem; cursor:pointer; }
+.layout { display:grid; grid-template-columns:280px minmax(0,1fr); gap:1.5rem; max-width:1510px; margin:0 auto; padding:1.5rem; }
+nav { position:sticky; top:4.4rem; align-self:start; max-height:calc(100vh - 5.5rem); overflow:auto; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:1rem; }
+nav .caption { font-size:.78rem; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:.6rem; }
+nav a { display:block; color:var(--muted); text-decoration:none; border-left:2px solid transparent; padding:.24rem .35rem; font-size:.88rem; } nav a:hover { color:var(--accent); border-color:var(--accent); } nav .toc-level-3 { padding-left:1.15rem; font-size:.81rem; }
+article { width:100%; max-width:1100px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:clamp(1.25rem,4vw,3.7rem); box-shadow:0 12px 32px rgba(22,36,46,.07); }
+h1,h2,h3,h4 { line-height:1.24; scroll-margin-top:5rem; } h1 { font-size:clamp(2rem,4vw,3rem); margin-top:0; } h2 { margin-top:2.8rem; padding-bottom:.38rem; border-bottom:1px solid var(--line); } h3 { margin-top:2rem; color:var(--accent); }
+p { margin:.85rem 0; } a { color:var(--accent); } strong { color:var(--text); } hr { border:0; border-top:1px solid var(--line); margin:2rem 0; }
+blockquote { margin:1.2rem 0; padding:.75rem 1rem; background:var(--soft); border-left:4px solid var(--accent); border-radius:0 8px 8px 0; color:var(--muted); }
+.table-wrap { overflow-x:auto; margin:1.2rem 0; } table { width:100%; border-collapse:collapse; font-size:.92rem; } th,td { border:1px solid var(--line); padding:.55rem .65rem; vertical-align:top; } th { background:var(--soft); }
+.parameter-input { width:100%; min-width:7rem; padding:.38rem .48rem; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:5px; font:inherit; font-variant-numeric:tabular-nums; }
+.parameter-input:focus { outline:2px solid var(--accent); outline-offset:1px; }
+.assumed-input { background:var(--assumed); border-color:var(--assumed-line); font-weight:700; }
+.edit-note { margin:0 0 1.2rem; padding:.7rem .9rem; border:1px solid var(--line); border-radius:8px; background:var(--soft); color:var(--muted); font-size:.86rem; }
+.save-status { display:inline-block; margin-left:.55rem; padding:.14rem .45rem; border-radius:999px; border:1px solid var(--line); background:var(--card); color:var(--muted); font-weight:650; }
+.save-status.ok { color:#176a55; border-color:#4fa88e; } .save-status.warn { color:#9b5b00; border-color:#d49b00; }
+.assumed-swatch { display:inline-block; width:1.1rem; height:.8rem; margin:0 .25rem; vertical-align:middle; background:var(--assumed); border:1px solid var(--assumed-line); border-radius:3px; }
+.live-transfer-panel { margin:1.2rem 0 1.8rem; padding:1rem; border:2px solid var(--accent); border-radius:10px; background:var(--soft); }
+.live-transfer-panel .live-summary { margin:0 0 .7rem; color:var(--muted); font-size:.9rem; font-variant-numeric:tabular-nums; }
+.live-plot-grid { display:grid; grid-template-columns:1fr 1fr; gap:.85rem; }
+.live-plot-card { min-width:0; padding:.6rem; border:1px solid var(--line); border-radius:8px; background:var(--card); }
+.live-plot-card h4 { margin:.1rem 0 .35rem; color:var(--accent); }
+.live-plot-card svg { display:block; width:100%; height:auto; color:var(--text); }
+details { margin:1rem 0; border:1px solid var(--line); border-radius:9px; background:color-mix(in srgb,var(--soft) 45%,var(--card)); padding:.2rem .9rem .8rem; } details details { margin-left:.45rem; } summary { cursor:pointer; font-weight:700; padding:.75rem .1rem; color:var(--accent); }
+pre { overflow:auto; background:var(--code); color:#e8edf2; border-radius:9px; padding:1rem; font-size:.87rem; } code { font-family:Cascadia Code,Consolas,monospace; } p code,li code,td code { background:var(--soft); border:1px solid var(--line); border-radius:4px; padding:.1rem .28rem; }
+.display-math { overflow-x:auto; padding:.5rem 0; } img { display:block; max-width:100%; height:auto; margin:1.3rem auto; border-radius:6px; }
+.footer { color:var(--muted); font-size:.78rem; margin-top:3rem; padding-top:1rem; border-top:1px solid var(--line); }
+@media (max-width:920px) { .layout { grid-template-columns:1fr; padding:.7rem; } nav { position:relative; top:auto; max-height:18rem; } article { padding:1.2rem; } .hide-small { display:none; } .live-plot-grid { grid-template-columns:1fr; } }
+@media print { .topbar,nav { display:none; } body { background:white; } .layout { display:block; padding:0; } article { max-width:none; border:0; box-shadow:none; } details { break-inside:avoid; } }
+</style>
+</head>
+<body>
+<div class="topbar"><span class="name">Dynamic Modeling of a Precision Ball Screw Drive Stage</span><button onclick="setDetails(true)">Expand derivations</button><button onclick="setDetails(false)">Collapse</button><button onclick="saveParameterInputs()">Save variables</button><button onclick="saveEditedHtml()">Save HTML copy</button><button onclick="resetParameterInputs()">Reset inputs</button><button class="hide-small" onclick="toggleTheme()">Theme</button><button class="hide-small" onclick="window.print()">Print</button></div>
+<div class="layout"><nav><div class="caption">On this page</div><a class="toc-level-2" href="#0-method">0. Method</a><a class="toc-level-2" href="#1-full-degree-of-freedom-enumeration">1. Full Degree-of-Freedom Enumeration</a><a class="toc-level-3" href="#1-1-topology">1.1 Topology</a><a class="toc-level-3" href="#1-2-coordinates">1.2 Coordinates</a><a class="toc-level-3" href="#1-3-elements">1.3 Elements</a><a class="toc-level-2" href="#2-nut-interface-kinematics">2. Nut Interface Kinematics</a><a class="toc-level-3" href="#2-1-two-distinct-nut-compliances">2.1 Two distinct nut compliances</a><a class="toc-level-2" href="#3-full-equations-of-motion">3. Full Equations of Motion</a><a class="toc-level-3" href="#drive-torque-switchable">Drive torque (switchable)</a><a class="toc-level-3" href="#torsional-branch">Torsional branch</a><a class="toc-level-3" href="#axial-branch">Axial branch</a><a class="toc-level-3" href="#structural-observations">Structural observations</a><a class="toc-level-2" href="#4-common-footing-parameter-table">4. Common-Footing Parameter Table</a><a class="toc-level-3" href="#4-0-executable-defaults">4.0 Executable defaults</a><a class="toc-level-3" href="#4-1-compliance-budget-closure-check-does-not-close">4.1 Compliance budget closure check — does not close</a><a class="toc-level-2" href="#5-reduction">5. Reduction</a><a class="toc-level-3" href="#5-1-element-by-element">5.1 Element-by-element</a><a class="toc-level-3" href="#5-2-discarded-mode-inventory">5.2 Discarded mode inventory</a><a class="toc-level-3" href="#5-3-derived-reduced-model">5.3 Derived reduced model</a><a class="toc-level-3" href="#5-4-linearized-modal-form">5.4 Linearized modal form</a><a class="toc-level-2" href="#6-verification-and-residuals">6. Verification and Residuals</a><a class="toc-level-3" href="#6-1-full-versus-reduced-protocol">6.1 Full-versus-reduced protocol</a><a class="toc-level-3" href="#6-2-position-dependence-prediction">6.2 Position dependence prediction</a><a class="toc-level-3" href="#6-3-fallback-register">6.3 Fallback register</a><a class="toc-level-2" href="#7-friction-models">7. Friction Models</a><a class="toc-level-3" href="#7-1-shared-stribeck-attractor">7.1 Shared Stribeck attractor</a><a class="toc-level-3" href="#7-2-generalized-maxwell-slip">7.2 Generalized Maxwell-Slip</a><a class="toc-level-3" href="#7-3-lugre-and-elastoplastic-extension">7.3 LuGre and elastoplastic extension</a><a class="toc-level-3" href="#7-4-comparison">7.4 Comparison</a><a class="toc-level-2" href="#8-friction-site-variants">8. Friction Site Variants</a><a class="toc-level-2" href="#9-identifiability">9. Identifiability</a><a class="toc-level-2" href="#10-known-limitations">10. Known Limitations</a><a class="toc-level-2" href="#nomenclature">Nomenclature</a></nav><article><div class="edit-note"><span class="assumed-swatch"></span>Amber inputs are unidentified assumptions. Values auto-save to browser storage and the page URL; “Save HTML copy” embeds them in a chosen HTML file. The live transfer panel recalculates immediately. Publication SVGs are regenerated only by the Python build.<span id="parameter-save-status" class="save-status">Loading values…</span></div><h1 id="dynamic-modeling-of-a-precision-ball-screw-drive-stage">Dynamic Modeling of a Precision Ball Screw Drive Stage</h1>
+<p><strong>Revision 3.</strong> Full decomposed model, followed by a derived reduction.</p>
+<p>Revision 2 asserted a lumped two-mass model as a modeling assumption. This revision builds the decomposed model first and derives the reduction as a result, with stated criteria and quantified residuals.</p>
+<blockquote><strong>Rendered-document guide.</strong> The <a href="Analytical_derivation_and_responses_v3.html">comprehensive analytical derivation and executed responses</a> is the companion to this model specification. Amber editable cells in either rendered HTML are provisional assumptions. Browser edits persist locally and can be saved into an HTML copy; static plots are regenerated only by the single <code>build_model_documentation.py</code> builder.</blockquote>
+<hr>
+<h2 id="0-method">0. Method</h2>
+<p>Three stages, in order.</p>
+<ol><li><strong>Enumerate.</strong> Every distinguishable inertia, compliance and dissipation site, with no collapses.</li><li><strong>Reduce.</strong> Apply three independent criteria element by element. An element is removed only if it fails all three.</li><li><strong>Verify.</strong> Quantify what each collapse discards, and record a fallback for each.</li></ol>
+<div class="table-wrap"><table><thead><tr><th style="text-align:left">#</th><th style="text-align:left">Criterion</th><th style="text-align:left">Question</th><th style="text-align:left">Governs</th></tr></thead><tbody><tr><td style="text-align:left">C1</td><td style="text-align:left">Series compliance share</td><td style="text-align:left">Does its deflection contribute meaningfully to the lost-motion budget?</td><td style="text-align:left">DC accuracy</td></tr><tr><td style="text-align:left">C2</td><td style="text-align:left">Mode separation</td><td style="text-align:left">Does the mode it creates lie above the excitation bandwidth?</td><td style="text-align:left">Dynamics</td></tr><tr><td style="text-align:left">C3</td><td style="text-align:left">Structural identifiability</td><td style="text-align:left">Does removing it merge two friction sites into one?</td><td style="text-align:left">Parameter transfer</td></tr></tbody></table></div>
+<p>C1 and C2 are independent. A stiff but light element can resonate in band while contributing negligible compliance. A soft element far above the band still contributes DC error. C3 is independent of both and is the criterion that retains the axial degree of freedom.</p>
+<hr>
+<h2 id="1-full-degree-of-freedom-enumeration">1. Full Degree-of-Freedom Enumeration</h2>
+<p>The intended scope was eight degrees of freedom. Honest enumeration produces ten. The two extra are the screw sections beyond the nut, retained for completeness and first in line for removal.</p>
+<h3 id="1-1-topology">1.1 Topology</h3>
+<pre><code class="language-"> TORSIONAL BRANCH                            AXIAL BRANCH
+ ================                            ============
+
+  [theta_cmd]                                  ground
+      |                                          |
+   (k_m nonlinear + detent)                   (k_brg)
+      v                                          v
+  q1: theta_m   J_m  --(T_mb to gnd)         q6: u_b   m_b
+      |                                          |
+   (k_c1) || hub-1 micro-slip                 (k_sha)
+      v                                          v
+  q2: theta_c   J_c                           q7: u_e   m_e
+      |                                          |
+   (k_c2) || hub-2 micro-slip                 (k_shb)
+      v                                          v
+  q3: theta_s1  J_s1 --(T_brg to gnd)         q8: u_f   m_f
+      |
+   (k_th_a)
+      v
+  q4: theta_s2  J_s2 &lt;==[ NUT INTERFACE ]==&gt;  q9: u_n   m_n
+      |         delta_n = u_n - u_e - r*theta_s2      |
+   (k_th_b)     F_n = k_ball * delta_n            (k_mnt)
+      v         T_f,n = rolling friction              v
+  q5: theta_s3  J_s3                          q10: x_s  m_s
+                                                     |
+                                              (guideway friction)
+                                                     v
+                                                  ground</code></pre>
+<p>The two branches couple <strong>only</strong> at the nut interface, and only through \(r = L/2\pi = 1.592\times10^{-4}\) m/rad. The smallness of this factor is what ultimately permits the reduction.</p>
+<h3 id="1-2-coordinates">1.2 Coordinates</h3>
+<div class="table-wrap"><table><thead><tr><th style="text-align:left">#</th><th style="text-align:left">Symbol</th><th style="text-align:left">Body</th><th style="text-align:left">Domain</th></tr></thead><tbody><tr><td style="text-align:left">q1</td><td style="text-align:left">\(\theta_m\)</td><td style="text-align:left">Motor rotor</td><td style="text-align:left">torsional</td></tr><tr><td style="text-align:left">q2</td><td style="text-align:left">\(\theta_c\)</td><td style="text-align:left">Coupling body (lattice)</td><td style="text-align:left">torsional</td></tr><tr><td style="text-align:left">q3</td><td style="text-align:left">\(\theta_{s1}\)</td><td style="text-align:left">Screw, drive end</td><td style="text-align:left">torsional</td></tr><tr><td style="text-align:left">q4</td><td style="text-align:left">\(\theta_{s2}\)</td><td style="text-align:left">Screw, at nut engagement</td><td style="text-align:left">torsional</td></tr><tr><td style="text-align:left">q5</td><td style="text-align:left">\(\theta_{s3}\)</td><td style="text-align:left">Screw, beyond nut</td><td style="text-align:left">torsional</td></tr><tr><td style="text-align:left">q6</td><td style="text-align:left">\(u_b\)</td><td style="text-align:left">Screw, at support bearing</td><td style="text-align:left">axial</td></tr><tr><td style="text-align:left">q7</td><td style="text-align:left">\(u_e\)</td><td style="text-align:left">Screw, at nut engagement</td><td style="text-align:left">axial</td></tr><tr><td style="text-align:left">q8</td><td style="text-align:left">\(u_f\)</td><td style="text-align:left">Screw, far end</td><td style="text-align:left">axial</td></tr><tr><td style="text-align:left">q9</td><td style="text-align:left">\(u_n\)</td><td style="text-align:left">Ball nut body</td><td style="text-align:left">axial</td></tr><tr><td style="text-align:left">q10</td><td style="text-align:left">\(x_s\)</td><td style="text-align:left">Stage assembly</td><td style="text-align:left">axial</td></tr></tbody></table></div>
+<p>Torsion and axial extension of a shaft are elastically decoupled, so \(\theta_{s2}\) and \(u_e\) are independent coordinates on the same physical body.</p>
+<p><img src="rendered_assets/kinematic_diagram.svg" alt="Full ten-DOF topology and its two-DOF band-limited reduction"></p>
+<p>\(x_{cmd}\) is an input, not a mechanical DOF. Friction-law memory variables are internal constitutive states and likewise do not change the mechanical DOF count.</p>
+<h3 id="1-3-elements">1.3 Elements</h3>
+<p><strong>Torsional compliances:</strong> \(k_m\) magnetic, \(k_{c1}\) and \(k_{c2}\) coupling half-stiffnesses, \(k_{\theta a}\) screw torsion drive-end to nut, \(k_{\theta b}\) screw torsion nut to far end.</p>
+<p><strong>Axial compliances:</strong> \(k_{brg}\) support bearing pair, \(k_{sha}\) screw extension bearing to nut, \(k_{shb}\) screw extension nut to far end, \(k_{ball}\) ball-raceway normal contact, \(k_{mnt}\) nut body and nut-to-stage mounting.</p>
+<p><strong>Friction sites (six):</strong></p>
+<div class="table-wrap"><table><thead><tr><th style="text-align:left">Site</th><th style="text-align:left">Symbol</th><th style="text-align:left">Driving velocity</th><th style="text-align:left">Acts between</th></tr></thead><tbody><tr><td style="text-align:left">Motor bearings</td><td style="text-align:left">\(T_{mb}\)</td><td style="text-align:left">\(\dot\theta_m\)</td><td style="text-align:left">rotor, ground</td></tr><tr><td style="text-align:left">Coupling hub 1 micro-slip</td><td style="text-align:left">\(T_{h1}\)</td><td style="text-align:left">\(\dot\theta_m - \dot\theta_c\)</td><td style="text-align:left">rotor, coupling</td></tr><tr><td style="text-align:left">Coupling hub 2 micro-slip</td><td style="text-align:left">\(T_{h2}\)</td><td style="text-align:left">\(\dot\theta_c - \dot\theta_{s1}\)</td><td style="text-align:left">coupling, screw</td></tr><tr><td style="text-align:left">Support bearings</td><td style="text-align:left">\(T_{brg}\)</td><td style="text-align:left">\(\dot\theta_{s1}\)</td><td style="text-align:left">screw, ground</td></tr><tr><td style="text-align:left">Ball nut rolling</td><td style="text-align:left">\(T_{f,n}\)</td><td style="text-align:left">\(\dot\theta_{s2}\)</td><td style="text-align:left">screw, nut</td></tr><tr><td style="text-align:left">Linear guideways</td><td style="text-align:left">\(F_{f,g}\)</td><td style="text-align:left">\(\dot x_s\)</td><td style="text-align:left">stage, ground</td></tr></tbody></table></div>
+<p>The two hub micro-slip sites exist only because the coupling was decomposed. They correspond to set-screw hub slip on the lattice coupling and are invisible in any lumped drivetrain model.</p>
+<hr>
+<h2 id="2-nut-interface-kinematics">2. Nut Interface Kinematics</h2>
+<p>The thread imposes a nominal relation between screw rotation and nut advance. The ball contact compliance is the deviation from it. Define</p>
+<div class="display-math">\[\delta_n = u_n - u_e - r\,\theta_{s2}, \qquad F_n = k_{ball}\,\delta_n + c_{ball}\,\dot\delta_n\]</div>
+<p>By virtual work, \(\partial\delta_n/\partial u_n = +1\), \(\partial\delta_n/\partial u_e = -1\), \(\partial\delta_n/\partial\theta_{s2} = -r\). Generalized forces are \(-F_n\) on \(u_n\), \(+F_n\) on \(u_e\), \(+rF_n\) on \(\theta_{s2}\).</p>
+<h3 id="2-1-two-distinct-nut-compliances">2.1 Two distinct nut compliances</h3>
+<p>Decomposition resolves the Revision 2 double-counting question, and resolves it differently.</p>
+<p>\(k_{ball}\) is the <strong>normal-load Hertzian axial stiffness</strong> of the ball-raceway contact. It sits in the axial load path and is conservative.</p>
+<p>\(\sigma_{0,n}\), the presliding stiffness of the nut friction model, is the <strong>tangential traction compliance</strong> of the rolling contact. By Mindlin contact theory these are related but distinct, and they act on different coordinates: \(k_{ball}\) on \(\delta_n\), the friction on \(\dot\theta_{s2}\).</p>
+<p>They are therefore not the same element and there is no double counting. Revision 2 resolved this by convention, defining \(k_{ax}\) as a sliding-regime stiffness. That convention is unnecessary and should be dropped.</p>
+<hr>
+<h2 id="3-full-equations-of-motion">3. Full Equations of Motion</h2>
+<h3 id="drive-torque-switchable">Drive torque (switchable)</h3>
+<div class="display-math">\[T_{mag} = (1-\lambda_{mag})\,k_m(\theta_{cmd}-\theta_m) + \lambda_{mag}\,T_{max}\sin\!\big(N_r(\theta_{cmd}-\theta_m)\big) - \lambda_{det}\,T_{det}\sin\!\big(4N_r\theta_m\big)\]</div>
+<p>with \(k_m = N_r T_{max}\), \(N_r = 50\) for a 1.8° motor, \(\lambda_{mag},\lambda_{det}\in\{0,1\}\).</p>
+<p>The executable nonlinear stepping cases use \(\lambda_{mag}=1\) and \(\lambda_{det}=0\). Detent is disabled because no measured or sourced \(T_{det}\) amplitude and equilibrium phase are available. The approximately 226 Hz magnetic/drivetrain pole is still present, but the provisional \(\zeta_m=0.50\) strongly suppresses its visible Bode peak; the analytical companion includes an explicit damping/output sensitivity plot.</p>
+<h3 id="torsional-branch">Torsional branch</h3>
+<p><strong>q1, rotor</strong></p>
+<div class="display-math">\[J_m\ddot\theta_m = T_{mag} - c_{\theta m}\dot\theta_m - k_{c1}(\theta_m-\theta_c) - c_{c1}(\dot\theta_m-\dot\theta_c) - T_{h1} - T_{mb}\]</div>
+<p>where \(c_{\theta m}=2\zeta_m\sqrt{k_mJ_\Sigma}\). This effective current-regulator/back-EMF damping is the inherited Revision 2 repair for the unrealistic sustained command ringing. Its executed \(\zeta_m\) remains a highlighted assumption until identified electrically.</p>
+<p><strong>q2, coupling</strong></p>
+<div class="display-math">\[J_c\ddot\theta_c = k_{c1}(\theta_m-\theta_c) + c_{c1}(\dot\theta_m-\dot\theta_c) + T_{h1} - k_{c2}(\theta_c-\theta_{s1}) - c_{c2}(\dot\theta_c-\dot\theta_{s1}) - T_{h2}\]</div>
+<p><strong>q3, screw drive end</strong></p>
+<div class="display-math">\[J_{s1}\ddot\theta_{s1} = k_{c2}(\theta_c-\theta_{s1}) + c_{c2}(\dot\theta_c-\dot\theta_{s1}) + T_{h2} - k_{\theta a}(\theta_{s1}-\theta_{s2}) - T_{brg}\]</div>
+<p><strong>q4, screw at nut</strong></p>
+<div class="display-math">\[J_{s2}\ddot\theta_{s2} = k_{\theta a}(\theta_{s1}-\theta_{s2}) - k_{\theta b}(\theta_{s2}-\theta_{s3}) + r\,F_n - T_{f,n}\]</div>
+<p><strong>q5, screw beyond nut</strong></p>
+<div class="display-math">\[J_{s3}\ddot\theta_{s3} = k_{\theta b}(\theta_{s2}-\theta_{s3})\]</div>
+<h3 id="axial-branch">Axial branch</h3>
+<p><strong>q6, screw at bearing</strong></p>
+<div class="display-math">\[m_b\ddot u_b = -k_{brg}u_b - c_{brg}\dot u_b + k_{sha}(u_e-u_b) + c_{sha}(\dot u_e-\dot u_b)\]</div>
+<p><strong>q7, screw at nut</strong></p>
+<div class="display-math">\[m_e\ddot u_e = -k_{sha}(u_e-u_b) - c_{sha}(\dot u_e-\dot u_b) + k_{shb}(u_f-u_e) + F_n\]</div>
+<p><strong>q8, screw far end</strong></p>
+<div class="display-math">\[m_f\ddot u_f = -k_{shb}(u_f-u_e)\]</div>
+<p><strong>q9, nut body</strong></p>
+<div class="display-math">\[m_n\ddot u_n = -F_n - k_{mnt}(u_n-x_s) - c_{mnt}(\dot u_n-\dot x_s)\]</div>
+<p><strong>q10, stage</strong></p>
+<div class="display-math">\[m_s\ddot x_s = k_{mnt}(u_n-x_s) + c_{mnt}(\dot u_n-\dot x_s) - F_{f,g}\]</div>
+<h3 id="structural-observations">Structural observations</h3>
+<p>The mass matrix is diagonal in this coordinate set. The stiffness matrix is tridiagonal within each branch, with exactly one off-branch coupling, at \((q4,q7)\) and \((q4,q9)\), arising from \(r\theta_{s2}\) in \(\delta_n\). The system is a chain, not a general network. That structure is what makes element-by-element reduction legitimate.</p>
+<hr>
+<h2 id="4-common-footing-parameter-table">4. Common-Footing Parameter Table</h2>
+<h3 id="4-0-executable-defaults">4.0 Executable defaults</h3>
+<p>The source estimates below remain the provenance record. The following cells show exactly which values the executable model uses. Highlighted cells are deliberately visible assumptions, including the values needed to close the stiffness and inertia budgets.</p>
+<div class="table-wrap"><table><thead><tr><th style="text-align:left">Parameter</th><th style="text-align:right">Executed value</th><th style="text-align:left">Unit</th></tr></thead><tbody><tr><td style="text-align:left">lead \(L\)</td><td style="text-align:right"><input class="parameter-input" data-param="spec_lead" data-default="1.000e-3" value="1.000e-3" aria-label="Editable parameter spec_lead" spellcheck="false"></td><td style="text-align:left">m/rev</td></tr><tr><td style="text-align:left">rotor teeth \(N_r\)</td><td style="text-align:right"><input class="parameter-input" data-param="spec_rotor_teeth" data-default="50" value="50" aria-label="Editable parameter spec_rotor_teeth" spellcheck="false"></td><td style="text-align:left">–</td></tr><tr><td style="text-align:left">reduced \(m_d\)</td><td style="text-align:right"><input class="parameter-input assumed-input" data-param="spec_m_d" data-default="59.0" value="59.0" aria-label="Editable parameter spec_m_d" spellcheck="false"></td><td style="text-align:left">kg</td></tr><tr><td style="text-align:left">reduced \(m_s\)</td><td style="text-align:right"><input class="parameter-input" data-param="spec_m_s" data-default="0.600" value="0.600" aria-label="Editable parameter spec_m_s" spellcheck="false"></td><td style="text-align:left">kg</td></tr><tr><td style="text-align:left">\(K_m\)</td><td style="text-align:right"><input class="parameter-input assumed-input" data-param="spec_K_m" data-default="1.200e8" value="1.200e8" aria-label="Editable parameter spec_K_m" spellcheck="false"></td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">measured \(k_{ax}\)</td><td style="text-align:right"><input class="parameter-input" data-param="spec_k_ax" data-default="1.140e7" value="1.140e7" aria-label="Editable parameter spec_k_ax" spellcheck="false"></td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">coupling \(J_c\)</td><td style="text-align:right"><input class="parameter-input assumed-input" data-param="spec_J_c" data-default="5.000e-8" value="5.000e-8" aria-label="Editable parameter spec_J_c" spellcheck="false"></td><td style="text-align:left">kg·m²</td></tr><tr><td style="text-align:left">support bearing \(k_{brg}\)</td><td style="text-align:right"><input class="parameter-input assumed-input" data-param="spec_k_brg" data-default="2.500e7" value="2.500e7" aria-label="Editable parameter spec_k_brg" spellcheck="false"></td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">closure-derived \(k_{ball}\)</td><td style="text-align:right"><input class="parameter-input assumed-input" data-param="spec_k_ball" data-default="4.387e7" value="4.387e7" aria-label="Editable parameter spec_k_ball" spellcheck="false"></td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">electromagnetic damping ratio \(\zeta_m\)</td><td style="text-align:right"><input class="parameter-input assumed-input" data-param="spec_zeta_m" data-default="0.50" value="0.50" aria-label="Editable parameter spec_zeta_m" spellcheck="false"></td><td style="text-align:left">–</td></tr></tbody></table></div>
+<p>The source-table \(J_c\approx1.2\times10^{-6}\) kg·m² would make the reflected drive mass approximately 104–106 kg rather than 59 kg and is therefore not used silently. The executable \(J_c\) above closes the stated inertia budget but requires CAD/datasheet verification.</p>
+<p>All compliances reflected to the linear domain via \(k_{lin}=k_{rot}/r^2\), with \(r^2 = 2.533\times10^{-8}\).</p>
+<div class="table-wrap"><table><thead><tr><th style="text-align:left">Element</th><th style="text-align:left">Native</th><th style="text-align:left">Linear equiv. [N/m]</th><th style="text-align:left">Compliance [m/N]</th><th style="text-align:left">Share</th><th style="text-align:left">Status</th></tr></thead><tbody><tr><td style="text-align:left">\(k_m\) magnetic</td><td style="text-align:left">~3 N·m/rad</td><td style="text-align:left">1.2×10⁸</td><td style="text-align:left">8.33×10⁻⁹</td><td style="text-align:left">9.5%</td><td style="text-align:left">from \(T_{max}\), unverified</td></tr><tr><td style="text-align:left">coupling \(k_{c1},k_{c2}\)</td><td style="text-align:left">~100 N·m/rad</td><td style="text-align:left">4.0×10⁹</td><td style="text-align:left">2.5×10⁻¹⁰</td><td style="text-align:left">0.3%</td><td style="text-align:left">placeholder</td></tr><tr><td style="text-align:left">\(k_{\theta a}\) screw torsion</td><td style="text-align:left">~211 N·m/rad</td><td style="text-align:left">8.3×10⁹</td><td style="text-align:left">1.2×10⁻¹⁰</td><td style="text-align:left">0.1%</td><td style="text-align:left">computed, \(GJ/L\)</td></tr><tr><td style="text-align:left">\(k_{sha}\) screw axial</td><td style="text-align:left">—</td><td style="text-align:left">6.7×10⁷</td><td style="text-align:left">1.49×10⁻⁸</td><td style="text-align:left">17%</td><td style="text-align:left">computed \(EA/L\), position dep.</td></tr><tr><td style="text-align:left">\(k_{brg}\) support bearings</td><td style="text-align:left">—</td><td style="text-align:left">3–15×10⁶</td><td style="text-align:left">6.7–33×10⁻⁸</td><td style="text-align:left"><strong>76–380%</strong></td><td style="text-align:left">spec range, ambiguous</td></tr><tr><td style="text-align:left">\(k_{ball}\) ball contact</td><td style="text-align:left">—</td><td style="text-align:left">unknown</td><td style="text-align:left">unknown</td><td style="text-align:left">?</td><td style="text-align:left">not estimated</td></tr><tr><td style="text-align:left">\(k_{mnt}\) nut mount</td><td style="text-align:left">—</td><td style="text-align:left">~1×10⁸</td><td style="text-align:left">1.0×10⁻⁸</td><td style="text-align:left">11%</td><td style="text-align:left">placeholder</td></tr><tr><td style="text-align:left"><strong>Measured total</strong></td><td style="text-align:left">—</td><td style="text-align:left"><strong>1.14×10⁷</strong></td><td style="text-align:left"><strong>8.77×10⁻⁸</strong></td><td style="text-align:left"><strong>100%</strong></td><td style="text-align:left">modal, 694 Hz</td></tr></tbody></table></div>
+<p>Inertias, reflected:</p>
+<div class="table-wrap"><table><thead><tr><th style="text-align:left">Element</th><th style="text-align:left">Native</th><th style="text-align:left">Linear equiv. [kg]</th><th style="text-align:left">Status</th></tr></thead><tbody><tr><td style="text-align:left">\(J_m\) rotor</td><td style="text-align:left">~1.2×10⁻⁶ kg·m²</td><td style="text-align:left">~47</td><td style="text-align:left">placeholder</td></tr><tr><td style="text-align:left">\(J_c\) coupling</td><td style="text-align:left">~1.2×10⁻⁶ kg·m²</td><td style="text-align:left">~47</td><td style="text-align:left">placeholder</td></tr><tr><td style="text-align:left">\(J_{s1..s3}\) screw</td><td style="text-align:left">~3×10⁻⁷ kg·m²</td><td style="text-align:left">~12</td><td style="text-align:left">placeholder</td></tr><tr><td style="text-align:left">\(m_b+m_e+m_f\)</td><td style="text-align:left">~0.04 kg</td><td style="text-align:left">0.04</td><td style="text-align:left">computed</td></tr><tr><td style="text-align:left">\(m_n\) nut body</td><td style="text-align:left">~0.05 kg</td><td style="text-align:left">0.05</td><td style="text-align:left">placeholder</td></tr><tr><td style="text-align:left">\(m_s\) stage</td><td style="text-align:left">0.60 kg</td><td style="text-align:left">0.60</td><td style="text-align:left">measured, modal</td></tr></tbody></table></div>
+<h3 id="4-1-compliance-budget-closure-check-does-not-close">4.1 Compliance budget closure check — does not close</h3>
+<div class="table-wrap"><table><thead><tr><th style="text-align:left">Item</th><th style="text-align:left">Compliance [m/N]</th><th style="text-align:left">Running total</th></tr></thead><tbody><tr><td style="text-align:left">Measured total available</td><td style="text-align:left">—</td><td style="text-align:left">8.77×10⁻⁸</td></tr><tr><td style="text-align:left">less \(k_m\)</td><td style="text-align:left">8.33×10⁻⁹</td><td style="text-align:left">7.94×10⁻⁸</td></tr><tr><td style="text-align:left">less \(k_{sha}\) at 150 mm free length</td><td style="text-align:left">1.49×10⁻⁸</td><td style="text-align:left">6.45×10⁻⁸</td></tr><tr><td style="text-align:left">less coupling and screw torsion</td><td style="text-align:left">3.7×10⁻¹⁰</td><td style="text-align:left">6.41×10⁻⁸</td></tr><tr><td style="text-align:left"><strong>available for \(k_{brg}\), \(k_{ball}\), \(k_{mnt}\)</strong></td><td style="text-align:left">—</td><td style="text-align:left"><strong>6.41×10⁻⁸</strong></td></tr></tbody></table></div>
+<p>The support bearing pair at the <strong>top</strong> of its spec range, 15 N/µm, consumes 6.67×10⁻⁸ m/N alone. That exceeds the entire remaining budget, before allocating anything to the ball contact or the nut mount.</p>
+<p><strong>Conclusion.</strong> The measured 694 Hz stage mode requires the support bearing pair to be stiffer than the upper bound of its published range. One of the following holds.</p>
+<ol><li>The bearing is the 25° contact angle variant, not 15°. Axial stiffness scales strongly with contact angle. This is the most likely explanation and would resolve the BOM ambiguity in favour of 25°.</li><li>Preload exceeds the light-preload assumption, or the mounting adds stiffness not credited to \(k_{brg}\).</li><li>\(m_{eff}=0.60\) kg is an underestimate. Larger effective mass at the same frequency implies a stiffer chain.</li><li>The 694 Hz feature is not the axial drivetrain mode.</li></ol>
+<p>This check is the principal product of decomposition. A lumped \(k_{ax}\) absorbs the discrepancy into one fitted number and the inconsistency never surfaces.</p>
+<p><strong>Resolving measurement:</strong> dead-weight axial loading of the stage with interferometric readout gives \(k_{ax}\) statically, independent of \(m_{eff}\). That single test separates hypotheses 3 and 4 from 1 and 2.</p>
+<hr>
+<h2 id="5-reduction">5. Reduction</h2>
+<h3 id="5-1-element-by-element">5.1 Element-by-element</h3>
+<div class="table-wrap"><table><thead><tr><th style="text-align:left">Coordinate</th><th style="text-align:left">C1 compliance share</th><th style="text-align:left">C2 blocked freq.</th><th style="text-align:left">C3 identifiability</th><th style="text-align:left">Verdict</th></tr></thead><tbody><tr><td style="text-align:left">q1 \(\theta_m\)</td><td style="text-align:left">drive node</td><td style="text-align:left">—</td><td style="text-align:left">carries \(T_{mb}\)</td><td style="text-align:left"><strong>retain</strong></td></tr><tr><td style="text-align:left">q2 \(\theta_c\)</td><td style="text-align:left">0.3%</td><td style="text-align:left">~2.9 kHz</td><td style="text-align:left">merges \(T_{h1}\), \(T_{h2}\)</td><td style="text-align:left">collapse</td></tr><tr><td style="text-align:left">q3 \(\theta_{s1}\)</td><td style="text-align:left">0.1%</td><td style="text-align:left">~6 kHz</td><td style="text-align:left">merges \(T_{brg}\)</td><td style="text-align:left">collapse</td></tr><tr><td style="text-align:left">q4 \(\theta_{s2}\)</td><td style="text-align:left">0.1%</td><td style="text-align:left">~6 kHz</td><td style="text-align:left">—</td><td style="text-align:left">collapse</td></tr><tr><td style="text-align:left">q5 \(\theta_{s3}\)</td><td style="text-align:left">none</td><td style="text-align:left">~6 kHz</td><td style="text-align:left">none</td><td style="text-align:left">collapse</td></tr><tr><td style="text-align:left">q6 \(u_b\)</td><td style="text-align:left">\(k_{brg}\), 76%+</td><td style="text-align:left">~2.9 kHz</td><td style="text-align:left">none</td><td style="text-align:left">collapse mass, <strong>retain compliance</strong></td></tr><tr><td style="text-align:left">q7 \(u_e\)</td><td style="text-align:left">\(k_{sha}\), 17%</td><td style="text-align:left">~2.9 kHz</td><td style="text-align:left">none</td><td style="text-align:left">collapse mass, <strong>retain compliance</strong></td></tr><tr><td style="text-align:left">q8 \(u_f\)</td><td style="text-align:left">none</td><td style="text-align:left">high</td><td style="text-align:left">none</td><td style="text-align:left">collapse</td></tr><tr><td style="text-align:left">q9 \(u_n\)</td><td style="text-align:left">\(k_{mnt}\), ~11%</td><td style="text-align:left">~7 kHz</td><td style="text-align:left">none</td><td style="text-align:left">collapse mass, <strong>retain compliance</strong></td></tr><tr><td style="text-align:left">q10 \(x_s\)</td><td style="text-align:left">stage node</td><td style="text-align:left">694 Hz</td><td style="text-align:left">carries \(F_{f,g}\)</td><td style="text-align:left"><strong>retain</strong></td></tr></tbody></table></div>
+<p>Every internal mass fails C1 and C2 by wide margins. The compliances do not, and four are retained in series. Two coordinates survive.</p>
+<p><strong>On C3.</strong> Collapsing q2 and q3 merges \(T_{h1}\), \(T_{h2}\), \(T_{mb}\) and \(T_{brg}\) into a single drivetrain-to-ground term \(F_{f,d}\). This is an accepted loss: none of the four is separately observable in the deployed open-loop configuration. Retaining the split of \(F_{f,n}\) from \(F_{f,g}\) is not optional, and is the sole reason a second coordinate is kept at all.</p>
+<h3 id="5-2-discarded-mode-inventory">5.2 Discarded mode inventory</h3>
+<div class="table-wrap"><table><thead><tr><th style="text-align:left">Mode</th><th style="text-align:left">Frequency</th><th style="text-align:left">Reason for discard</th></tr></thead><tbody><tr><td style="text-align:left">Rotor against coupling</td><td style="text-align:left">~2.9 kHz</td><td style="text-align:left">3.2× above band</td></tr><tr><td style="text-align:left">Rotor/coupling against screw torsion</td><td style="text-align:left">~6 kHz</td><td style="text-align:left">6.7× above band</td></tr><tr><td style="text-align:left">Screw axial against bearings</td><td style="text-align:left">~2.9 kHz</td><td style="text-align:left">3.2× above band</td></tr><tr><td style="text-align:left">Nut body against mount</td><td style="text-align:left">~7 kHz</td><td style="text-align:left">7.8× above band</td></tr></tbody></table></div>
+<p>Band of interest taken as ≤900 Hz. Nearest discarded mode has 3.2× separation.</p>
+<blockquote><strong>Open item.</strong> All four rest on placeholder values. The coupling mode is most exposed: at \(k_c = 10\) N·m/rad rather than 100 it falls to roughly 0.9 kHz and enters the band. Bellows torsional stiffness from the datasheet is the highest-value single number to obtain.</blockquote>
+<h3 id="5-3-derived-reduced-model">5.3 Derived reduced model</h3>
+<div class="display-math">\[m_d = \frac{J_m + J_c + J_{s1} + J_{s2} + J_{s3}}{r^2}, \qquad m_s = m_{stage} + m_{nut} + 4m_{cart} + m_{payload}\]</div>
+<div class="display-math">\[\frac{1}{k_{ax}} = \frac{1}{k_{brg}} + \frac{1}{k_{sha}} + \frac{1}{k_{ball}} + \frac{1}{k_{mnt}}\]</div>
+<p>\(k_{ax}\) is carried as a scalar. Note that \(k_{sha}\) is position dependent through the free screw length, so \(k_{ax}\) is position dependent. See Section 6.2.</p>
+<p>\(K_m = k_m/r^2\) is <strong>not</strong> part of \(k_{ax}\). It grounds the drive node separately, so the two appear in series in the static stage-to-ground path.</p>
+<div class="display-math">\[\begin{bmatrix} m_d & 0 \\ 0 & m_s \end{bmatrix}
+\begin{bmatrix} \ddot x_d \\ \ddot x_s \end{bmatrix}
++ c_{ax}\begin{bmatrix} 1 & -1 \\ -1 & 1 \end{bmatrix}
+\begin{bmatrix} \dot x_d \\ \dot x_s \end{bmatrix}
++ k_{ax}\begin{bmatrix} 1 & -1 \\ -1 & 1 \end{bmatrix}
+\begin{bmatrix} x_d \\ x_s \end{bmatrix}
+=
+\begin{bmatrix} F_{mag} - F_{f,n} - F_{f,d} \\[2pt] F_{f,n} - F_{f,g} \end{bmatrix}\]</div>
+<p>with \(x_d = u_e + r\theta_{s2}\) the effective drive-side coordinate and \(F_{mag} = T_{mag}/r\).</p>
+<p>This is structurally identical to the Revision 2 result. The difference is that it is now a derived object with stated provenance, a discarded-mode inventory and a failing closure check attached, rather than an assumption.</p>
+<p>The stage end effector has one output translation, \(x_s\), but the compliant plant has two generalized coordinates. \(x_d\) is an internal reflected rotor/screw coordinate, not a second end-effector direction. A one-DOF model follows only after imposing the additional rigid constraint \(x_d=x_s\); it retains the low common-motion pole but deletes the relative approximately 698 Hz axial mode and collapses the modeled nut differential velocity to zero.</p>
+<h3 id="5-4-linearized-modal-form">5.4 Linearized modal form</h3>
+<div class="display-math">\[\begin{bmatrix} m_d & 0 \\ 0 & m_s \end{bmatrix}\ddot{\mathbf{x}}
++
+\begin{bmatrix} K_m + k_{ax} & -k_{ax} \\ -k_{ax} & k_{ax} \end{bmatrix}\mathbf{x}
+=
+\begin{bmatrix} K_m x_{cmd} \\ 0 \end{bmatrix}\]</div>
+<div class="display-math">\[m_d m_s\,\omega^4 - \big[m_d k_{ax} + m_s(K_m+k_{ax})\big]\omega^2 + K_m k_{ax} = 0\]</div>
+<p>With placeholder values: <strong>226 Hz</strong> and <strong>698 Hz</strong>, against 239 Hz analytical rotor-in-detent and 620–690 Hz measured. Both predicted modes correspond to observed features, subject to the Section 4.1 closure failure.</p>
+<hr>
+<h2 id="6-verification-and-residuals">6. Verification and Residuals</h2>
+<h3 id="6-1-full-versus-reduced-protocol">6.1 Full-versus-reduced protocol</h3>
+<p>Simulate both models on identical input and report the discrepancy.</p>
+<ol><li>Single microstep, 156 nm at \(\mu = 32\), from rest.</li><li>Bidirectional reversal at the target repeatability scale.</li><li>Trapezoidal move over full travel with deceleration shaping.</li><li>Frequency sweep 10 Hz to 3 kHz, drive-to-stage transfer function.</li></ol>
+<p>Report peak and RMS position discrepancy. Case 4 shows where the discarded modes live and tests the 3.2× separation claim empirically.</p>
+<h3 id="6-2-position-dependence-prediction">6.2 Position dependence prediction</h3>
+<p>\(k_{sha} = EA/L_{free}\) varies across travel. Holding all other budget items fixed:</p>
+<div class="table-wrap"><table><thead><tr><th style="text-align:left">Nut position</th><th style="text-align:left">\(k_{sha}\) [N/m]</th><th style="text-align:left">\(k_{ax}\) [N/m]</th><th style="text-align:left">Predicted mode</th></tr></thead><tbody><tr><td style="text-align:left">50 mm from bearing</td><td style="text-align:left">2.0×10⁸</td><td style="text-align:left">1.29×10⁷</td><td style="text-align:left">~736 Hz</td></tr><tr><td style="text-align:left">150 mm</td><td style="text-align:left">6.7×10⁷</td><td style="text-align:left">1.14×10⁷</td><td style="text-align:left">~694 Hz</td></tr><tr><td style="text-align:left">250 mm</td><td style="text-align:left">4.0×10⁷</td><td style="text-align:left">1.02×10⁷</td><td style="text-align:left">~657 Hz</td></tr></tbody></table></div>
+<p>Roughly 80 Hz of variation across travel, which brackets the observed 620–690 Hz spread. Falsifiable with impact hammer at three carriage positions. If confirmed, the spread is physical position dependence rather than measurement scatter. If not, \(k_{sha}\) is not the element it appears to be and the budget must be reallocated.</p>
+<h3 id="6-3-fallback-register">6.3 Fallback register</h3>
+<div class="table-wrap"><table><thead><tr><th style="text-align:left">If measurement disagrees with</th><th style="text-align:left">Relax first</th></tr></thead><tbody><tr><td style="text-align:left">Predicted mode 2 frequency</td><td style="text-align:left">\(k_{brg}\) contact angle assumption, then \(m_{eff}\)</td></tr><tr><td style="text-align:left">Predicted mode 1 frequency</td><td style="text-align:left">\(J_m\) placeholder, then \(T_{max}\) at 400 mA</td></tr><tr><td style="text-align:left">Presence of a mode near 1 kHz</td><td style="text-align:left">Coupling collapse, restore q2</td></tr><tr><td style="text-align:left">Position dependence of mode 2</td><td style="text-align:left">\(k_{sha}\) estimate, restore q6 and q7 separately</td></tr><tr><td style="text-align:left">Hysteresis not reproduced at reversal</td><td style="text-align:left">Hub micro-slip collapse, restore \(T_{h1}\), \(T_{h2}\)</td></tr></tbody></table></div>
+<hr>
+<h2 id="7-friction-models">7. Friction Models</h2>
+<p>Both given in identical notation so the forcing terms of Section 8 are interchangeable. Each applies independently at each site, with \(v\) the site driving velocity.</p>
+<h3 id="7-1-shared-stribeck-attractor">7.1 Shared Stribeck attractor</h3>
+<div class="display-math">\[s(v) = F_c + (F_s - F_c)\exp\!\left(-\left|\frac{v}{v_s}\right|^{\delta}\right)\]</div>
+<h3 id="7-2-generalized-maxwell-slip">7.2 Generalized Maxwell-Slip</h3>
+<p>A parallel bank of \(N\) elastoplastic elements. Element \(i\) carries force state \(F_i\), stiffness \(k_i\), normalized weight \(\nu_i\) with \(\sum\nu_i = 1\). Each element is independently stuck or slipping, giving a switched hybrid system with \(2^N\) discrete modes.</p>
+<p><strong>Stuck:</strong> \(\dot F_i = k_i v\), valid while \(|F_i| < \nu_i s(v)\).</p>
+<p><strong>Slipping:</strong> \(\dot F_i = C\!\left(\operatorname{sgn}(v) - \dfrac{F_i}{\nu_i s(v)}\right)\), reverting to stuck at velocity reversal.</p>
+<p>This signed-attractor form is important: its equilibrium \(F_i=\operatorname{sgn}(v)\nu_i s(v)\) is stable for both velocity signs. Placing \(\operatorname{sgn}(v)\) outside the whole bracket makes the negative-velocity branch repelling.</p>
+<p><strong>Output:</strong> \(F_f = \sum_{i=1}^N F_i + \sigma_2 v\), with \(\sigma_0 = \sum_i k_i\) and total breakaway \(F_s\).</p>
+<p>Elements reach their thresholds at different deflections, so the model retains <strong>non-local memory</strong>. This is the property that motivates GMS and is not reproducible with a single internal state.</p>
+<h3 id="7-3-lugre-and-elastoplastic-extension">7.3 LuGre and elastoplastic extension</h3>
+<p><strong>State:</strong> \(\dot z = v - \sigma_0\dfrac{|v|}{s(v)}z\)</p>
+<p><strong>Output:</strong> \(F_f = \sigma_0 z + \sigma_1\dot z + \sigma_2 v\)</p>
+<p><strong>Elastoplastic:</strong> \(\dot z = v\left[1 - \alpha(z,v)\operatorname{sgn}(v)\dfrac{\sigma_0 z}{s(v)}\right]\), recovering LuGre at \(\alpha = 1\).</p>
+<h3 id="7-4-comparison">7.4 Comparison</h3>
+<div class="table-wrap"><table><thead><tr><th style="text-align:left">Property</th><th style="text-align:left">GMS</th><th style="text-align:left">LuGre</th></tr></thead><tbody><tr><td style="text-align:left">States per site</td><td style="text-align:left">\(N\)</td><td style="text-align:left">1</td></tr><tr><td style="text-align:left">Form</td><td style="text-align:left">switched hybrid, \(2^N\) modes</td><td style="text-align:left">smooth ODE</td></tr><tr><td style="text-align:left">Presliding memory</td><td style="text-align:left">non-local</td><td style="text-align:left">local</td></tr><tr><td style="text-align:left">True stick</td><td style="text-align:left">exact</td><td style="text-align:left">only with \(\alpha\)</td></tr><tr><td style="text-align:left">Parameters per site</td><td style="text-align:left">\(2N+4\)</td><td style="text-align:left">6</td></tr><tr><td style="text-align:left">Integration cost</td><td style="text-align:left">high, event detection</td><td style="text-align:left">low</td></tr></tbody></table></div>
+<hr>
+<h2 id="8-friction-site-variants">8. Friction Site Variants</h2>
+<p>The reduced equation of Section 5.3 is unchanged. Only the forcing vector changes. Each active site takes either friction model without structural change.</p>
+<div class="table-wrap"><table><thead><tr><th style="text-align:left">Case</th><th style="text-align:center">\(F_{f,g}\)</th><th style="text-align:center">\(F_{f,n}\)</th><th style="text-align:center">\(F_{f,d}\)</th><th style="text-align:left">Purpose</th></tr></thead><tbody><tr><td style="text-align:left">0</td><td style="text-align:center">–</td><td style="text-align:center">–</td><td style="text-align:center">–</td><td style="text-align:left">Modal baseline</td></tr><tr><td style="text-align:left">A</td><td style="text-align:center">✓</td><td style="text-align:center">–</td><td style="text-align:center">–</td><td style="text-align:left">Guideway, LuGre</td></tr><tr><td style="text-align:left">A2</td><td style="text-align:center">✓</td><td style="text-align:center">–</td><td style="text-align:center">–</td><td style="text-align:left">Guideway, matched GMS</td></tr><tr><td style="text-align:left">B</td><td style="text-align:center">–</td><td style="text-align:center">✓</td><td style="text-align:center">–</td><td style="text-align:left">Nut, LuGre</td></tr><tr><td style="text-align:left">B2</td><td style="text-align:center">–</td><td style="text-align:center">✓</td><td style="text-align:center">–</td><td style="text-align:left">Nut, matched GMS</td></tr><tr><td style="text-align:left">C</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td><td style="text-align:center">–</td><td style="text-align:left">Guideway + nut, LuGre</td></tr><tr><td style="text-align:left">C2</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td><td style="text-align:center">–</td><td style="text-align:left">Guideway + nut, matched GMS</td></tr><tr><td style="text-align:left">D</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td><td style="text-align:left">Full plant, testbed correlation</td></tr></tbody></table></div>
+<p>Cases with suffix <code>2</code> use the same mechanical force vector as their unsuffixed counterpart; only the constitutive law changes from LuGre to GMS. Case 0 is always frictionless. Case D is not executed until drivetrain-friction parameters are identified.</p>
+<p><strong>Case 0:</strong> \(\mathbf{f} = \begin{bmatrix} F_{mag} \\ 0\end{bmatrix}\)</p>
+<p><strong>Case A:</strong> \(\mathbf{f} = \begin{bmatrix} F_{mag} \\ -F_{f,g}(\dot x_s) \end{bmatrix}\)</p>
+<p><strong>Case B:</strong> \(\mathbf{f} = \begin{bmatrix} F_{mag} - F_{f,n}(\dot x_d - \dot x_s) \\ +F_{f,n}(\dot x_d - \dot x_s) \end{bmatrix}\)</p>
+<p><strong>Case C:</strong> \(\mathbf{f} = \begin{bmatrix} F_{mag} - F_{f,n}(\dot x_d-\dot x_s) \\ F_{f,n}(\dot x_d-\dot x_s) - F_{f,g}(\dot x_s) \end{bmatrix}\)</p>
+<p><strong>Case D:</strong> \(\mathbf{f} = \begin{bmatrix} F_{mag} - F_{f,n}(\dot x_d-\dot x_s) - F_{f,d}(\dot x_d) \\ F_{f,n}(\dot x_d-\dot x_s) - F_{f,g}(\dot x_s) \end{bmatrix}\)</p>
+<p>\(F_{f,d}\) aggregates the four drivetrain-to-ground sites merged in Section 5.1: motor bearings, both coupling hubs, and the support bearings.</p>
+<hr>
+<h2 id="9-identifiability">9. Identifiability</h2>
+<p><strong>Single-coordinate model.</strong> A rigid kinematic lock forces \(\dot x_d = \dot x_s\), so \(v_n \equiv 0\) and \(v_g \equiv v_d\). The guideway and drivetrain friction terms are driven by the same velocity and sum at the same node. Only the aggregate is identifiable. The split is structurally unrecoverable regardless of measurement quality or excitation richness.</p>
+<p><strong>Two-coordinate model.</strong> Three sites, three distinct velocity arguments, two distinct bodies:</p>
+<ul><li>\(F_{f,g}\) sets absolute stage lost motion, visible to a stage-referenced measurement.</li><li>\(F_{f,n}\) appears only as differential deflection across \(k_{ax}\), requiring a differential measurement spanning drivetrain and stage pickups.</li><li>\(F_{f,d}\) acts on the drive node against ground, separable only if the drive coordinate is instrumented.</li></ul>
+<p>In the deployed open-loop configuration neither the drive coordinate nor the differential deflection is measurable, so only the aggregate is observable. Identification must be performed on the instrumented testbed and the split transferred. This is the formal statement of why the differential interferometer topology is necessary rather than merely convenient.</p>
+<hr>
+<h2 id="10-known-limitations">10. Known Limitations</h2>
+<ol><li>Every inertia and most stiffnesses are placeholders. All frequencies in Sections 4, 5 and 6 are provisional.</li><li><strong>The compliance budget does not close.</strong> See Section 4.1. Unresolved, and takes priority.</li><li>\(k_{ax}\) is carried as a scalar despite the position dependence quantified in Section 6.2.</li><li>Carriage skirt compliance and rail bending are absorbed into the rigid stage assumption.</li><li>Yaw, pitch and roll are not modeled. Drive axis only.</li><li>Thermal dependence of all friction parameters is omitted.</li><li>Screw lead error, cyclic error and runout are not represented.</li><li>Stepper electrical dynamics omitted. Defensible below 900 RPM, not above.</li><li>Nut friction load dependence, \(T_{f,n}\) as a function of \(|F_n|\), is written but not parameterized.</li></ol>
+<hr>
+<h2 id="nomenclature">Nomenclature</h2>
+<div class="table-wrap"><table><thead><tr><th style="text-align:left">Symbol</th><th style="text-align:left">Description</th><th style="text-align:left">Units</th></tr></thead><tbody><tr><td style="text-align:left">\(r = L/2\pi\)</td><td style="text-align:left">Screw transmission ratio</td><td style="text-align:left">m/rad</td></tr><tr><td style="text-align:left">\(L\)</td><td style="text-align:left">Screw lead, 1 mm</td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">\(\theta_m,\theta_c,\theta_{s1..s3}\)</td><td style="text-align:left">Torsional coordinates</td><td style="text-align:left">rad</td></tr><tr><td style="text-align:left">\(u_b,u_e,u_f,u_n,x_s\)</td><td style="text-align:left">Axial coordinates</td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">\(x_d = u_e + r\theta_{s2}\)</td><td style="text-align:left">Effective drive-side coordinate</td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">\(J_m,J_c,J_{s1..s3}\)</td><td style="text-align:left">Torsional inertias</td><td style="text-align:left">kg·m²</td></tr><tr><td style="text-align:left">\(m_b,m_e,m_f,m_n,m_s\)</td><td style="text-align:left">Axial masses</td><td style="text-align:left">kg</td></tr><tr><td style="text-align:left">\(m_d\)</td><td style="text-align:left">Reflected drivetrain mass</td><td style="text-align:left">kg</td></tr><tr><td style="text-align:left">\(k_m\), \(K_m = k_m/r^2\)</td><td style="text-align:left">Magnetic stiffness</td><td style="text-align:left">N·m/rad, N/m</td></tr><tr><td style="text-align:left">\(k_{c1},k_{c2}\)</td><td style="text-align:left">Coupling half-stiffnesses</td><td style="text-align:left">N·m/rad</td></tr><tr><td style="text-align:left">\(k_{\theta a},k_{\theta b}\)</td><td style="text-align:left">Screw torsional stiffnesses</td><td style="text-align:left">N·m/rad</td></tr><tr><td style="text-align:left">\(k_{brg}\)</td><td style="text-align:left">Support bearing axial stiffness</td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">\(k_{sha},k_{shb}\)</td><td style="text-align:left">Screw axial extension stiffnesses</td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">\(k_{ball}\)</td><td style="text-align:left">Ball contact normal axial stiffness</td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">\(k_{mnt}\)</td><td style="text-align:left">Nut mount stiffness</td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">\(k_{ax}\)</td><td style="text-align:left">Reduced series axial stiffness</td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">\(\delta_n\), \(F_n\)</td><td style="text-align:left">Nut interface deflection and force</td><td style="text-align:left">m, N</td></tr><tr><td style="text-align:left">\(T_{mb},T_{h1},T_{h2},T_{brg},T_{f,n}\)</td><td style="text-align:left">Friction torques</td><td style="text-align:left">N·m</td></tr><tr><td style="text-align:left">\(F_{f,g},F_{f,n},F_{f,d}\)</td><td style="text-align:left">Reduced-model friction forces</td><td style="text-align:left">N</td></tr><tr><td style="text-align:left">\(N_r\), \(T_{max}\), \(T_{det}\)</td><td style="text-align:left">Rotor teeth (50), peak torque, detent amplitude</td><td style="text-align:left">–, N·m, N·m</td></tr><tr><td style="text-align:left">\(\lambda_{mag},\lambda_{det}\)</td><td style="text-align:left">Model switches</td><td style="text-align:left">–</td></tr><tr><td style="text-align:left">\(F_s,F_c,v_s,\delta\)</td><td style="text-align:left">Stribeck parameters</td><td style="text-align:left">N, N, m/s, –</td></tr><tr><td style="text-align:left">\(N,\nu_i,k_i,F_i,C\)</td><td style="text-align:left">GMS element count, weight, stiffness, state, attraction</td><td style="text-align:left">–, –, N/m, N, N/s</td></tr><tr><td style="text-align:left">\(z,\sigma_0,\sigma_1,\sigma_2\)</td><td style="text-align:left">LuGre state and coefficients</td><td style="text-align:left">m, N/m, N·s/m, N·s/m</td></tr></tbody></table></div><div class="footer">Rendered from ball_screw_stage_dynamic_derivation_v3.md · 2026-08-10 14:58 W. Europe Daylight Time</div></article></div>
+<script>
+function setDetails(open) { document.querySelectorAll('details').forEach(d => d.open=open); }
+function toggleTheme() { const root=document.documentElement; root.dataset.theme=root.dataset.theme==='dark'?'light':'dark'; }
+const parameterStorageKey = 'model-parameters:' + document.title + ':' + location.pathname;
+let parameterSaveTimer = null;
+function currentParameterValues() {
+  const values = {};
+  document.querySelectorAll('.parameter-input').forEach(input => values[input.dataset.param] = input.value);
+  return values;
+}
+function setParameterStatus(message, kind='') {
+  const status = document.getElementById('parameter-save-status');
+  if (!status) return;
+  status.textContent = message;
+  status.className = 'save-status' + (kind ? ' ' + kind : '');
+}
+function readHashParameterValues() {
+  if (!location.hash.startsWith('#params=')) return {};
+  try { return JSON.parse(decodeURIComponent(location.hash.slice(8))); } catch (_) { return {}; }
+}
+function writeHashParameterValues(values) {
+  try {
+    const url = new URL(location.href);
+    url.hash = 'params=' + encodeURIComponent(JSON.stringify(values));
+    history.replaceState(null, '', url.href);
+    return true;
+  } catch (_) { return false; }
+}
+function persistParameterInputs(showStatus=true) {
+  const values = currentParameterValues();
+  let browserStorageSaved = true;
+  try { localStorage.setItem(parameterStorageKey, JSON.stringify(values)); }
+  catch (_) { browserStorageSaved = false; }
+  const urlSaved = writeHashParameterValues(values);
+  if (showStatus) {
+    const time = new Date().toLocaleTimeString();
+    if (browserStorageSaved || urlSaved) setParameterStatus('Variables saved · ' + time, 'ok');
+    else setParameterStatus('Browser storage unavailable — use Save HTML copy', 'warn');
+  }
+  return browserStorageSaved || urlSaved;
+}
+function saveParameterInputs() {
+  persistParameterInputs(true);
+  refreshInteractivePlots();
+}
+function scheduleParameterUpdate() {
+  setParameterStatus('Saving and updating live plots…', 'warn');
+  if (parameterSaveTimer) clearTimeout(parameterSaveTimer);
+  parameterSaveTimer = setTimeout(() => {
+    persistParameterInputs(true);
+    refreshInteractivePlots();
+  }, 160);
+}
+function resetParameterInputs() {
+  document.querySelectorAll('.parameter-input').forEach(input => {
+    input.value = input.dataset.default;
+    input.setAttribute('value', input.value);
+  });
+  try { localStorage.removeItem(parameterStorageKey); } catch (_) {}
+  try { const url = new URL(location.href); url.hash = ''; history.replaceState(null, '', url.href); } catch (_) {}
+  refreshInteractivePlots();
+  setParameterStatus('Defaults restored; saved overrides cleared', 'ok');
+}
+async function saveEditedHtml() {
+  persistParameterInputs(false);
+  const originalInputs = Array.from(document.querySelectorAll('.parameter-input'));
+  originalInputs.forEach(input => input.setAttribute('value', input.value));
+  const clonedRoot = document.documentElement.cloneNode(true);
+  const clonedInputs = Array.from(clonedRoot.querySelectorAll('.parameter-input'));
+  clonedInputs.forEach((input, index) => {
+    const value = originalInputs[index].value;
+    input.setAttribute('value', value);
+    input.setAttribute('data-default', value);
+  });
+  const source = '<!doctype html>\n' + clonedRoot.outerHTML;
+  const suggestedName = location.pathname.split('/').pop() || 'model-report.html';
+  if ('showSaveFilePicker' in window) {
+    try {
+      const handle = await window.showSaveFilePicker({suggestedName, types:[{description:'HTML document', accept:{'text/html':['.html']}}]});
+      const writable = await handle.createWritable();
+      await writable.write(source);
+      await writable.close();
+      setParameterStatus('HTML copy saved with current values', 'ok');
+      return;
+    } catch (error) { if (error.name === 'AbortError') return; }
+  }
+  const blob = new Blob([source], {type:'text/html;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url; link.download = suggestedName; document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setParameterStatus('HTML copy downloaded with current values', 'ok');
+}
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+function svgNode(name, attributes={}, text='') {
+  const node = document.createElementNS(SVG_NS, name);
+  Object.entries(attributes).forEach(([key, value]) => node.setAttribute(key, String(value)));
+  if (text) node.textContent = text;
+  return node;
+}
+function parameterNumber(name, fallback) {
+  const input = document.querySelector('.parameter-input[data-param="' + name + '"]');
+  const value = input ? Number(input.value) : fallback;
+  return Number.isFinite(value) ? value : fallback;
+}
+function cMul(a, b) { return {re:a.re*b.re-a.im*b.im, im:a.re*b.im+a.im*b.re}; }
+function cSub(a, b) { return {re:a.re-b.re, im:a.im-b.im}; }
+function cDiv(a, b) {
+  const denominator = b.re*b.re + b.im*b.im;
+  return {re:(a.re*b.re+a.im*b.im)/denominator, im:(a.im*b.re-a.re*b.im)/denominator};
+}
+function liveTransferData() {
+  const md = parameterNumber('reduced_drive_mass', 59.0);
+  const ms = parameterNumber('reduced_stage_mass', 0.60);
+  const km = parameterNumber('magnetic_stiffness', 1.20e8);
+  const kax = parameterNumber('reduced_axial_stiffness', 1.14e7);
+  const cax = parameterNumber('axial_damping', 55.0);
+  const zeta = parameterNumber('electromagnetic_zeta', 0.50);
+  if (!(md>0 && ms>0 && km>0 && kax>0 && cax>=0 && zeta>=0))
+    throw new Error('Masses and stiffnesses must be positive; damping values must be non-negative.');
+  const cm = 2*zeta*Math.sqrt(km*md);
+  const frequencies=[], drive=[], stage=[], rotorStage=[];
+  const count=560, logMin=Math.log10(20), logMax=Math.log10(3000);
+  for (let i=0; i<count; i++) {
+    const frequency = Math.pow(10, logMin + (logMax-logMin)*i/(count-1));
+    const omega = 2*Math.PI*frequency;
+    const a = {re:km+kax-md*omega*omega, im:omega*(cm+cax)};
+    const b = {re:-kax, im:-omega*cax};
+    const d = {re:kax-ms*omega*omega, im:omega*cax};
+    const determinant = cSub(cMul(a,d), cMul(b,b));
+    const gd = cDiv(cMul({re:km,im:0},d), determinant);
+    const gs = cDiv(cMul({re:-km,im:0},b), determinant);
+    frequencies.push(frequency); drive.push(gd); stage.push(gs); rotorStage.push(cDiv(gs,gd));
+  }
+  const qa=md*ms, qb=md*kax+ms*(km+kax), qc=km*kax;
+  const discriminant=Math.max(qb*qb-4*qa*qc,0);
+  const roots=[(qb-Math.sqrt(discriminant))/(2*qa),(qb+Math.sqrt(discriminant))/(2*qa)];
+  const modes=roots.map(value => Math.sqrt(Math.max(value,0))/(2*Math.PI));
+  return {frequencies, drive, stage, rotorStage, modes, md, ms, km, kax, cax, zeta};
+}
+function unwrapPhases(values) {
+  const phases=[]; let previous=null, offset=0;
+  values.forEach(value => {
+    let phase=Math.atan2(value.im,value.re)*180/Math.PI;
+    if (previous!==null) {
+      while (phase+offset-previous>180) offset-=360;
+      while (phase+offset-previous<-180) offset+=360;
+    }
+    phase+=offset; phases.push(phase); previous=phase;
+  });
+  return phases;
+}
+function drawLiveBode(svgId, data, phasePlot=false) {
+  const svg=document.getElementById(svgId); if (!svg) return;
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  const width=760, height=360, left=64, right=18, top=22, bottom=48;
+  const plotWidth=width-left-right, plotHeight=height-top-bottom;
+  const xMin=Math.log10(20), xMax=Math.log10(3000);
+  const yMin=phasePlot?-370:-100, yMax=phasePlot?30:40;
+  const mapX=f => left+(Math.log10(f)-xMin)/(xMax-xMin)*plotWidth;
+  const mapY=y => top+(yMax-y)/(yMax-yMin)*plotHeight;
+  const xTicks=[20,50,100,200,500,1000,2000,3000];
+  const yTicks=phasePlot?[-360,-270,-180,-90,0]:[-100,-80,-60,-40,-20,0,20,40];
+  xTicks.forEach(tick => {
+    const x=mapX(tick); svg.appendChild(svgNode('line',{x1:x,y1:top,x2:x,y2:top+plotHeight,stroke:'#cbd3da','stroke-width':0.7}));
+    svg.appendChild(svgNode('text',{x:x,y:height-22,'text-anchor':'middle','font-size':11,fill:'currentColor'},tick>=1000?(tick/1000)+'k':String(tick)));
+  });
+  yTicks.forEach(tick => {
+    const y=mapY(tick); svg.appendChild(svgNode('line',{x1:left,y1:y,x2:left+plotWidth,y2:y,stroke:'#cbd3da','stroke-width':0.7}));
+    svg.appendChild(svgNode('text',{x:left-8,y:y+4,'text-anchor':'end','font-size':11,fill:'currentColor'},String(tick)));
+  });
+  svg.appendChild(svgNode('rect',{x:left,y:top,width:plotWidth,height:plotHeight,fill:'none',stroke:'#697680','stroke-width':1}));
+  const series=[
+    {name:'Xd / Xcmd',color:'#b23a48',values:data.drive},
+    {name:'Xs / Xcmd',color:'#277da1',values:data.stage},
+    {name:'Xs / Xd',color:'#218c74',values:data.rotorStage}
+  ];
+  series.forEach((item,index) => {
+    const values=phasePlot?unwrapPhases(item.values):item.values.map(value => 20*Math.log10(Math.max(Math.hypot(value.re,value.im),1e-15)));
+    let path='';
+    values.forEach((value,i) => { const x=mapX(data.frequencies[i]), y=mapY(Math.max(yMin,Math.min(yMax,value))); path+=(i?'L':'M')+x.toFixed(2)+' '+y.toFixed(2)+' '; });
+    svg.appendChild(svgNode('path',{d:path,fill:'none',stroke:item.color,'stroke-width':2}));
+    const legendX=left+12, legendY=top+16+index*17;
+    svg.appendChild(svgNode('line',{x1:legendX,y1:legendY-4,x2:legendX+25,y2:legendY-4,stroke:item.color,'stroke-width':2.4}));
+    svg.appendChild(svgNode('text',{x:legendX+32,y:legendY,'font-size':11,fill:'currentColor'},item.name));
+  });
+  data.modes.forEach((mode,index) => {
+    const x=mapX(mode); svg.appendChild(svgNode('line',{x1:x,y1:top,x2:x,y2:top+plotHeight,stroke:'#555','stroke-width':1,'stroke-dasharray':index?'2 3':'6 4'}));
+    svg.appendChild(svgNode('text',{x:x+4,y:top+plotHeight-7,'font-size':10,fill:'currentColor'},mode.toFixed(1)+' Hz'));
+  });
+  svg.appendChild(svgNode('text',{x:left+plotWidth/2,y:height-4,'text-anchor':'middle','font-size':12,fill:'currentColor'},'Frequency (Hz)'));
+  svg.appendChild(svgNode('text',{x:15,y:top+plotHeight/2,transform:'rotate(-90 15 '+(top+plotHeight/2)+')','text-anchor':'middle','font-size':12,fill:'currentColor'},phasePlot?'Phase (deg)':'Magnitude (dB)'));
+}
+function refreshInteractivePlots() {
+  const panel=document.querySelector('[data-live-transfer-plots]'); if (!panel) return;
+  if (!panel.dataset.initialized) {
+    panel.innerHTML='<div id="live-model-summary" class="live-summary"></div><div class="live-plot-grid"><div class="live-plot-card"><h4>Live magnitude</h4><svg id="live-bode-magnitude" viewBox="0 0 760 360" role="img" aria-label="Live transfer-function magnitude"></svg></div><div class="live-plot-card"><h4>Live phase</h4><svg id="live-bode-phase" viewBox="0 0 760 360" role="img" aria-label="Live transfer-function phase"></svg></div></div>';
+    panel.dataset.initialized='true';
+  }
+  try {
+    const data=liveTransferData();
+    document.getElementById('live-model-summary').textContent='Live values: md='+data.md.toPrecision(5)+' kg, ms='+data.ms.toPrecision(5)+' kg, Km='+data.km.toPrecision(5)+' N/m, kax='+data.kax.toPrecision(5)+' N/m, zeta_m='+data.zeta.toPrecision(4)+' · modes '+data.modes.map(value=>value.toFixed(2)+' Hz').join(', ');
+    drawLiveBode('live-bode-magnitude',data,false); drawLiveBode('live-bode-phase',data,true);
+  } catch (error) { document.getElementById('live-model-summary').textContent='Live plot error: '+error.message; }
+}
+document.addEventListener('DOMContentLoaded', () => {
+  let saved = {};
+  let browserStorageLoaded = true;
+  try { saved = JSON.parse(localStorage.getItem(parameterStorageKey) || '{}'); } catch (_) { saved = {}; browserStorageLoaded = false; }
+  saved = Object.assign(saved, readHashParameterValues());
+  document.querySelectorAll('.parameter-input').forEach(input => {
+    if (Object.prototype.hasOwnProperty.call(saved, input.dataset.param)) input.value = saved[input.dataset.param];
+    input.setAttribute('value', input.value);
+    input.addEventListener('input', () => { input.setAttribute('value', input.value); scheduleParameterUpdate(); });
+  });
+  refreshInteractivePlots();
+  if (Object.keys(saved).length) setParameterStatus('Saved variables restored', 'ok');
+  else if (browserStorageLoaded) setParameterStatus('Defaults loaded · auto-save active', 'ok');
+  else setParameterStatus('URL saving active; browser storage unavailable', 'warn');
+});
+</script>
+</body></html>

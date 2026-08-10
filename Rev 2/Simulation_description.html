@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dynamic Modeling and Derivation of a Precision Ball Screw Drive Stage</title>
+<script>
+window.MathJax = {tex: {inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]']]}, svg: {fontCache: 'global'}};
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+:root { --bg:#eef2f5; --card:#fff; --text:#20262d; --muted:#65717d; --line:#d9e0e6; --accent:#1f6f8b; --soft:#f4f8fa; --code:#17212b; --assumed:#fff0b8; --assumed-line:#d49b00; }
+html[data-theme="dark"] { --bg:#11171d; --card:#182129; --text:#e9eef2; --muted:#aab5be; --line:#33414c; --accent:#73c2df; --soft:#202c35; --code:#0d1217; --assumed:#5b4810; --assumed-line:#f1bf36; }
+* { box-sizing:border-box; } html { scroll-behavior:smooth; }
+body { margin:0; background:var(--bg); color:var(--text); font:16px/1.67 Inter,Segoe UI,system-ui,sans-serif; }
+.topbar { position:sticky; top:0; z-index:20; display:flex; gap:.75rem; align-items:center; padding:.65rem 1rem; background:color-mix(in srgb,var(--card) 94%,transparent); border-bottom:1px solid var(--line); backdrop-filter:blur(9px); }
+.topbar .name { font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:auto; }
+button { color:var(--text); background:var(--soft); border:1px solid var(--line); border-radius:7px; padding:.42rem .7rem; cursor:pointer; }
+.layout { display:grid; grid-template-columns:280px minmax(0,1fr); gap:1.5rem; max-width:1510px; margin:0 auto; padding:1.5rem; }
+nav { position:sticky; top:4.4rem; align-self:start; max-height:calc(100vh - 5.5rem); overflow:auto; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:1rem; }
+nav .caption { font-size:.78rem; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:.6rem; }
+nav a { display:block; color:var(--muted); text-decoration:none; border-left:2px solid transparent; padding:.24rem .35rem; font-size:.88rem; } nav a:hover { color:var(--accent); border-color:var(--accent); } nav .toc-level-3 { padding-left:1.15rem; font-size:.81rem; }
+article { width:100%; max-width:1100px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:clamp(1.25rem,4vw,3.7rem); box-shadow:0 12px 32px rgba(22,36,46,.07); }
+h1,h2,h3,h4 { line-height:1.24; scroll-margin-top:5rem; } h1 { font-size:clamp(2rem,4vw,3rem); margin-top:0; } h2 { margin-top:2.8rem; padding-bottom:.38rem; border-bottom:1px solid var(--line); } h3 { margin-top:2rem; color:var(--accent); }
+p { margin:.85rem 0; } a { color:var(--accent); } strong { color:var(--text); } hr { border:0; border-top:1px solid var(--line); margin:2rem 0; }
+blockquote { margin:1.2rem 0; padding:.75rem 1rem; background:var(--soft); border-left:4px solid var(--accent); border-radius:0 8px 8px 0; color:var(--muted); }
+.table-wrap { overflow-x:auto; margin:1.2rem 0; } table { width:100%; border-collapse:collapse; font-size:.92rem; } th,td { border:1px solid var(--line); padding:.55rem .65rem; vertical-align:top; } th { background:var(--soft); }
+.parameter-input { width:100%; min-width:7rem; padding:.38rem .48rem; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:5px; font:inherit; font-variant-numeric:tabular-nums; }
+.parameter-input:focus { outline:2px solid var(--accent); outline-offset:1px; }
+.assumed-input { background:var(--assumed); border-color:var(--assumed-line); font-weight:700; }
+.edit-note { margin:0 0 1.2rem; padding:.7rem .9rem; border:1px solid var(--line); border-radius:8px; background:var(--soft); color:var(--muted); font-size:.86rem; }
+.assumed-swatch { display:inline-block; width:1.1rem; height:.8rem; margin:0 .25rem; vertical-align:middle; background:var(--assumed); border:1px solid var(--assumed-line); border-radius:3px; }
+details { margin:1rem 0; border:1px solid var(--line); border-radius:9px; background:color-mix(in srgb,var(--soft) 45%,var(--card)); padding:.2rem .9rem .8rem; } details details { margin-left:.45rem; } summary { cursor:pointer; font-weight:700; padding:.75rem .1rem; color:var(--accent); }
+pre { overflow:auto; background:var(--code); color:#e8edf2; border-radius:9px; padding:1rem; font-size:.87rem; } code { font-family:Cascadia Code,Consolas,monospace; } p code,li code,td code { background:var(--soft); border:1px solid var(--line); border-radius:4px; padding:.1rem .28rem; }
+.display-math { overflow-x:auto; padding:.5rem 0; } img { display:block; max-width:100%; height:auto; margin:1.3rem auto; border-radius:6px; }
+.footer { color:var(--muted); font-size:.78rem; margin-top:3rem; padding-top:1rem; border-top:1px solid var(--line); }
+@media (max-width:920px) { .layout { grid-template-columns:1fr; padding:.7rem; } nav { position:relative; top:auto; max-height:18rem; } article { padding:1.2rem; } .hide-small { display:none; } }
+@media print { .topbar,nav { display:none; } body { background:white; } .layout { display:block; padding:0; } article { max-width:none; border:0; box-shadow:none; } details { break-inside:avoid; } }
+</style>
+</head>
+<body>
+<div class="topbar"><span class="name">Dynamic Modeling and Derivation of a Precision Ball Screw Drive Stage</span><button onclick="setDetails(true)">Expand derivations</button><button onclick="setDetails(false)">Collapse</button><button onclick="saveEditedHtml()">Save edited HTML</button><button onclick="resetParameterInputs()">Reset inputs</button><button class="hide-small" onclick="toggleTheme()">Theme</button><button class="hide-small" onclick="window.print()">Print</button></div>
+<div class="layout"><nav><div class="caption">On this page</div><a class="toc-level-2" href="#how-to-use-this-document-as-a-model-build-specification">How to Use This Document as a Model-Build Specification</a><a class="toc-level-2" href="#0-summary-of-changes-from-revision-1">0. Summary of Changes from Revision 1</a><a class="toc-level-2" href="#1-system-layout-and-coordinate-choice">1. System Layout and Coordinate Choice</a><a class="toc-level-3" href="#1-1-physical-chain">1.1 Physical chain</a><a class="toc-level-3" href="#1-2-mechanical-degrees-of-freedom-and-kinematic-diagram">1.2 Mechanical degrees of freedom and kinematic diagram</a><a class="toc-level-3" href="#1-3-why-the-linear-domain">1.3 Why the linear domain</a><a class="toc-level-3" href="#1-4-why-the-axial-compliance-is-the-correct-internal-dof">1.4 Why the axial compliance is the correct internal DOF</a><a class="toc-level-3" href="#1-5-justification-for-lumping-the-bellows-rigid">1.5 Justification for lumping the bellows rigid</a><a class="toc-level-2" href="#2-modeling-assumptions">2. Modeling Assumptions</a><a class="toc-level-2" href="#3-the-drive-force">3. The Drive Force</a><a class="toc-level-3" href="#3-1-nonlinear-magnetic-spring">3.1 Nonlinear magnetic spring</a><a class="toc-level-3" href="#3-2-linearized-magnetic-spring">3.2 Linearized magnetic spring</a><a class="toc-level-3" href="#3-3-electromagnetic-drivetrain-damping">3.3 Electromagnetic drivetrain damping</a><a class="toc-level-3" href="#3-4-detent-torque">3.4 Detent torque</a><a class="toc-level-3" href="#3-5-switchable-combined-form">3.5 Switchable combined form</a><a class="toc-level-3" href="#3-6-command-discretization">3.6 Command discretization</a><a class="toc-level-2" href="#4-derivation-of-the-equations-of-motion">4. Derivation of the Equations of Motion</a><a class="toc-level-3" href="#step-1-lump-the-drivetrain-mass">Step 1 — Lump the drivetrain mass</a><a class="toc-level-3" href="#step-2-lump-the-stage-mass">Step 2 — Lump the stage mass</a><a class="toc-level-3" href="#step-3-define-the-three-friction-sites-and-their-driving-velocities">Step 3 — Define the three friction sites and their driving velocities</a><a class="toc-level-3" href="#step-4-drivetrain-free-body-diagram">Step 4 — Drivetrain free body diagram</a><a class="toc-level-3" href="#step-5-stage-free-body-diagram">Step 5 — Stage free body diagram</a><a class="toc-level-3" href="#step-6-assemble">Step 6 — Assemble</a><a class="toc-level-2" href="#5-linearized-modal-baseline">5. Linearized Modal Baseline</a><a class="toc-level-3" href="#5-1-numerical-check-against-measurement">5.1 Numerical check against measurement</a><a class="toc-level-3" href="#5-2-limiting-forms">5.2 Limiting forms</a><a class="toc-level-2" href="#6-friction-models">6. Friction Models</a><a class="toc-level-3" href="#6-0-shared-stribeck-attractor">6.0 Shared Stribeck attractor</a><a class="toc-level-3" href="#6-1-generalized-maxwell-slip-gms">6.1 Generalized Maxwell-Slip (GMS)</a><a class="toc-level-3" href="#6-2-lugre-and-its-elastoplastic-extension">6.2 LuGre and its elastoplastic extension</a><a class="toc-level-3" href="#6-3-model-comparison">6.3 Model comparison</a><a class="toc-level-3" href="#6-4-double-counting-caveat">6.4 Double-counting caveat</a><a class="toc-level-2" href="#7-friction-site-variants">7. Friction Site Variants</a><a class="toc-level-3" href="#case-0-frictionless">Case 0 — Frictionless</a><a class="toc-level-3" href="#case-a-guideway-friction-only">Case A — Guideway friction only</a><a class="toc-level-3" href="#case-a2-guideway-friction-only-gms">Case A2 — Guideway friction only, GMS</a><a class="toc-level-3" href="#case-b-nut-and-screw-friction-only">Case B — Nut and screw friction only</a><a class="toc-level-3" href="#case-b2-nut-and-screw-friction-only-gms">Case B2 — Nut and screw friction only, GMS</a><a class="toc-level-3" href="#case-c-guideway-and-nut-friction">Case C — Guideway and nut friction</a><a class="toc-level-3" href="#case-c2-guideway-and-nut-friction-gms">Case C2 — Guideway and nut friction, GMS</a><a class="toc-level-3" href="#case-d-full-model">Case D — Full model</a><a class="toc-level-3" href="#7-1-case-selection-summary">7.1 Case selection summary</a><a class="toc-level-2" href="#8-identifiability">8. Identifiability</a><a class="toc-level-2" href="#9-known-limitations">9. Known Limitations</a><a class="toc-level-2" href="#nomenclature">Nomenclature</a></nav><article><div class="edit-note"><span class="assumed-swatch"></span>Amber inputs are unidentified assumptions. Input edits persist in this browser. “Save edited HTML” writes the current values into a new HTML file after an explicit browser save prompt; browsers cannot silently overwrite the source file. Static figures are regenerated only by the Python build.</div><h1 id="dynamic-modeling-and-derivation-of-a-precision-ball-screw-drive-stage">Dynamic Modeling and Derivation of a Precision Ball Screw Drive Stage</h1>
+<p><strong>Revision 2.</strong> Linear-domain formulation. Supersedes the rotational-domain 2-DOF derivation.</p>
+<hr>
+<h2 id="how-to-use-this-document-as-a-model-build-specification">How to Use This Document as a Model-Build Specification</h2>
+<p>This document is the authoritative topology and assumption record. Build or review the model in the following order:</p>
+<ol><li>Use the physical chain and coordinate definitions in Section 1; do not introduce a rigid \(x_d=x_s\) constraint because it removes the nut-friction identification channel.</li><li>Apply every modeling assumption in Section 2 and preserve the measured/derived/placeholder status of each parameter.</li><li>Choose the magnetic-force switches in Section 3. Use the linear law for transfer functions and modes, and the sinusoidal law for bounded time-domain stepping.</li><li>Assemble the two body equations exactly as derived in Section 4. In particular, nut friction must have opposite signs on the two bodies.</li><li>Use Section 6 to select either LuGre or GMS independently at each active site, then use Section 7 to activate Case 0/A/B/C/D.</li><li>Check the requested measurement topology against Section 8 before claiming that individual friction sites are identifiable.</li><li>Carry every limitation in Section 9 into result captions and conclusions.</li></ol>
+<p>The full algebra, state augmentation, case-by-case equations, Bode responses, bounded stepping response, and tracking error are in the rendered companion <a href="Analytical_derivation_and_responses.html">Analytical Derivation and Response Study</a>. Both browser pages and all figures are regenerated by the single-purpose command:</p>
+<pre><code class="language-powershell">python .\build_model_documentation.py</code></pre>
+<blockquote><strong>Parameter-status rule.</strong> A placeholder or provisional response parameter may be used to exercise model structure, but it must not be presented as an identified prediction of the hardware.</blockquote>
+<hr>
+<h2 id="0-summary-of-changes-from-revision-1">0. Summary of Changes from Revision 1</h2>
+<div class="table-wrap"><table><thead><tr><th style="text-align:left">#</th><th style="text-align:left">Revision 1</th><th style="text-align:left">Revision 2</th></tr></thead><tbody><tr><td style="text-align:left">1</td><td style="text-align:left">Rotational coordinates, N·m/rad</td><td style="text-align:left">Linear coordinates, N/m</td></tr><tr><td style="text-align:left">2</td><td style="text-align:left">Flexible element = bellows coupling \(k_c\)</td><td style="text-align:left">Flexible element = axial drivetrain stiffness \(k_{ax}\)</td></tr><tr><td style="text-align:left">3</td><td style="text-align:left">Nut and screw assumed rigid, bellows flexible</td><td style="text-align:left">Bellows lumped rigid, axial compliance retained</td></tr><tr><td style="text-align:left">4</td><td style="text-align:left">Friction model labeled GMS, written as single-state LuGre</td><td style="text-align:left">GMS and LuGre both written explicitly, in matching notation</td></tr><tr><td style="text-align:left">5</td><td style="text-align:left">Cases B and C use rotational bristle states</td><td style="text-align:left">Replaced by four friction-site variants, all in N</td></tr><tr><td style="text-align:left">6</td><td style="text-align:left">Magnetic spring linearized only</td><td style="text-align:left">Nonlinear sinusoid and linearization, switchable, plus detent</td></tr><tr><td style="text-align:left">7</td><td style="text-align:left">Damping omitted throughout</td><td style="text-align:left">Structural damping retained, zeroed only for the modal baseline</td></tr></tbody></table></div>
+<hr>
+<h2 id="1-system-layout-and-coordinate-choice">1. System Layout and Coordinate Choice</h2>
+<h3 id="1-1-physical-chain">1.1 Physical chain</h3>
+<pre><code class="language-">   [Commanded field position: x_cmd]
+                  |
+        (Magnetic spring: F_mag, nonlinear)
+                  v
+   [Node 1: Drivetrain  m_d , x_d ]  ---&gt; [bearing friction to ground]
+        rotor + bellows + screw, lumped
+                  |
+        (Axial compliance: k_ax , c_ax)
+        (Nut friction acts IN PARALLEL here)
+                  v
+   [Node 2: Stage  m_s , x_s ]  ---&gt; [guideway friction to ground]
+        table + ball nut + 4 carriages + payload</code></pre>
+<h3 id="1-2-mechanical-degrees-of-freedom-and-kinematic-diagram">1.2 Mechanical degrees of freedom and kinematic diagram</h3>
+<p><img src="rendered_assets/kinematic_diagram.svg" alt="Two-degree-of-freedom kinematic diagram"></p>
+<p>The mechanical model has exactly <strong>two degrees of freedom</strong>: \(x_d\) and \(x_s\). The field command \(x_{cmd}\) is an imposed input, not a degree of freedom. LuGre bristle deflections and GMS element forces are internal friction states; they enlarge the first-order state vector but do not add independent rigid-body motion coordinates. Rotor angle is already represented by \(x_d=r\theta_d\) and is therefore not a third DOF.</p>
+<h3 id="1-3-why-the-linear-domain">1.3 Why the linear domain</h3>
+<p>The transmission ratio is defined as</p>
+<div class="display-math">\[r = \frac{L}{2\pi} \qquad [\text{m/rad}]\]</div>
+<p>with \(L\) the screw lead. Displacements map as \(x = r\theta\) and forces map as \(F = T/r\). Working in the linear domain gives three concrete advantages.</p>
+<ol><li>Both friction sites are expressed in newtons, so their contributions are directly comparable and directly summable. In the rotational domain the nut friction requires a bristle stiffness in N·m/rad, which is a bookkeeping artifact rather than a physical quantity.</li><li>The measurement chain is linear. The interferometer reads metres, and the flexure force sensing reads newtons.</li><li>Published GMS and LuGre parameters for linear guideways and ball nuts are given in N, N/m and N·s/m.</li></ol>
+<h3 id="1-4-why-the-axial-compliance-is-the-correct-internal-dof">1.4 Why the axial compliance is the correct internal DOF</h3>
+<p>Reflecting a torsional stiffness to the linear domain divides by \(r^2\). With \(L = 1\) mm, \(r = 1.592\times10^{-4}\) m/rad and \(r^2 = 2.533\times10^{-8}\). This is a very small number, so the reflection direction dominates the result.</p>
+<div class="table-wrap"><table><thead><tr><th style="text-align:left">Quantity</th><th style="text-align:left">Native value</th><th style="text-align:left">Linear equivalent</th><th style="text-align:left">Status</th></tr></thead><tbody><tr><td style="text-align:left">\(J_m\), motor rotor</td><td style="text-align:left"><input class="parameter-input assumed-input" data-param="J_m" data-default="1.2e-6" value="1.2e-6" aria-label="Editable parameter J_m" spellcheck="false"> kg·m²</td><td style="text-align:left"><input class="parameter-input assumed-input" data-param="m_Jm" data-default="47" value="47" aria-label="Editable parameter m_Jm" spellcheck="false"> kg</td><td style="text-align:left"></td></tr><tr><td style="text-align:left">\(J_c\), bellows coupling</td><td style="text-align:left"><input class="parameter-input assumed-input" data-param="J_c" data-default="5e-8" value="5e-8" aria-label="Editable parameter J_c" spellcheck="false"> kg·m²</td><td style="text-align:left"><input class="parameter-input assumed-input" data-param="m_Jc" data-default="2" value="2" aria-label="Editable parameter m_Jc" spellcheck="false"> kg</td><td style="text-align:left"></td></tr><tr><td style="text-align:left">\(J_s\), ball screw</td><td style="text-align:left"><input class="parameter-input assumed-input" data-param="J_s" data-default="3e-7" value="3e-7" aria-label="Editable parameter J_s" spellcheck="false"> kg·m²</td><td style="text-align:left"><input class="parameter-input assumed-input" data-param="m_Js" data-default="12" value="12" aria-label="Editable parameter m_Js" spellcheck="false"> kg</td><td style="text-align:left"></td></tr><tr><td style="text-align:left"><strong>\(m_d\), drivetrain total</strong></td><td style="text-align:left">—</td><td style="text-align:left"><input class="parameter-input assumed-input" data-param="m_d" data-default="59.0" value="59.0" aria-label="Editable parameter m_d" spellcheck="false"> kg</td><td style="text-align:left"></td></tr><tr><td style="text-align:left">\(m_s\), stage assembly</td><td style="text-align:left"><input class="parameter-input" data-param="m_s_native" data-default="0.60" value="0.60" aria-label="Editable parameter m_s_native" spellcheck="false"> kg</td><td style="text-align:left"><input class="parameter-input" data-param="m_s" data-default="0.60" value="0.60" aria-label="Editable parameter m_s" spellcheck="false"> kg</td><td style="text-align:left">measured, modal</td></tr><tr><td style="text-align:left">\(k_c\), bellows torsional</td><td style="text-align:left"><input class="parameter-input assumed-input" data-param="k_c" data-default="100" value="100" aria-label="Editable parameter k_c" spellcheck="false"> N·m/rad</td><td style="text-align:left"><input class="parameter-input assumed-input" data-param="k_c_linear" data-default="4.0e9" value="4.0e9" aria-label="Editable parameter k_c_linear" spellcheck="false"> N/m</td><td style="text-align:left"></td></tr><tr><td style="text-align:left">\(k_m\), magnetic spring</td><td style="text-align:left"><input class="parameter-input assumed-input" data-param="k_m_rot" data-default="3.0" value="3.0" aria-label="Editable parameter k_m_rot" spellcheck="false"> N·m/rad</td><td style="text-align:left"><input class="parameter-input assumed-input" data-param="K_m" data-default="1.2e8" value="1.2e8" aria-label="Editable parameter K_m" spellcheck="false"> N/m</td><td style="text-align:left"></td></tr><tr><td style="text-align:left">\(k_{ax}\), axial drivetrain</td><td style="text-align:left"><input class="parameter-input" data-param="k_ax_rot" data-default="0.29" value="0.29" aria-label="Editable parameter k_ax_rot" spellcheck="false"> N·m/rad</td><td style="text-align:left"><input class="parameter-input" data-param="k_ax" data-default="1.14e7" value="1.14e7" aria-label="Editable parameter k_ax" spellcheck="false"> N/m</td><td style="text-align:left">measured, modal</td></tr><tr><td style="text-align:left">\(\sigma_{0,g}\), guideway presliding</td><td style="text-align:left">—</td><td style="text-align:left"><input class="parameter-input assumed-input" data-param="sigma0_g" data-default="7.6e5" value="7.6e5" aria-label="Editable parameter sigma0_g" spellcheck="false"> N/m</td><td style="text-align:left"></td></tr></tbody></table></div>
+<p>Two consequences follow.</p>
+<p><strong>The inertia ratio is \(m_d/m_s \approx 98\).</strong> The drivetrain is effectively immovable as seen from the stage. This is why the impact-hammer identification returned a clean fixed-base effective mass of 0.60 kg.</p>
+<p><strong>The stiffness ordering is \(\sigma_{0,g} \ll k_{ax} < K_m \ll k_c/r^2\).</strong> The bellows is the stiffest element in the series chain by two orders of magnitude, and the axial path is the second softest. Revision 1 retained the stiffest element as its flexible degree of freedom and declared the second softest rigid.</p>
+<h3 id="1-5-justification-for-lumping-the-bellows-rigid">1.5 Justification for lumping the bellows rigid</h3>
+<p><strong>Series compliance argument.</strong> The bellows contributes \(1/(4.0\times10^9)\) against \(1/(1.14\times10^7)\) for the axial path. Its share of the total drivetrain series compliance is below 0.3 percent.</p>
+<p><strong>Mode separation argument.</strong> The discarded rotor-against-screw torsional mode sits at</p>
+<div class="display-math">\[\omega_{tors} = \sqrt{k_c\left(\frac{1}{J_m} + \frac{1}{J_s}\right)} \approx 2.04\times10^{4}\ \text{rad/s} \approx 3.2\ \text{kHz}\]</div>
+<p>which is well above the ≤900 Hz band of interest and above the significant microstep excitation content.</p>
+<blockquote><strong>Open item.</strong> The mode-separation argument depends on \(k_c\), which is currently a placeholder. At \(k_c = 10\) N·m/rad the discarded mode falls to approximately 1.0 kHz and the argument weakens materially. The bellows torsional stiffness must be taken from the coupling datasheet and \(\omega_{tors}(k_c)\) reported as a sensitivity.</blockquote>
+<hr>
+<h2 id="2-modeling-assumptions">2. Modeling Assumptions</h2>
+<ul><li><strong>Lumped drivetrain body.</strong> Rotor, bellows coupling and screw translate as one reflected mass \(m_d\). Justified in Section 1.5.</li><li><strong>Rigid stage body.</strong> Table plate, ball nut and four carriages form one rigid mass \(m_s\). Carriage skirt and rail bending compliance are omitted.</li><li><strong>Single axial compliance.</strong> Screw shaft axial stiffness, support bearing axial stiffness and nut body stiffness are lumped into one spring \(k_{ax}\) acting between \(m_d\) and \(m_s\).</li><li><strong>\(k_{ax}\) is the sliding-regime structural stiffness.</strong> It excludes presliding ball-contact compliance, which is carried by the friction model instead. See the double-counting note in Section 6.3.</li><li><strong>Position-independent parameters.</strong> \(k_{ax}\) varies with carriage position because the free screw length changes. This is treated as a documented limitation, not an additional degree of freedom.</li><li><strong>Ideal kinematic transform.</strong> The screw-nut transform is taken as \(x = r\theta\) with unit efficiency. Transmission losses are represented explicitly by the nut friction element rather than by an efficiency factor \(\eta\).</li><li><strong>Damping retained.</strong> Structural damping \(c_{ax}\), electromagnetic drivetrain damping \(c_m\), and viscous friction \(\sigma_2\) are carried through the response model and set to zero only for the energy-conserving modal baseline of Section 5. \(c_m\) represents current-regulator/back-EMF damping and remains an unidentified, highlighted input.</li></ul>
+<hr>
+<h2 id="3-the-drive-force">3. The Drive Force</h2>
+<h3 id="3-1-nonlinear-magnetic-spring">3.1 Nonlinear magnetic spring</h3>
+<p>For a two-phase hybrid stepper with \(N_r\) rotor teeth, the commutation torque about the commanded equilibrium is</p>
+<div class="display-math">\[T_{mag} = T_{max}\sin\big(N_r(\theta_{cmd} - \theta_d)\big)\]</div>
+<p>Converting to the linear domain with \(F = T/r\) and \(\theta = x/r\):</p>
+<div class="display-math">\[\boxed{\;F_{comm} = F_{max}\sin\big(\kappa\,(x_{cmd} - x_d)\big)\;}\]</div>
+<p>where</p>
+<div class="display-math">\[F_{max} = \frac{T_{max}}{r}, \qquad \kappa = \frac{N_r}{r} = \frac{2\pi N_r}{L} \quad [\text{rad/m}]\]</div>
+<p>\(\kappa\) is the spatial electrical wavenumber. One full step corresponds to an electrical quarter cycle, so the full-step pitch is \(L/(4N_r)\).</p>
+<h3 id="3-2-linearized-magnetic-spring">3.2 Linearized magnetic spring</h3>
+<p>Expanding about zero lag angle:</p>
+<div class="display-math">\[\boxed{\;F_{comm} \approx K_m\,(x_{cmd} - x_d), \qquad K_m = F_{max}\kappa = \frac{T_{max}N_r}{r^2} = \frac{k_m}{r^2}\;}\]</div>
+<p>which recovers \(k_m = N_r T_{max}\) as the rotational-domain equivalent.</p>
+<h3 id="3-3-electromagnetic-drivetrain-damping">3.3 Electromagnetic drivetrain damping</h3>
+<p>An ideal magnetic spring with an instantaneous field-position step stores and returns energy but cannot dissipate it. The original model therefore leaves the 226 Hz common-motion mode almost undamped: \(c_{ax}\) acts only on \(\dot x_d-\dot x_s\), which is small in that mode. The response model includes the missing velocity-dependent drive term</p>
+<div class="display-math">\[\boxed{F_{em,damp}=-c_m\dot x_d}.\]</div>
+<p>For a transparent provisional parameterization,</p>
+<div class="display-math">\[c_m=2\zeta_m\sqrt{K_m m_d},\]</div>
+<p>where \(\zeta_m\) is the assumed damping ratio of the isolated reflected drivetrain-on-magnetic-spring mode. This does not change the undamped modal frequencies. It changes only the damped Bode and stepping responses.</p>
+<h3 id="3-4-detent-torque">3.4 Detent torque</h3>
+<p>Detent torque is referenced to the rotor's absolute position rather than to the lag angle, and for a two-phase hybrid stepper it completes four cycles per electrical cycle:</p>
+<div class="display-math">\[F_{det} = -\,\frac{T_{det}}{r}\sin\big(4\kappa\,x_d\big)\]</div>
+<h3 id="3-5-switchable-combined-form">3.5 Switchable combined form</h3>
+<p>Two binary switches select the model variant. \(\lambda_{mag} \in \{0,1\}\) selects linearized or nonlinear commutation. \(\lambda_{det} \in \{0,1\}\) enables detent.</p>
+<div class="display-math">\[F_{drive} = (1-\lambda_{mag})\,K_m(x_{cmd}-x_d) \;+\; \lambda_{mag}\,F_{max}\sin\!\big(\kappa(x_{cmd}-x_d)\big) \;-\; c_m\dot x_d \;-\; \lambda_{det}\,\frac{T_{det}}{r}\sin\!\big(4\kappa\,x_d\big)\]</div>
+<div class="table-wrap"><table><thead><tr><th style="text-align:left">\(\lambda_{mag}\)</th><th style="text-align:left">\(\lambda_{det}\)</th><th style="text-align:left">Use</th></tr></thead><tbody><tr><td style="text-align:left">0</td><td style="text-align:left">0</td><td style="text-align:left">Modal analysis, transfer functions, eigenvalue extraction</td></tr><tr><td style="text-align:left">1</td><td style="text-align:left">0</td><td style="text-align:left">Nonlinear step response, large-lag transients, pull-out margin</td></tr><tr><td style="text-align:left">1</td><td style="text-align:left">1</td><td style="text-align:left">Full simulation, microstep monotonicity, detent-induced position error</td></tr></tbody></table></div>
+<h3 id="3-6-command-discretization">3.6 Command discretization</h3>
+<p>\(x_{cmd}\) is not continuous. It is a staircase set by the microstep index \(n \in \mathbb{Z}\) and the microstep divisor \(\mu\):</p>
+<div class="display-math">\[x_{cmd}(t) = \frac{L}{4N_r\,\mu}\,n(t)\]</div>
+<p>The continuous treatment used in Section 5 is a modal-analysis convenience only. All time-domain simulation must use the staircase.</p>
+<hr>
+<h2 id="4-derivation-of-the-equations-of-motion">4. Derivation of the Equations of Motion</h2>
+<h3 id="step-1-lump-the-drivetrain-mass">Step 1 — Lump the drivetrain mass</h3>
+<p>Rotor, coupling and screw are rigidly connected under the Section 1.5 assumption. Reflecting their combined inertia through the screw transform:</p>
+<div class="display-math">\[m_d = \frac{J_m + J_c + J_s}{r^2}\]</div>
+<h3 id="step-2-lump-the-stage-mass">Step 2 — Lump the stage mass</h3>
+<div class="display-math">\[m_s = m_{stage} + m_{nut} + 4\,m_{cart} + m_{payload}\]</div>
+<h3 id="step-3-define-the-three-friction-sites-and-their-driving-velocities">Step 3 — Define the three friction sites and their driving velocities</h3>
+<div class="table-wrap"><table><thead><tr><th style="text-align:left">Site</th><th style="text-align:left">Symbol</th><th style="text-align:left">Driving velocity</th><th style="text-align:left">Acts between</th></tr></thead><tbody><tr><td style="text-align:left">Linear guideways</td><td style="text-align:left">\(F_{f,g}\)</td><td style="text-align:left">\(v_g = \dot x_s\)</td><td style="text-align:left">stage and ground</td></tr><tr><td style="text-align:left">Ball nut and screw</td><td style="text-align:left">\(F_{f,n}\)</td><td style="text-align:left">\(v_n = \dot x_d - \dot x_s\)</td><td style="text-align:left">drivetrain and stage</td></tr><tr><td style="text-align:left">Support and motor bearings</td><td style="text-align:left">\(F_{f,d}\)</td><td style="text-align:left">\(v_d = \dot x_d\)</td><td style="text-align:left">drivetrain and ground</td></tr></tbody></table></div>
+<p>Each \(F_{f,\alpha}\) is a function of its own velocity and its own internal states. Each is defined positive when opposing positive \(v_\alpha\).</p>
+<h3 id="step-4-drivetrain-free-body-diagram">Step 4 — Drivetrain free body diagram</h3>
+<p>The drivetrain is driven by the magnetic force, resisted by the axial spring and damper, by the nut friction reaction and by its own bearing friction:</p>
+<div class="display-math">\[m_d\ddot x_d = F_{mag} - c_m\dot x_d - k_{ax}(x_d - x_s) - c_{ax}(\dot x_d - \dot x_s) - F_{f,n} - F_{f,d}\]</div>
+<h3 id="step-5-stage-free-body-diagram">Step 5 — Stage free body diagram</h3>
+<p>The stage is driven forward by the axial spring and damper and by the nut friction reaction, and resisted by the guideway friction:</p>
+<div class="display-math">\[m_s\ddot x_s = k_{ax}(x_d - x_s) + c_{ax}(\dot x_d - \dot x_s) + F_{f,n} - F_{f,g}\]</div>
+<p>The sign of \(F_{f,n}\) is opposite in the two equations because it is an internal interaction force. When the drivetrain leads the stage, \(v_n > 0\), the nut friction retards the drivetrain and drags the stage forward.</p>
+<h3 id="step-6-assemble">Step 6 — Assemble</h3>
+<div class="display-math">\[\begin{bmatrix} m_d & 0 \\ 0 & m_s \end{bmatrix}
+\begin{bmatrix} \ddot x_d \\ \ddot x_s \end{bmatrix}
++ c_{ax}\begin{bmatrix} 1 & -1 \\ -1 & 1 \end{bmatrix}
+\begin{bmatrix} \dot x_d \\ \dot x_s \end{bmatrix}
++ c_m\begin{bmatrix} 1 & 0 \\ 0 & 0 \end{bmatrix}
+\begin{bmatrix} \dot x_d \\ \dot x_s \end{bmatrix}
++ k_{ax}\begin{bmatrix} 1 & -1 \\ -1 & 1 \end{bmatrix}
+\begin{bmatrix} x_d \\ x_s \end{bmatrix}
+=
+\begin{bmatrix} F_{mag} - F_{f,n} - F_{f,d} \\[2pt] F_{f,n} - F_{f,g} \end{bmatrix}\]</div>
+<p>This is the master equation. Note that the stiffness matrix alone is singular. Grounding is supplied entirely by \(F_{mag}\), which depends on \(x_d\).</p>
+<details>
+<summary>Raw LaTeX (master equation)</summary>
+<pre><code class="language-latex">\begin{bmatrix} m_d &amp; 0 \\ 0 &amp; m_s \end{bmatrix} \begin{bmatrix} \ddot x_d \\ \ddot x_s \end{bmatrix} + c_{ax}\begin{bmatrix} 1 &amp; -1 \\ -1 &amp; 1 \end{bmatrix} \begin{bmatrix} \dot x_d \\ \dot x_s \end{bmatrix} + c_m\begin{bmatrix} 1 &amp; 0 \\ 0 &amp; 0 \end{bmatrix}\begin{bmatrix} \dot x_d \\ \dot x_s \end{bmatrix} + k_{ax}\begin{bmatrix} 1 &amp; -1 \\ -1 &amp; 1 \end{bmatrix} \begin{bmatrix} x_d \\ x_s \end{bmatrix} = \begin{bmatrix} F_{mag} - F_{f,n} - F_{f,d} \\ F_{f,n} - F_{f,g} \end{bmatrix}</code></pre>
+</details>
+<hr>
+<h2 id="5-linearized-modal-baseline">5. Linearized Modal Baseline</h2>
+<p>Set \(\lambda_{mag} = 0\), \(\lambda_{det} = 0\), \(c_{ax} = 0\) and all friction to zero. Moving \(K_m x_d\) to the left-hand side gives the standard grounded form:</p>
+<div class="display-math">\[\begin{bmatrix} m_d & 0 \\ 0 & m_s \end{bmatrix}
+\begin{bmatrix} \ddot x_d \\ \ddot x_s \end{bmatrix}
++
+\begin{bmatrix} K_m + k_{ax} & -k_{ax} \\ -k_{ax} & k_{ax} \end{bmatrix}
+\begin{bmatrix} x_d \\ x_s \end{bmatrix}
+=
+\begin{bmatrix} K_m x_{cmd} \\ 0 \end{bmatrix}\]</div>
+<p>The characteristic equation is</p>
+<div class="display-math">\[m_d m_s\,\omega^4 - \big[m_d k_{ax} + m_s(K_m + k_{ax})\big]\omega^2 + K_m k_{ax} = 0\]</div>
+<h3 id="5-1-numerical-check-against-measurement">5.1 Numerical check against measurement</h3>
+<p>Substituting \(m_d = 59\) kg, \(m_s = 0.60\) kg, \(K_m = 1.2\times10^8\) N/m, \(k_{ax} = 1.14\times10^7\) N/m:</p>
+<div class="table-wrap"><table><thead><tr><th style="text-align:left">Mode</th><th style="text-align:left">Predicted</th><th style="text-align:left">Independent evidence</th><th style="text-align:left">Shape</th></tr></thead><tbody><tr><td style="text-align:left">1</td><td style="text-align:left">226 Hz</td><td style="text-align:left">239 Hz, analytical rotor-in-detent</td><td style="text-align:left">Drivetrain on magnetic spring, stage riding along</td></tr><tr><td style="text-align:left">2</td><td style="text-align:left">698 Hz</td><td style="text-align:left">620–690 Hz, measured by impact hammer</td><td style="text-align:left">Stage on \(k_{ax}\) against near-stationary drivetrain</td></tr></tbody></table></div>
+<p>Both predicted modes correspond to independently observed features. The 226 versus 239 Hz gap is attributable to the placeholder \(J_m\) and should close once the rotor inertia is either taken from the datasheet or measured by free deceleration.</p>
+<p>For comparison, the Revision 1 model predicts 240 Hz and 3.2 kHz. It reproduces the detent mode, invents a mode at 3.2 kHz that is dynamically irrelevant here, and cannot reproduce the 620–690 Hz stage mode at all.</p>
+<h3 id="5-2-limiting-forms">5.2 Limiting forms</h3>
+<p>Because \(m_d \gg m_s\) and \(K_m > k_{ax}\), the two modes decouple to good approximation:</p>
+<div class="display-math">\[\omega_1 \approx \sqrt{\frac{K_m}{m_d}}, \qquad \omega_2 \approx \sqrt{\frac{k_{ax}}{m_s}}\]</div>
+<p>giving 227 Hz and 694 Hz. The stage mode is a fixed-base mode to within one percent.</p>
+<hr>
+<h2 id="6-friction-models">6. Friction Models</h2>
+<p>Both models are given in identical notation so that the forcing terms of Section 7 are interchangeable between them. Everything below applies independently at each of the three sites \(\alpha \in \{g, n, d\}\), with \(v\) standing for the site's driving velocity \(v_\alpha\) from Step 3.</p>
+<h3 id="6-0-shared-stribeck-attractor">6.0 Shared Stribeck attractor</h3>
+<div class="display-math">\[s(v) = F_c + (F_s - F_c)\exp\!\left(-\left|\frac{v}{v_s}\right|^{\delta}\right)\]</div>
+<p>with \(F_s\) the breakaway force, \(F_c\) the Coulomb force, \(v_s\) the Stribeck velocity and \(\delta\) the shape exponent. Both models use this same function.</p>
+<h3 id="6-1-generalized-maxwell-slip-gms">6.1 Generalized Maxwell-Slip (GMS)</h3>
+<p>GMS is a parallel bank of \(N\) elastoplastic elements. Element \(i\) carries its own force state \(F_i\), its own stiffness \(k_i\) and a normalized weight \(\nu_i\) with \(\sum_{i=1}^{N}\nu_i = 1\). Each element is independently either stuck or slipping, so the model is a switched hybrid system with \(2^N\) discrete modes.</p>
+<p><strong>Stuck:</strong></p>
+<div class="display-math">\[\dot F_i = k_i\,v \qquad \text{valid while } |F_i| < \nu_i\,s(v)\]</div>
+<p>Transition to slipping occurs when \(|F_i|\) reaches \(\nu_i s(v)\).</p>
+<p><strong>Slipping:</strong></p>
+<div class="display-math">\[\boxed{\dot F_i = C\left(\operatorname{sgn}(v) - \frac{F_i}{\nu_i\,s(v)}\right)}\]</div>
+<p>This signed-attractor form is essential: its stable sliding equilibrium is \(F_i=\operatorname{sgn}(v)\nu_i s(v)\). The previously written product form, \(\operatorname{sgn}(v)C[1-F_i/(\nu_i s)]\), has the wrong equilibrium during negative sliding and drives a negative force away from its threshold.</p>
+<p>Transition back to stuck occurs at velocity reversal, that is when \(v\) changes sign or reaches zero.</p>
+<p><strong>Total friction force:</strong></p>
+<div class="display-math">\[F_{f} = \sum_{i=1}^{N} F_i \;+\; \sigma_2\,v\]</div>
+<p>Two aggregate quantities connect this to the lumped description:</p>
+<div class="display-math">\[\sigma_0 = \sum_{i=1}^{N} k_i \qquad \text{(presliding stiffness at zero deflection)}\]</div>
+<div class="display-math">\[\left.\sum_i \nu_i s(v)\right|_{v \to 0} = F_s \qquad \text{(total breakaway force)}\]</div>
+<p>Because the elements reach their individual thresholds at different deflections, the model retains <strong>non-local memory</strong>: the current force depends on the full history of reversals, not only on the present state. This is the property that motivates GMS over single-state models and it is not reproducible with any single internal state.</p>
+<h3 id="6-2-lugre-and-its-elastoplastic-extension">6.2 LuGre and its elastoplastic extension</h3>
+<p>LuGre carries one internal state \(z\), interpreted as an average bristle deflection.</p>
+<p><strong>State equation:</strong></p>
+<div class="display-math">\[\dot z = v - \sigma_0\frac{|v|}{s(v)}\,z\]</div>
+<p><strong>Force output:</strong></p>
+<div class="display-math">\[F_{f} = \sigma_0 z + \sigma_1\dot z + \sigma_2 v\]</div>
+<p>The elastoplastic extension introduces a transition function \(\alpha(z,v) \in [0,1]\) to eliminate drift during true stick:</p>
+<div class="display-math">\[\dot z = v\left[1 - \alpha(z,v)\operatorname{sgn}(v)\frac{\sigma_0 z}{s(v)}\right]\]</div>
+<p>Setting \(\alpha = 1\) recovers standard LuGre exactly.</p>
+<blockquote><strong>Note on Revision 1.</strong> The state equation given in the Revision 1 appendix, expanded, is \(\dot z = v - |v|\sigma_0 z/F_{ss}(v)\). That is LuGre, not GMS. The two models were conflated.</blockquote>
+<h3 id="6-3-model-comparison">6.3 Model comparison</h3>
+<div class="table-wrap"><table><thead><tr><th style="text-align:left">Property</th><th style="text-align:left">GMS</th><th style="text-align:left">LuGre</th></tr></thead><tbody><tr><td style="text-align:left">Internal states per site</td><td style="text-align:left">\(N\) force states</td><td style="text-align:left">1 deflection state</td></tr><tr><td style="text-align:left">Mathematical form</td><td style="text-align:left">Switched hybrid, \(2^N\) modes</td><td style="text-align:left">Smooth ODE</td></tr><tr><td style="text-align:left">Presliding memory</td><td style="text-align:left">Non-local</td><td style="text-align:left">Local</td></tr><tr><td style="text-align:left">True stick</td><td style="text-align:left">Yes, exact</td><td style="text-align:left">Only with elastoplastic \(\alpha\)</td></tr><tr><td style="text-align:left">Hysteresis with non-local memory</td><td style="text-align:left">Reproduced</td><td style="text-align:left">Not reproduced</td></tr><tr><td style="text-align:left">Parameters per site</td><td style="text-align:left">\(2N + 4\)</td><td style="text-align:left">6</td></tr><tr><td style="text-align:left">Identification difficulty</td><td style="text-align:left">High</td><td style="text-align:left">Moderate</td></tr><tr><td style="text-align:left">Integration cost</td><td style="text-align:left">High, event detection required</td><td style="text-align:left">Low</td></tr></tbody></table></div>
+<h3 id="6-4-double-counting-caveat">6.4 Double-counting caveat</h3>
+<p>The Hertzian ball-raceway contact compliance appears in two places. It is physically part of \(k_{ax}\), and it is also part of the nut GMS bank's \(\sigma_{0,n} = \sum k_i\). To avoid counting it twice, \(k_{ax}\) is defined as the <strong>sliding-regime structural stiffness</strong>, measured with the friction bristles saturated. The impact-hammer identification is performed at gross-sliding amplitude, so the measured \(1.14\times10^7\) N/m is consistent with this definition. Any \(k_{ax}\) obtained from a small-amplitude quasi-static test would not be, and would double-count.</p>
+<hr>
+<h2 id="7-friction-site-variants">7. Friction Site Variants</h2>
+<p>The master equation of Step 6 is unchanged in all cases. Only the active friction ports and their internal laws change. A/B/C use LuGre. A2/B2/C2 repeat the same physical ports with GMS so friction-law effects are never confused with topology effects. Case D remains the optional full architecture and is not part of the present paired response comparison.</p>
+<h3 id="case-0-frictionless">Case 0 — Frictionless</h3>
+<div class="display-math">\[F_{f,g} = F_{f,n} = F_{f,d} = 0, \qquad
+\mathbf{f} = \begin{bmatrix} F_{mag} \\ 0 \end{bmatrix}\]</div>
+<p>Frictionless baseline. For undamped modal extraction, set \(c_{ax}=c_m=0\); for Bode and stepping responses, retain the separately modeled structural and electromagnetic damping.</p>
+<h3 id="case-a-guideway-friction-only">Case A — Guideway friction only</h3>
+<p>Friction acts between the stage and ground, driven by absolute stage velocity.</p>
+<div class="display-math">\[\mathbf{f} = \begin{bmatrix} F_{mag} \\[2pt] -\,F_{f,g}(\dot x_s,\ \mathbf{z}_g) \end{bmatrix}\]</div>
+<p>This is the dominant site by presliding compliance. Directly observable by a stage-mounted interferometer.</p>
+<h3 id="case-a2-guideway-friction-only-gms">Case A2 — Guideway friction only, GMS</h3>
+<p>The body equations and velocity \(v_g=\dot x_s\) are identical to Case A. Replace the single LuGre state \(z_g\) by the GMS force bank \(\{F_{i,g}\}_{i=1}^{N_g}\) and sum its output to obtain \(F_{f,g}\).</p>
+<h3 id="case-b-nut-and-screw-friction-only">Case B — Nut and screw friction only</h3>
+<p>Friction acts across the screw-nut interface, driven by relative velocity, and therefore appears <strong>in parallel with \(k_{ax}\)</strong> with opposite signs in the two rows.</p>
+<div class="display-math">\[\mathbf{f} = \begin{bmatrix} -\,F_{f,n}(\dot x_d - \dot x_s,\ \mathbf{z}_n) \;+\; F_{mag} \\[2pt] +\,F_{f,n}(\dot x_d - \dot x_s,\ \mathbf{z}_n) \end{bmatrix}\]</div>
+<p>Not observable from stage position alone. Manifests only as differential deflection across \(k_{ax}\).</p>
+<h3 id="case-b2-nut-and-screw-friction-only-gms">Case B2 — Nut and screw friction only, GMS</h3>
+<p>The body equations and velocity \(v_n=\dot x_d-\dot x_s\) are identical to Case B. Replace \(z_n\) by the GMS force bank \(\{F_{i,n}\}_{i=1}^{N_n}\).</p>
+<h3 id="case-c-guideway-and-nut-friction">Case C — Guideway and nut friction</h3>
+<div class="display-math">\[\mathbf{f} = \begin{bmatrix} F_{mag} - F_{f,n}(\dot x_d - \dot x_s,\ \mathbf{z}_n) \\[2pt] F_{f,n}(\dot x_d - \dot x_s,\ \mathbf{z}_n) - F_{f,g}(\dot x_s,\ \mathbf{z}_g) \end{bmatrix}\]</div>
+<p>Two independent friction banks acting on two distinct velocity arguments. This is the minimum structure required for the parameter-transfer study.</p>
+<h3 id="case-c2-guideway-and-nut-friction-gms">Case C2 — Guideway and nut friction, GMS</h3>
+<p>The mechanical equations are identical to Case C. Both active LuGre states are replaced by independent GMS banks driven by \(v_g\) and \(v_n\) respectively.</p>
+<h3 id="case-d-full-model">Case D — Full model</h3>
+<p>Adds support-bearing and motor-bearing friction on the drivetrain node, driven by absolute drivetrain velocity.</p>
+<div class="display-math">\[\mathbf{f} = \begin{bmatrix} F_{mag} - F_{f,n}(\dot x_d - \dot x_s,\ \mathbf{z}_n) - F_{f,d}(\dot x_d,\ \mathbf{z}_d) \\[2pt] F_{f,n}(\dot x_d - \dot x_s,\ \mathbf{z}_n) - F_{f,g}(\dot x_s,\ \mathbf{z}_g) \end{bmatrix}\]</div>
+<p>\(F_{f,d}\) is the site addressed by rotor spin-down and breakaway measurements, reflected as \(F_{f,d} = T_{brg}/r\).</p>
+<h3 id="7-1-case-selection-summary">7.1 Case selection summary</h3>
+<div class="table-wrap"><table><thead><tr><th style="text-align:left">Case</th><th style="text-align:left">Friction law</th><th style="text-align:center">\(F_{f,g}\)</th><th style="text-align:center">\(F_{f,n}\)</th><th style="text-align:center">\(F_{f,d}\)</th><th style="text-align:left">Purpose</th></tr></thead><tbody><tr><td style="text-align:left">0</td><td style="text-align:left">none</td><td style="text-align:center">–</td><td style="text-align:center">–</td><td style="text-align:center">–</td><td style="text-align:left">Frictionless modal/response baseline</td></tr><tr><td style="text-align:left">A</td><td style="text-align:left">LuGre</td><td style="text-align:center">✓</td><td style="text-align:center">–</td><td style="text-align:center">–</td><td style="text-align:left">Guideway hypothesis</td></tr><tr><td style="text-align:left">A2</td><td style="text-align:left">GMS</td><td style="text-align:center">✓</td><td style="text-align:center">–</td><td style="text-align:center">–</td><td style="text-align:left">Matched guideway-law comparison</td></tr><tr><td style="text-align:left">B</td><td style="text-align:left">LuGre</td><td style="text-align:center">–</td><td style="text-align:center">✓</td><td style="text-align:center">–</td><td style="text-align:left">Nut hypothesis</td></tr><tr><td style="text-align:left">B2</td><td style="text-align:left">GMS</td><td style="text-align:center">–</td><td style="text-align:center">✓</td><td style="text-align:center">–</td><td style="text-align:left">Matched nut-law comparison</td></tr><tr><td style="text-align:left">C</td><td style="text-align:left">LuGre</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td><td style="text-align:center">–</td><td style="text-align:left">Two-site parameter transfer</td></tr><tr><td style="text-align:left">C2</td><td style="text-align:left">GMS</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td><td style="text-align:center">–</td><td style="text-align:left">Matched two-site-law comparison</td></tr><tr><td style="text-align:left">D</td><td style="text-align:left">selectable</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td><td style="text-align:left">Optional full architecture; not plotted here</td></tr></tbody></table></div>
+<hr>
+<h2 id="8-identifiability">8. Identifiability</h2>
+<p>The friction-site separation of Section 7 exists only because the axial degree of freedom was retained. This has a direct consequence for parameter identification.</p>
+<p><strong>Under a single-coordinate model</strong>, the rigid kinematic lock forces \(\dot x_d = \dot x_s\). Then \(v_n \equiv 0\) and \(v_g \equiv v_d\), so the guideway and drivetrain friction terms are driven by the same velocity and sum at the same node. Only the aggregate \(F_{f,g} + F_{f,d}\) is identifiable. The split is structurally unrecoverable regardless of measurement quality or excitation richness.</p>
+<p><strong>Under the two-coordinate model of Step 6</strong>, the three sites are driven by three distinct velocity arguments and act on two distinct bodies:</p>
+<ul><li>\(F_{f,g}\) sets the absolute lost motion of the stage and is visible to a stage-referenced measurement.</li><li>\(F_{f,n}\) appears only as differential deflection across \(k_{ax}\) and requires a differential measurement spanning the drivetrain and stage pickup points.</li><li>\(F_{f,d}\) acts on the drivetrain node against ground and is separable only if the drivetrain coordinate is instrumented.</li></ul>
+<p>This is the formal statement of why the instrumented testbed is necessary and why the differential interferometer architecture is the correct measurement topology. In the deployed open-loop configuration, where neither the drivetrain coordinate nor the differential deflection is measurable, only the aggregate is observable. The identification must therefore be performed on the testbed and the split transferred.</p>
+<hr>
+<h2 id="9-known-limitations">9. Known Limitations</h2>
+<ol><li>\(J_m\), \(J_c\), \(J_s\) and \(k_c\) are placeholders. Every number in Sections 1.3, 1.4 and 5.1 is provisional until they are measured or sourced.</li><li>\(k_{ax}\) is position dependent through the varying free screw length. Treated as constant here.</li><li>Carriage skirt compliance and rail bending are absorbed into the rigid stage assumption.</li><li>Yaw, pitch and roll of the stage are not modeled. Only the drive axis is represented.</li><li>Thermal dependence of all friction parameters is omitted.</li><li>The screw transform is treated as ideal. Lead error, cyclic error and screw runout are not represented.</li><li>Electrical dynamics of the stepper are omitted. Current is assumed to track command instantaneously, which is defensible below 900 RPM but not at higher rates.</li><li>Electromagnetic damping \(c_m\) is required for a realistic transient but has not been identified. The response study highlights its assumed value and must be rerun after ring-down identification.</li></ol>
+<hr>
+<h2 id="nomenclature">Nomenclature</h2>
+<div class="table-wrap"><table><thead><tr><th style="text-align:left">Symbol</th><th style="text-align:left">Description</th><th style="text-align:left">Units</th></tr></thead><tbody><tr><td style="text-align:left">\(r = L/2\pi\)</td><td style="text-align:left">Screw transmission ratio</td><td style="text-align:left">m/rad</td></tr><tr><td style="text-align:left">\(L\)</td><td style="text-align:left">Screw lead</td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">\(x_{cmd}\)</td><td style="text-align:left">Commanded field position, linear equivalent</td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">\(x_d\)</td><td style="text-align:left">Drivetrain position, linear equivalent</td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">\(x_s\)</td><td style="text-align:left">Stage position</td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">\(m_d\)</td><td style="text-align:left">Reflected drivetrain mass</td><td style="text-align:left">kg</td></tr><tr><td style="text-align:left">\(m_s\)</td><td style="text-align:left">Stage assembly mass</td><td style="text-align:left">kg</td></tr><tr><td style="text-align:left">\(J_m\), \(J_c\), \(J_s\)</td><td style="text-align:left">Rotor, coupling, screw inertias</td><td style="text-align:left">kg·m²</td></tr><tr><td style="text-align:left">\(k_{ax}\), \(c_{ax}\)</td><td style="text-align:left">Axial drivetrain stiffness and damping</td><td style="text-align:left">N/m, N·s/m</td></tr><tr><td style="text-align:left">\(c_m\)</td><td style="text-align:left">Reflected electromagnetic drivetrain damping</td><td style="text-align:left">N·s/m</td></tr><tr><td style="text-align:left">\(\zeta_m\)</td><td style="text-align:left">Provisional damping ratio used to derive \(c_m\)</td><td style="text-align:left">–</td></tr><tr><td style="text-align:left">\(k_c\)</td><td style="text-align:left">Bellows torsional stiffness</td><td style="text-align:left">N·m/rad</td></tr><tr><td style="text-align:left">\(F_{mag}\)</td><td style="text-align:left">Total magnetic drive force</td><td style="text-align:left">N</td></tr><tr><td style="text-align:left">\(F_{max} = T_{max}/r\)</td><td style="text-align:left">Peak commutation force</td><td style="text-align:left">N</td></tr><tr><td style="text-align:left">\(\kappa = 2\pi N_r/L\)</td><td style="text-align:left">Spatial electrical wavenumber</td><td style="text-align:left">rad/m</td></tr><tr><td style="text-align:left">\(K_m = k_m/r^2\)</td><td style="text-align:left">Linearized magnetic stiffness</td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">\(N_r\)</td><td style="text-align:left">Rotor tooth count, 50 for a 1.8° motor</td><td style="text-align:left">–</td></tr><tr><td style="text-align:left">\(T_{max}\)</td><td style="text-align:left">Peak torque-angle amplitude at run current</td><td style="text-align:left">N·m</td></tr><tr><td style="text-align:left">\(T_{det}\)</td><td style="text-align:left">Detent torque amplitude</td><td style="text-align:left">N·m</td></tr><tr><td style="text-align:left">\(\mu\)</td><td style="text-align:left">Microstep divisor</td><td style="text-align:left">–</td></tr><tr><td style="text-align:left">\(\lambda_{mag}\), \(\lambda_{det}\)</td><td style="text-align:left">Model switches</td><td style="text-align:left">–</td></tr><tr><td style="text-align:left">\(F_{f,g}\), \(F_{f,n}\), \(F_{f,d}\)</td><td style="text-align:left">Guideway, nut, bearing friction forces</td><td style="text-align:left">N</td></tr><tr><td style="text-align:left">\(v_g\), \(v_n\), \(v_d\)</td><td style="text-align:left">Corresponding driving velocities</td><td style="text-align:left">m/s</td></tr><tr><td style="text-align:left">\(F_s\), \(F_c\)</td><td style="text-align:left">Breakaway and Coulomb force</td><td style="text-align:left">N</td></tr><tr><td style="text-align:left">\(v_s\), \(\delta\)</td><td style="text-align:left">Stribeck velocity and shape exponent</td><td style="text-align:left">m/s, –</td></tr><tr><td style="text-align:left">\(N\), \(\nu_i\), \(k_i\), \(F_i\)</td><td style="text-align:left">GMS element count, weight, stiffness, force state</td><td style="text-align:left">–, –, N/m, N</td></tr><tr><td style="text-align:left">\(C\)</td><td style="text-align:left">GMS slip attraction parameter</td><td style="text-align:left">N/s</td></tr><tr><td style="text-align:left">\(z\)</td><td style="text-align:left">LuGre bristle deflection state</td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">\(\sigma_0\), \(\sigma_1\), \(\sigma_2\)</td><td style="text-align:left">Bristle stiffness, micro-damping, viscous coefficient</td><td style="text-align:left">N/m, N·s/m, N·s/m</td></tr></tbody></table></div><div class="footer">Rendered from Simulation_description.md · 2026-08-10 11:37 W. Europe Daylight Time</div></article></div>
+<script>
+function setDetails(open) { document.querySelectorAll('details').forEach(d => d.open=open); }
+function toggleTheme() { const root=document.documentElement; root.dataset.theme=root.dataset.theme==='dark'?'light':'dark'; }
+const parameterStorageKey = 'model-parameters:' + document.title + ':' + location.pathname;
+function currentParameterValues() {
+  const values = {};
+  document.querySelectorAll('.parameter-input').forEach(input => values[input.dataset.param] = input.value);
+  return values;
+}
+function persistParameterInputs() {
+  localStorage.setItem(parameterStorageKey, JSON.stringify(currentParameterValues()));
+}
+function resetParameterInputs() {
+  document.querySelectorAll('.parameter-input').forEach(input => {
+    input.value = input.dataset.default;
+    input.setAttribute('value', input.value);
+  });
+  localStorage.removeItem(parameterStorageKey);
+}
+async function saveEditedHtml() {
+  const originalInputs = Array.from(document.querySelectorAll('.parameter-input'));
+  originalInputs.forEach(input => input.setAttribute('value', input.value));
+  const clonedRoot = document.documentElement.cloneNode(true);
+  const clonedInputs = Array.from(clonedRoot.querySelectorAll('.parameter-input'));
+  clonedInputs.forEach((input, index) => {
+    const value = originalInputs[index].value;
+    input.setAttribute('value', value);
+    input.setAttribute('data-default', value);
+  });
+  const source = '<!doctype html>
+' + clonedRoot.outerHTML;
+  const suggestedName = location.pathname.split('/').pop() || 'model-report.html';
+  if ('showSaveFilePicker' in window) {
+    try {
+      const handle = await window.showSaveFilePicker({suggestedName, types:[{description:'HTML document', accept:{'text/html':['.html']}}]});
+      const writable = await handle.createWritable();
+      await writable.write(source);
+      await writable.close();
+      return;
+    } catch (error) { if (error.name === 'AbortError') return; }
+  }
+  const blob = new Blob([source], {type:'text/html;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url; link.download = suggestedName; link.click();
+  URL.revokeObjectURL(url);
+}
+document.addEventListener('DOMContentLoaded', () => {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(parameterStorageKey) || '{}'); } catch (_) { saved = {}; }
+  document.querySelectorAll('.parameter-input').forEach(input => {
+    if (Object.prototype.hasOwnProperty.call(saved, input.dataset.param)) input.value = saved[input.dataset.param];
+    input.setAttribute('value', input.value);
+    input.addEventListener('input', () => { input.setAttribute('value', input.value); persistParameterInputs(); });
+  });
+});
+</script>
+</body></html>
