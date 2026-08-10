@@ -5,7 +5,7 @@ This workspace documents and executes a physics-based model of the stepper-drive
 ## Start here
 
 - [Revision 3 model specification](Rev%203/ball_screw_stage_dynamic_derivation_v3.html) — assumptions, coordinates, topology, parameters, reduction, and friction variants.
-- [Revision 3 analytical derivation and responses](Rev%203/Analytical_derivation_and_responses_v3.html) — comprehensive equations, expandable derivation steps, Bode plots, step responses, tracking errors, kinematic diagram, presliding memory test, and verification results.
+- [Revision 3 analytical derivation and responses](Rev%203/Analytical_derivation_and_responses_v3.html) — comprehensive equations, expandable derivation steps, focused Bode plots, step responses, modeled command-stage deviations, kinematic diagram, presliding memory test, and verification results.
 - [Revision 3 Markdown derivation](Rev%203/Analytical_derivation_and_responses_v3.md) — editable source for the analytical document.
 - [Single Revision 3 builder](Rev%203/build_model_documentation.py) — simulations, plots, generated metric tables, and Markdown-to-HTML rendering.
 - `Rev 2/` — preserved earlier revision for comparison.

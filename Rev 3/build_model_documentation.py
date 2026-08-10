@@ -97,6 +97,8 @@ GMS_WEIGHTS = np.array([0.10, 0.20, 0.30, 0.40])
 GMS_STIFFNESS_FRACTIONS = np.array([0.40, 0.30, 0.20, 0.10])
 GMS_N = GMS_WEIGHTS.size
 GMS_CONVERGENCE_DTS = (1.0e-5, 5.0e-6, 2.5e-6)
+BODE_FOCUS_MIN_HZ = 100.0
+BODE_FOCUS_MAX_HZ = 3000.0
 
 
 # Nested reversals for the dedicated presliding-memory experiment.  One
@@ -554,6 +556,7 @@ def presliding_responses(constants: dict[str, float]) -> dict[str, object]:
         ])
         metrics[key] = {
             "whole_rms_nm": float(np.sqrt(np.mean(error[active] ** 2)) * 1e9),
+            "max_abs_deviation_nm": float(np.max(np.abs(error[active])) * 1e9),
             "final_mean_nm": float(endpoint_error_array[-1] * 1e9),
             "return_error_mismatch_nm": float(np.mean(error_mismatch) * 1e9),
             "return_force_mismatch_N": float(np.mean(force_mismatch)),
@@ -601,6 +604,8 @@ def time_responses(constants: dict[str, float]) -> tuple[np.ndarray, np.ndarray,
         metrics[key] = {
             "mean_final_error_nm": float(np.mean(error[final_window]) * 1e9),
             "rms_final_error_nm": final_window_rms_error_nm(times, states, constants),
+            "rms_sequence_deviation_nm": float(np.sqrt(np.mean(error ** 2)) * 1e9),
+            "max_abs_deviation_nm": float(np.max(np.abs(error)) * 1e9),
             "max_stage_um": float(np.max(np.abs(states[:, 1])) * 1e6),
             "first_peak_um": first_peak * 1e6,
             "first_overshoot_pct": max(0.0, (first_peak / constants["quarter_step"] - 1.0) * 100.0),
@@ -635,12 +640,13 @@ def gms_step_halving_convergence(constants: dict[str, float], base_times: np.nda
 
 def plot_case_responses(frequencies: np.ndarray, responses: dict[str, np.ndarray],
                         times: np.ndarray, command: np.ndarray,
-                        results: dict[str, np.ndarray], constants: dict[str, float]) -> list[Path]:
-    """Create one self-contained Bode/step/error figure beside each case."""
+                        results: dict[str, np.ndarray], constants: dict[str, float],
+                        time_metrics: dict[str, dict[str, float]]) -> list[Path]:
+    """Create one self-contained Bode/step/deviation figure beside each case."""
     outputs: list[Path] = []
     time_ms = times * 1e3
     for key, case in CASES.items():
-        fig, axes = plt.subplots(2, 2, figsize=(11.2, 7.4))
+        fig, axes = plt.subplots(2, 2, figsize=(10.4, 7.4))
         ax_mag, ax_pos = axes[0]
         ax_phase, ax_err = axes[1]
         response = responses[key]
@@ -653,11 +659,13 @@ def plot_case_responses(frequencies: np.ndarray, responses: dict[str, np.ndarray
         ax_mag.set_ylabel("Magnitude (dB)")
         ax_mag.set_title("Command-to-stage Bode magnitude")
         ax_mag.set_ylim(-90.0, 35.0)
+        ax_mag.set_xlim(BODE_FOCUS_MIN_HZ, BODE_FOCUS_MAX_HZ)
 
         ax_phase.semilogx(frequencies, phase, color=color, linestyle=line_style, linewidth=1.8)
         ax_phase.set_xlabel("Frequency (Hz)")
         ax_phase.set_ylabel("Phase (deg)")
         ax_phase.set_ylim(-380.0, 30.0)
+        ax_phase.set_xlim(BODE_FOCUS_MIN_HZ, BODE_FOCUS_MAX_HZ)
 
         stage = results[key][:, 1]
         error = command - stage
@@ -667,22 +675,32 @@ def plot_case_responses(frequencies: np.ndarray, responses: dict[str, np.ndarray
                     label="Actual stage")
         ax_pos.set_ylabel("Position (µm)")
         ax_pos.set_title("Bounded commanded / actual motion")
+        ax_pos.set_ylabel("Position (um)")
         ax_pos.legend(loc="upper right", frameon=True)
 
         ax_err.plot(time_ms, error * 1e9, color=color, linestyle=line_style, linewidth=1.5)
         ax_err.axhline(0.0, color="#888888", linewidth=0.8)
         ax_err.set_xlabel("Time (ms)")
-        ax_err.set_ylabel(r"Error $x_{cmd}-x_s$ (nm)")
-        ax_err.set_title("Tracking error")
+        ax_err.set_ylabel(r"Modeled deviation $x_{cmd}-x_s$ (nm)")
+        ax_err.set_title("Open-loop command-stage deviation")
 
         for axis in axes.flat:
             axis.grid(True, which="major", color="#d1d1d1", linewidth=0.7)
             axis.grid(True, which="minor", color="#eeeeee", linewidth=0.45)
+        metric = time_metrics[key]
         fig.suptitle(case["label"], fontsize=14, fontweight="bold")
+        fig.text(
+            0.5, 0.042,
+            f"Open-loop modeled command-stage deviation (not a servo tracking specification): "
+            f"RMS={metric['rms_sequence_deviation_nm']:.1f} nm; "
+            f"peak |deviation|={metric['max_abs_deviation_nm']:.1f} nm; "
+            f"final-2-ms RMS={metric['rms_final_error_nm']:.1f} nm.",
+            ha="center", fontsize=8.2, color="#555555",
+        )
         fig.text(0.5, 0.012,
                  f"Nonlinear magnetic force; zeta_m={MODEL['zeta_m']:.2f}; each command increment <= {constants['quarter_step'] * 1e6:.2f} µm.",
                  ha="center", fontsize=8.5, color="#555555")
-        fig.tight_layout(rect=(0.02, 0.04, 0.99, 0.95))
+        fig.tight_layout(rect=(0.02, 0.075, 0.99, 0.95))
         output = ASSET_DIR / f"response_case_{key}.svg"
         fig.savefig(output, format="svg", bbox_inches="tight")
         plt.close(fig)
@@ -692,7 +710,8 @@ def plot_case_responses(frequencies: np.ndarray, responses: dict[str, np.ndarray
 
 def plot_pairwise_comparison(frequencies: np.ndarray, responses: dict[str, np.ndarray],
                              times: np.ndarray, command: np.ndarray,
-                             results: dict[str, np.ndarray]) -> Path:
+                             results: dict[str, np.ndarray],
+                             time_metrics: dict[str, dict[str, float]]) -> Path:
     """Compare each LuGre case only with its topology-matched GMS case."""
     fig, axes = plt.subplots(3, 2, figsize=(11.5, 10.5))
     time_ms = times * 1e3
@@ -700,19 +719,23 @@ def plot_pairwise_comparison(frequencies: np.ndarray, responses: dict[str, np.nd
         ax_bode, ax_error = axes[row]
         for key in (lugre_key, gms_key):
             case = CASES[key]
+            metric = time_metrics[key]
+            metric_label = (f"{case['label']} | RMS {metric['rms_sequence_deviation_nm']:.1f} nm; "
+                            f"max {metric['max_abs_deviation_nm']:.1f} nm")
             magnitude = 20.0 * np.log10(np.maximum(np.abs(responses[key]), 1e-15))
             ax_bode.semilogx(frequencies, magnitude, color=case["color"],
-                             linestyle=case["ls"], linewidth=1.7, label=case["label"])
+                             linestyle=case["ls"], linewidth=1.7, label=metric_label)
             error = command - results[key][:, 1]
             ax_error.plot(time_ms, error * 1e9, color=case["color"],
-                          linestyle=case["ls"], linewidth=1.45, label=case["label"])
+                          linestyle=case["ls"], linewidth=1.45, label=metric_label)
         ax_bode.axhline(0.0, color="#888888", linewidth=0.7)
         ax_bode.set_ylabel("Magnitude (dB)")
         ax_bode.set_ylim(-90.0, 30.0)
+        ax_bode.set_xlim(BODE_FOCUS_MIN_HZ, BODE_FOCUS_MAX_HZ)
         ax_bode.set_title(f"{lugre_key}/{gms_key}: Bode magnitude")
         ax_bode.legend(loc="lower left", fontsize=8)
         ax_error.axhline(0.0, color="#888888", linewidth=0.7)
-        ax_error.set_ylabel("Tracking error (nm)")
+        ax_error.set_ylabel("Modeled command-stage deviation (nm)")
         ax_error.set_title(f"{lugre_key}/{gms_key}: nonlinear sequence")
         ax_error.legend(loc="upper right", fontsize=8)
         for axis in (ax_bode, ax_error):
@@ -720,8 +743,11 @@ def plot_pairwise_comparison(frequencies: np.ndarray, responses: dict[str, np.nd
             axis.grid(True, which="minor", color="#eeeeee", linewidth=0.45)
     axes[-1, 0].set_xlabel("Frequency (Hz)")
     axes[-1, 1].set_xlabel("Time (ms)")
-    fig.suptitle("Topology-matched friction-model comparison", fontsize=15, fontweight="bold")
-    fig.tight_layout(rect=(0.02, 0.02, 0.99, 0.96))
+    fig.suptitle("Topology-matched friction-model response comparison", fontsize=15, fontweight="bold")
+    fig.text(0.5, 0.008,
+             "RMS and max labels summarize open-loop command-stage deviation, not closed-loop tracking performance.",
+             ha="center", fontsize=8.3, color="#555555")
+    fig.tight_layout(rect=(0.02, 0.03, 0.99, 0.96))
     output = ASSET_DIR / "lugre_gms_pairwise_comparison.svg"
     fig.savefig(output, format="svg", bbox_inches="tight")
     plt.close(fig)
@@ -729,7 +755,7 @@ def plot_pairwise_comparison(frequencies: np.ndarray, responses: dict[str, np.nd
 
 
 def plot_presliding_memory(experiment: dict[str, object]) -> Path:
-    """Visualize nested reversal tracking and friction return-point memory."""
+    """Visualize nested-reversal command following and friction return-point memory."""
     times = experiment["times"]
     command = experiment["command"]
     results = experiment["results"]
@@ -761,8 +787,8 @@ def plot_presliding_memory(experiment: dict[str, object]) -> Path:
     ax_motion.set_title("Nested microstep command and actual stage motion")
     ax_motion.set_ylabel("Position (um)")
     ax_motion.legend(loc="upper right", fontsize=8)
-    ax_error.set_title("Tracking error over the same reversal history")
-    ax_error.set_ylabel(r"Error $x_{cmd}-x_s$ (nm)")
+    ax_error.set_title("Modeled command-stage deviation over the same reversal history")
+    ax_error.set_ylabel(r"Modeled deviation $x_{cmd}-x_s$ (nm)")
     ax_error.axhline(0.0, color="#777777", linewidth=0.8)
     ax_error.legend(loc="upper right", fontsize=8)
     ax_memory.set_title("Guideway friction memory loops")
@@ -772,16 +798,19 @@ def plot_presliding_memory(experiment: dict[str, object]) -> Path:
     ax_memory.axvline(0.0, color="#888888", linewidth=0.7)
     ax_memory.legend(loc="best", fontsize=8)
 
-    categories = ("Whole-sequence\nRMS", "Return-point\nmismatch", "Final-origin\nabsolute error")
+    categories = ("Whole-sequence\nRMS", "Peak absolute\ndeviation",
+                  "Return-point\nmismatch", "Final-origin\nabsolute deviation")
     x_positions = np.arange(len(categories), dtype=float)
     width = 0.34
     lugre_values = np.array([
         metrics["A"]["whole_rms_nm"],
+        metrics["A"]["max_abs_deviation_nm"],
         metrics["A"]["return_error_mismatch_nm"],
         abs(metrics["A"]["final_mean_nm"]),
     ])
     gms_values = np.array([
         metrics["A2"]["whole_rms_nm"],
+        metrics["A2"]["max_abs_deviation_nm"],
         metrics["A2"]["return_error_mismatch_nm"],
         abs(metrics["A2"]["final_mean_nm"]),
     ])
@@ -791,8 +820,8 @@ def plot_presliding_memory(experiment: dict[str, object]) -> Path:
                              color=CASES["A2"]["color"], label="GMS A2")
     ax_metrics.set_yscale("log")
     ax_metrics.set_xticks(x_positions, categories)
-    ax_metrics.set_ylabel("Tracking-error metric (nm, log scale)")
-    ax_metrics.set_title("Tracking result: global and memory-sensitive metrics")
+    ax_metrics.set_ylabel("Command-stage deviation metric (nm, log scale)")
+    ax_metrics.set_title("Open-loop response: global and memory-sensitive metrics")
     ax_metrics.legend(loc="upper right", fontsize=8)
     for bars in (bars_a, bars_a2):
         for bar in bars:
@@ -925,6 +954,8 @@ def plot_full_reduced_verification(frequencies: np.ndarray, verification: dict[s
                         label=label, color=color, linestyle=line_style, linewidth=1.7)
         ax_phase.semilogx(frequencies, np.unwrap(np.angle(response)) * 180.0 / np.pi,
                           label=label, color=color, linestyle=line_style, linewidth=1.7)
+    ax_mag.set_xlim(BODE_FOCUS_MIN_HZ, BODE_FOCUS_MAX_HZ)
+    ax_phase.set_xlim(BODE_FOCUS_MIN_HZ, BODE_FOCUS_MAX_HZ)
     ax_mag.axhline(0.0, color="#888888", linewidth=0.7)
     ax_mag.set_ylabel("Magnitude (dB)")
     ax_mag.set_title("Command-to-stage Bode magnitude")
@@ -1060,6 +1091,7 @@ def plot_rotor_stage_transfer_functions(frequencies: np.ndarray) -> Path:
         axis.grid(True, which="major", color="#d1d1d1", linewidth=0.7)
         axis.grid(True, which="minor", color="#eeeeee", linewidth=0.45)
         axis.set_xlabel("Frequency (Hz)")
+        axis.set_xlim(BODE_FOCUS_MIN_HZ, BODE_FOCUS_MAX_HZ)
         axis.legend(fontsize=8.0, loc="best")
     magnitude_ax.set_ylabel("Magnitude (dB)")
     magnitude_ax.set_title("Transfer-function magnitude")
@@ -1085,8 +1117,8 @@ def generated_summary(linear_metrics: dict[str, dict[str, float | np.ndarray]],
                       verification: dict[str, object]) -> str:
     lines = [
         "<!-- BEGIN GENERATED RESPONSE SUMMARY -->",
-        "| Case | Friction law | Presliding modes (Hz) | DC gain $X_s/X_{cmd}$ | First-step overshoot | Final-window RMS error |",
-        "|---|---|---:|---:|---:|---:|",
+        "| Case | Friction law | Presliding modes (Hz) | DC gain $X_s/X_{cmd}$ | First-step overshoot | Full-sequence RMS deviation | Peak absolute deviation | Final-window RMS deviation |",
+        "|---|---|---:|---:|---:|---:|---:|---:|",
     ]
     for key, case in CASES.items():
         modes = linear_metrics[key]["modes"]
@@ -1094,11 +1126,14 @@ def generated_summary(linear_metrics: dict[str, dict[str, float | np.ndarray]],
         friction_label = {"none": "none", "lugre": "LuGre", "gms": "GMS"}[case["friction"]]
         lines.append(
             f"| {key} | {friction_label} | {mode_text} | {linear_metrics[key]['dc_gain']:.5f} | "
-            f"{time_metrics[key]['first_overshoot_pct']:.1f}% | {time_metrics[key]['rms_final_error_nm']:.1f} nm |"
+            f"{time_metrics[key]['first_overshoot_pct']:.1f}% | "
+            f"{time_metrics[key]['rms_sequence_deviation_nm']:.1f} nm | "
+            f"{time_metrics[key]['max_abs_deviation_nm']:.1f} nm | "
+            f"{time_metrics[key]['rms_final_error_nm']:.1f} nm |"
         )
     lines.extend([
         "",
-        "The final column summarizes the last 2 ms of the nonlinear run; it is not an identified settling specification. "
+        "The three deviation columns use $d(t)=x_{cmd}(t)-x_s(t)$. They describe the open-loop modeled plant response under each friction law, not closed-loop servo tracking performance. The final column summarizes the last 2 ms of the nonlinear run and is not an identified settling specification. "
         "All cases include the separately highlighted electromagnetic damping assumption; Case 0 remains frictionless.",
         "",
         "### Generated reduction audit",
@@ -1136,8 +1171,9 @@ def generated_presliding_summary(experiment: dict[str, object]) -> str:
         "|---|---:|---:|---:|",
     ]
     rows = (
-        ("Whole-sequence RMS tracking error", "whole_rms_nm", "nm", False),
-        ("Mean repeated-return tracking mismatch", "return_error_mismatch_nm", "nm", False),
+        ("Whole-sequence RMS command-stage deviation", "whole_rms_nm", "nm", False),
+        ("Peak absolute command-stage deviation", "max_abs_deviation_nm", "nm", False),
+        ("Mean repeated-return deviation mismatch", "return_error_mismatch_nm", "nm", False),
         ("Mean repeated-return friction-force mismatch", "return_force_mismatch_N", "N", False),
         ("Absolute mean error after final return to zero", "final_mean_nm", "nm", True),
     )
@@ -1606,7 +1642,7 @@ function liveTransferData() {{
     throw new Error('Masses and stiffnesses must be positive; damping values must be non-negative.');
   const cm = 2*zeta*Math.sqrt(km*md);
   const frequencies=[], drive=[], stage=[], rotorStage=[];
-  const count=560, logMin=Math.log10(20), logMax=Math.log10(3000);
+  const count=560, logMin=Math.log10(100), logMax=Math.log10(3000);
   for (let i=0; i<count; i++) {{
     const frequency = Math.pow(10, logMin + (logMax-logMin)*i/(count-1));
     const omega = 2*Math.PI*frequency;
@@ -1641,11 +1677,11 @@ function drawLiveBode(svgId, data, phasePlot=false) {{
   while (svg.firstChild) svg.removeChild(svg.firstChild);
   const width=760, height=360, left=64, right=18, top=22, bottom=48;
   const plotWidth=width-left-right, plotHeight=height-top-bottom;
-  const xMin=Math.log10(20), xMax=Math.log10(3000);
+  const xMin=Math.log10(100), xMax=Math.log10(3000);
   const yMin=phasePlot?-370:-100, yMax=phasePlot?30:40;
   const mapX=f => left+(Math.log10(f)-xMin)/(xMax-xMin)*plotWidth;
   const mapY=y => top+(yMax-y)/(yMax-yMin)*plotHeight;
-  const xTicks=[20,50,100,200,500,1000,2000,3000];
+  const xTicks=[100,200,500,1000,2000,3000];
   const yTicks=phasePlot?[-360,-270,-180,-90,0]:[-100,-80,-60,-40,-20,0,20,40];
   xTicks.forEach(tick => {{
     const x=mapX(tick); svg.appendChild(svgNode('line',{{x1:x,y1:top,x2:x,y2:top+plotHeight,stroke:'#cbd3da','stroke-width':0.7}}));
@@ -1729,8 +1765,10 @@ def main() -> None:
     convergence = gms_step_halving_convergence(constants, times, time_data)
     presliding = presliding_responses(constants)
     verification = full_reduced_verification(frequencies, constants)
-    case_paths = plot_case_responses(frequencies, bode, times, command, time_data, constants)
-    comparison_path = plot_pairwise_comparison(frequencies, bode, times, command, time_data)
+    case_paths = plot_case_responses(
+        frequencies, bode, times, command, time_data, constants, time_metrics)
+    comparison_path = plot_pairwise_comparison(
+        frequencies, bode, times, command, time_data, time_metrics)
     presliding_path = plot_presliding_memory(presliding)
     diagram_path = plot_kinematic_diagram()
     verification_path = plot_full_reduced_verification(frequencies, verification)
@@ -1768,7 +1806,9 @@ def main() -> None:
         print(f"Case {key}: modes={modes[0]:.2f}, {modes[1]:.2f} Hz; "
               f"DC gain={linear_metrics[key]['dc_gain']:.6f}; "
               f"overshoot={time_metrics[key]['first_overshoot_pct']:.2f}%; "
-              f"final-window RMS error={time_metrics[key]['rms_final_error_nm']:.2f} nm")
+              f"sequence RMS deviation={time_metrics[key]['rms_sequence_deviation_nm']:.2f} nm; "
+              f"peak deviation={time_metrics[key]['max_abs_deviation_nm']:.2f} nm; "
+              f"final-window RMS deviation={time_metrics[key]['rms_final_error_nm']:.2f} nm")
     print(f"Full/reduced residual: RMS={verification['rms_residual_nm']:.3f} nm; "
           f"peak={verification['peak_residual_nm']:.3f} nm")
     for key in ("A", "A2"):

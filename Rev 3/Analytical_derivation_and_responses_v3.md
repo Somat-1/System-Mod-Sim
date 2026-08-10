@@ -319,7 +319,7 @@ $$\boxed{\frac{X_s}{X_d}=\frac{-b(s)}{d(s)}
 
 $X_d/X_{cmd}$ is the clearest view of the low rotor/drive pole. $X_s/X_{cmd}$ contains both plant poles but can show weaker low-mode participation. $X_s/X_d$ treats rotor-equivalent drive motion as a prescribed input, so the common motor/magnetic pole cancels and only the stage-following dynamics remain. Therefore rotor-to-stage alone cannot be used to prove that the lower mode is absent.
 
-The panel below is computed directly in the browser. Changing $m_d$, $m_s$, $K_m$, $k_{ax}$, $c_{ax}$, or $\zeta_m$ in the editable table immediately redraws these Bode curves. The publication SVGs elsewhere remain fixed snapshots from the Python build.
+The panel below is computed directly in the browser. Changing $m_d$, $m_s$, $K_m$, $k_{ax}$, $c_{ax}$, or $\zeta_m$ in the editable table immediately redraws these Bode curves. The publication SVGs elsewhere remain fixed snapshots from the Python build. The displayed frequency range is focused to 100-3000 Hz; the underlying low-frequency response below 100 Hz is essentially static for these cases and contains no modeled pole.
 
 <div id="live-transfer-panel" class="live-transfer-panel" data-live-transfer-plots></div>
 
@@ -355,6 +355,43 @@ Important limitations prevent treating all plotted features as identified modes:
 - the 0 kg 685–700 Hz chirp feature is direction-dependent and did not clear the formal prominence threshold.
 
 The physical data therefore justify investigating a low grounded/motor mode, but not yet fitting a detent amplitude from those plots alone.
+
+</details>
+
+### 5.3 Can the present model reproduce every measured feature?
+
+**No - not in its current topology.** The approximately 690 Hz agreement is encouraging, but the two-DOF transfer matrix has only two mechanical modal pairs. Its characteristic equation is
+
+$$\det\!\left(\mathbf M_rs^2+\mathbf C_rs+\mathbf K_r\right)=0,$$
+
+which is fourth order in $s$ and therefore cannot create an arbitrary collection of independent resonances. The current full ten-DOF parameterization also predicts only approximately 225, 694, and 2322 Hz below 3 kHz because its extra axial/torsional coordinates are stiff and its base is fixed. Changing a friction law can move or damp the retained poles, but the present presliding-tangent implementation does not create a missing base, bracket, transverse, or electrical mode.
+
+<details open>
+<summary>Evidence audit from the referenced Modal Comparison folder</summary>
+
+| Observed feature | Local-test evidence and caution | Present-model interpretation |
+|---|---|---|
+| Broad 155-190 Hz response | Seen across chirp runs, but only the +1 kg up/down pair at about 159-160 Hz clears the 3x local-floor rule. It changes little with payload. | More consistent with grounded base/mount or drive dynamics than the payload-sensitive axial mode. The present 226 Hz motor/drive pole may be related, but cannot be identified as the same mode by tuning alone. |
+| 256.3 Hz hammer candidate | Appears in the +1 kg PLA second-pass result, whose accepted-tap accounting is weak and internally cautioned. | Insufficient evidence for a new plant pole; repeat with a reliable mount before adding a coordinate. |
+| Approximately 345 Hz notch | Fixed across payload and sweep direction; the local report identifies chopper/ambient contamination. | Must not be fitted as a mechanical mode. |
+| Approximately 592-614 Hz hammer and 685-700 Hz chirp features | The base impact and motor-excited chirp methods do not use the same input, output, boundary, or response normalization. The chirp feature is also sweep-direction dependent. | The modeled approximately 694 Hz relative drive/stage mode is a plausible match to the chirp feature, but co-located FRFs are needed to decide whether the hammer and chirp features are one mode. |
+| Approximately 1007-1044 Hz PLA-mounted impact peaks | Coherent hammer peaks appear with added PLA-mounted payloads. | Likely requires an explicit payload/bracket or sensor-mount compliance; that coordinate is absent from both the reduced model and the present rigid-stage output. |
+| Dither candidates | No configuration passes both the prominence and visible-fade criteria in the DitherV2 report. | Do not use these candidates for parameter fitting yet. |
+
+The audited sources are Results Summary/modal_testing_summary.pdf, Results Summary/chirp_results_summary_v2.pdf, MotorExcitation/Chirp Tests/chirp_results/summary.md, V2 Testing/v2_modal_second_pass/summary.md, and MotorExcitation/DitherV2/ditherv2_coherent_results/summary.md under TempScripts/Modal Comparison.
+
+</details>
+
+<details open>
+<summary>Minimum defensible extensions, in order</summary>
+
+1. **Match the measured transfer function first.** Generate impact inertance $A_s/F_{impact}$ at the accelerometer point and motor-excited $A_s/X_{cmd}$ or $A_s/I_{cmd}$, rather than comparing both tests directly with displacement ratio $X_s/X_{cmd}$. Poles are shared only when the same structure and boundary are excited; modal residues and antiresonances depend strongly on input/output location.
+2. **Add a grounded base/support coordinate** $x_b$ with identified $m_b,k_b,c_b$, and express guideway/bearing forces relative to $x_b$ instead of an immovable ground. This is the leading candidate for a broad, weakly payload-dependent 155-190 Hz mode.
+3. **Add payload/bracket compliance** between the stage body and accelerometer/payload coordinate. This is the leading candidate for the approximately 1 kHz PLA-mounted impact peaks.
+4. **Add motor electrical and detent dynamics only from dedicated tests.** Two phase-current states, driver/current-loop transfer, rotor detent amplitude/phase, and an identified low-mode damping ratio can change the 150-250 Hz motor response. A single $c_m$ cannot reproduce controller delay or current-loop poles.
+5. **Add transverse/rocking coordinates only if cross-axis measurements support them.** Rail bending, stage pitch/yaw, screw lateral bending, and bearing-housing motion are excluded by the present one-axis topology but can appear in an accelerometer FRF through sensor misalignment or structural coupling.
+
+This is a representability issue, not a reason to add arbitrary fitted resonances. Each new coordinate needs a mode-shape or mass/stiffness experiment that distinguishes it from measurement artifacts.
 
 </details>
 
@@ -601,7 +638,7 @@ LuGre adds tangent damping $(\sigma_1+\sigma_2)\mathbf H^T\mathbf H$; the presen
 
 - Guideway friction is ground-referenced. Its presliding stiffness reduces the static command-to-stage gain, creates steady tracking bias, and adds reversal hysteresis.
 - Nut friction is an internal equal-and-opposite port. It does not directly create net external force; it mainly changes differential deformation, the higher relative mode, overshoot, and settling.
-- Combining both sites changes both absolute tracking and internal load transfer.
+- Combining both sites changes both absolute command following and internal load transfer.
 - LuGre and GMS can share the same small-signal stiffness and therefore similar modal frequencies, while producing different reversal loops and final errors. GMS retains non-local memory through separately yielding elements; LuGre has one local bristle state.
 - Friction can add damping at some amplitudes but can also produce stick–slip, lost motion, amplitude-dependent apparent stiffness, and nonzero final error. These effects cannot be inferred from the linear Bode curve alone.
 
@@ -611,7 +648,7 @@ LuGre adds tangent damping $(\sigma_1+\sigma_2)\mathbf H^T\mathbf H$; the presen
 
 The ordinary quarter-step sequence tests settling after large isolated reversals. It does not deliberately revisit nested reversal points, so it is a weak discriminator between a one-state LuGre law and a distributed-state GMS law. This separate experiment uses matched guideway cases A and A2 because guideway displacement is the directly observed stage displacement and reaches partial slip; the much smaller internal nut differential would hide the effect.
 
-![Presliding nested-reversal motion, tracking error, memory loops, and comparison metrics](rendered_assets/presliding_memory_comparison.svg)
+![Presliding nested-reversal motion, modeled command-stage deviation, memory loops, and comparison metrics](rendered_assets/presliding_memory_comparison.svg)
 
 <details open>
 <summary>10.1 Exact quantized command and quarter-step-bound audit</summary>
@@ -672,23 +709,24 @@ The plotted force-position loops use the friction forces produced inside the tim
 <details open>
 <summary>10.4 Metrics, equations, and interpretation</summary>
 
-Let $\bar e_j$ and $\bar F_j$ be the mean tracking error and guideway friction force over the final 2 ms of plateau $j$. For the repeated-level pair set
+Let $\bar d_j$ and $\bar F_j$ be the mean modeled command-stage deviation and guideway friction force over the final 2 ms of plateau $j$. For the repeated-level pair set
 
 $$\mathcal P=\{(2,6),(3,5),(8,12),(9,11)\},$$
 
 where the plateau numbers are one-based as in the table, define
 
-$$E_{ret}=\frac{1}{|\mathcal P|}\sum_{(i,j)\in\mathcal P}|\bar e_i-\bar e_j|,$$
+$$E_{ret}=\frac{1}{|\mathcal P|}\sum_{(i,j)\in\mathcal P}|\bar d_i-\bar d_j|,$$
 
 $$F_{ret}=\frac{1}{|\mathcal P|}\sum_{(i,j)\in\mathcal P}|\bar F_i-\bar F_j|.$$
 
-$E_{ret}$ measures how closely tracking returns to the same result at a repeated command level; $F_{ret}$ directly measures constitutive return-point closure. The final-origin metric is $|\bar e_{13}|$. Whole-sequence RMS is also reported, but it is dominated by the commanded jumps and is less sensitive to hysteretic memory.
+$E_{ret}$ measures how closely the modeled plant response returns to the same result at a repeated command level; $F_{ret}$ directly measures constitutive return-point closure. The final-origin metric is $|\bar d_{13}|$. Whole-sequence RMS is also reported, but it is dominated by the commanded jumps and is less sensitive to hysteretic memory.
 
 <!-- BEGIN GENERATED PRESLIDING SUMMARY -->
 | Executed metric | LuGre A | GMS A2 | GMS change relative to LuGre |
 |---|---:|---:|---:|
-| Whole-sequence RMS tracking error | 210.75 nm | 209.85 nm | 0.4% lower |
-| Mean repeated-return tracking mismatch | 7.50 nm | 4.66 nm | 37.8% lower |
+| Whole-sequence RMS command-stage deviation | 210.75 nm | 209.85 nm | 0.4% lower |
+| Peak absolute command-stage deviation | 1093.75 nm | 1093.75 nm | 0.0% lower |
+| Mean repeated-return deviation mismatch | 7.50 nm | 4.66 nm | 37.8% lower |
 | Mean repeated-return friction-force mismatch | 0.0986 N | 0.0035 N | 96.4% lower |
 | Absolute mean error after final return to zero | 16.06 nm | 2.75 nm | 82.9% lower |
 
@@ -705,7 +743,14 @@ The comparison does **not** assert that GMS has lower pointwise error on every p
 
 $$\mathbf f_0=[F_{mag}-c_m\dot x_d,\;0]^T.$$
 
-![Case 0 Bode, bounded stepping, and tracking error](rendered_assets/response_case_0.svg)
+Each case figure is collapsed by default to keep the derivation readable. Its footer reports the full-sequence RMS, peak absolute, and final-2-ms RMS of the **modeled open-loop command-stage deviation**. These are response descriptors for the assumed plant and friction law, not closed-loop tracking specifications.
+
+<details>
+<summary>Open Case 0 focused Bode, bounded stepping, and modeled deviation</summary>
+
+![Case 0 focused Bode, bounded stepping, and modeled command-stage deviation](rendered_assets/response_case_0.svg)
+
+</details>
 
 This is the reference for structural modes and the damping repair. No LuGre or GMS state is present.
 
@@ -717,11 +762,21 @@ $$\mathbf f_A=\begin{bmatrix}F_{mag}-c_m\dot x_d\\-F_{f,g}(\dot x_s)\end{bmatrix
 
 ### Case A — LuGre
 
+<details>
+<summary>Open Case A focused Bode and nonlinear response</summary>
+
 ![Case A guideway LuGre response](rendered_assets/response_case_A.svg)
+
+</details>
 
 ### Case A2 — GMS
 
+<details>
+<summary>Open Case A2 focused Bode and nonlinear response</summary>
+
 ![Case A2 guideway GMS response](rendered_assets/response_case_A2.svg)
+
+</details>
 
 The mechanical topology is identical; only the guideway constitutive state law changes.
 
@@ -733,11 +788,21 @@ $$\mathbf f_B=\begin{bmatrix}F_{mag}-c_m\dot x_d-F_{f,n}(v_n)\\+F_{f,n}(v_n)\end
 
 ### Case B — LuGre
 
+<details>
+<summary>Open Case B focused Bode and nonlinear response</summary>
+
 ![Case B nut LuGre response](rendered_assets/response_case_B.svg)
+
+</details>
 
 ### Case B2 — GMS
 
+<details>
+<summary>Open Case B2 focused Bode and nonlinear response</summary>
+
 ![Case B2 nut GMS response](rendered_assets/response_case_B2.svg)
+
+</details>
 
 Equal-and-opposite placement ensures that nut friction cannot create net external linear momentum.
 
@@ -747,26 +812,36 @@ $$\mathbf f_C=\begin{bmatrix}F_{mag}-c_m\dot x_d-F_{f,n}(v_n)\\F_{f,n}(v_n)-F_{f
 
 ### Case C — LuGre
 
+<details>
+<summary>Open Case C focused Bode and nonlinear response</summary>
+
 ![Case C combined LuGre response](rendered_assets/response_case_C.svg)
+
+</details>
 
 ### Case C2 — GMS
 
+<details>
+<summary>Open Case C2 focused Bode and nonlinear response</summary>
+
 ![Case C2 combined GMS response](rendered_assets/response_case_C2.svg)
+
+</details>
 
 ## 15. Generated numerical summary
 
 <!-- BEGIN GENERATED RESPONSE SUMMARY -->
-| Case | Friction law | Presliding modes (Hz) | DC gain $X_s/X_{cmd}$ | First-step overshoot | Final-window RMS error |
-|---|---|---:|---:|---:|---:|
-| 0 | none | 225.7, 697.7 | 1.00000 | 26.1% | 21.1 nm |
-| A | LuGre | 226.5, 720.0 | 0.93197 | 18.8% | 35.1 nm |
-| A2 | GMS | 226.5, 720.0 | 0.93197 | 18.6% | 38.8 nm |
-| B | LuGre | 225.7, 756.3 | 1.00000 | 25.4% | 19.8 nm |
-| B2 | GMS | 225.7, 756.3 | 1.00000 | 25.6% | 22.2 nm |
-| C | LuGre | 226.5, 777.0 | 0.94069 | 18.8% | 28.6 nm |
-| C2 | GMS | 226.5, 777.0 | 0.94069 | 19.1% | 34.8 nm |
+| Case | Friction law | Presliding modes (Hz) | DC gain $X_s/X_{cmd}$ | First-step overshoot | Full-sequence RMS deviation | Peak absolute deviation | Final-window RMS deviation |
+|---|---|---:|---:|---:|---:|---:|---:|
+| 0 | none | 225.7, 697.7 | 1.00000 | 26.1% | 248.7 nm | 1305.7 nm | 21.1 nm |
+| A | LuGre | 226.5, 720.0 | 0.93197 | 18.8% | 247.5 nm | 1310.5 nm | 35.1 nm |
+| A2 | GMS | 226.5, 720.0 | 0.93197 | 18.6% | 246.4 nm | 1315.1 nm | 38.8 nm |
+| B | LuGre | 225.7, 756.3 | 1.00000 | 25.4% | 244.1 nm | 1266.9 nm | 19.8 nm |
+| B2 | GMS | 225.7, 756.3 | 1.00000 | 25.6% | 244.4 nm | 1270.6 nm | 22.2 nm |
+| C | LuGre | 226.5, 777.0 | 0.94069 | 18.8% | 243.1 nm | 1296.5 nm | 28.6 nm |
+| C2 | GMS | 226.5, 777.0 | 0.94069 | 19.1% | 242.4 nm | 1302.8 nm | 34.8 nm |
 
-The final column summarizes the last 2 ms of the nonlinear run; it is not an identified settling specification. All cases include the separately highlighted electromagnetic damping assumption; Case 0 remains frictionless.
+The three deviation columns use $d(t)=x_{cmd}(t)-x_s(t)$. They describe the open-loop modeled plant response under each friction law, not closed-loop servo tracking performance. The final column summarizes the last 2 ms of the nonlinear run and is not an identified settling specification. All cases include the separately highlighted electromagnetic damping assumption; Case 0 remains frictionless.
 
 ### Generated reduction audit
 
@@ -783,15 +858,29 @@ The literal table value is reported as an audit only; it is not silently used. T
 
 ## 16. Matched comparisons only
 
+<details>
+<summary>Open topology-matched A/A2, B/B2, and C/C2 comparison</summary>
+
 ![Pairwise LuGre/GMS comparison for A/A2, B/B2, and C/C2](rendered_assets/lugre_gms_pairwise_comparison.svg)
+
+</details>
 
 The comparison is organized by physical topology. A is compared only with A2, B only with B2, and C only with C2. The seven trajectories are not overlaid in one unreadable endpoint plot.
 
-## 17. Interpretation of commanded/actual motion
+## 17. Interpretation of commanded/actual motion and modeled deviation
 
-The tracking error plotted throughout is
+The plotted difference is defined as
 
-$$e(t)=x_{cmd}(t)-x_s(t).$$
+$$d_{model}(t)=x_{cmd}(t)-x_s(t).$$
+
+It is intentionally called the **modeled command-stage deviation**, not a tracking-error specification. The simulations contain the plant, nonlinear stepper force, assumed damping, and selected friction law, but no feedback position controller, estimator, sensor dynamics, trajectory generator, or measured hardware response. The curves show how this assumed open-loop system moves under each friction model; they do not quantify how an actual closed-loop stage tracks a reference.
+
+For each case figure the labels use
+
+$$d_{RMS}=\sqrt{\frac{1}{T}\int_0^T d_{model}^2(t)\,dt},\qquad
+d_{max}=\max_{0\le t\le T}|d_{model}(t)|.$$
+
+The numerical implementation uses the complete sampled 85 ms record. Because the position command changes instantaneously, $d_{max}$ and much of the whole-sequence RMS are dominated by the switch instants. The separately reported final-2-ms RMS describes the last zero-command dwell, but it is still a model response rather than an identified settling requirement.
 
 The input is a sequence of finite held positions, not a motion profile with shaped velocity and acceleration. A passive second-order plant therefore has transient motion at each switch. What was not realistic in the earlier plot was sustained, nearly undamped ringing about the command. Its cause was the ideal magnetic stiffness with no electrical damping, not the bounded sine nonlinearity. The implemented $c_m$ removes that modeling omission while keeping the nonlinear sine force in every nonlinear case.
 
@@ -858,7 +947,7 @@ These values use the identical 85 ms zero-order-held command and the identical f
 | $u_b,u_e,u_f,u_n,x_s$ | full-model axial coordinates | m |
 | $x_d$ | reduced effective drive coordinate | m |
 | $x_{cmd}$ | commanded field-equivalent linear position | m |
-| $e=x_{cmd}-x_s$ | tracking error | m |
+| $d_{model}=x_{cmd}-x_s$ | modeled open-loop command-stage deviation; not a servo tracking specification | m |
 | $J_m,J_c,J_{s1..s3}$ | rotational inertias | kg·m² |
 | $m_b,m_e,m_f,m_n,m_{stage}$ | axial lumped masses | kg |
 | $m_d,m_s$ | reduced drive and stage masses | kg |
