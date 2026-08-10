@@ -96,6 +96,16 @@ FRICTION = {
 GMS_WEIGHTS = np.array([0.10, 0.20, 0.30, 0.40])
 GMS_STIFFNESS_FRACTIONS = np.array([0.40, 0.30, 0.20, 0.10])
 GMS_N = GMS_WEIGHTS.size
+GMS_CONVERGENCE_DTS = (1.0e-5, 5.0e-6, 2.5e-6)
+
+
+# Nested reversals for the dedicated presliding-memory experiment.  One
+# microstep is 1/8 of the already bounded quarter-step command (1/32 full
+# step).  Repeated levels create return points without reaching gross sliding.
+PRESLIDING_LEVELS = np.array([0, 7, 2, 6, 2, 7, 0, -6, -2, -5, -2, -6, 0], dtype=float)
+PRESLIDING_START = 0.005
+PRESLIDING_HOLD = 0.010
+PRESLIDING_RETURN_PAIRS = ((1, 5), (2, 4), (7, 11), (8, 10))
 
 
 CASES = OrderedDict([
@@ -120,6 +130,30 @@ H = {
 LUGRE_INDEX = {"g": 4, "n": 5, "d": 6}
 GMS_START = {"g": 7, "n": 7 + GMS_N, "d": 7 + 2 * GMS_N}
 STATE_SIZE = 7 + 3 * GMS_N
+
+
+def validate_gms_partition() -> dict[str, object]:
+    """Fail the build unless every executed GMS partition closes exactly."""
+    if GMS_WEIGHTS.size != GMS_STIFFNESS_FRACTIONS.size:
+        raise ValueError("GMS force weights and stiffness fractions must have equal length")
+    if np.any(GMS_WEIGHTS <= 0.0) or np.any(GMS_STIFFNESS_FRACTIONS <= 0.0):
+        raise ValueError("Every GMS force weight and stiffness fraction must be positive")
+    weight_sum = float(np.sum(GMS_WEIGHTS))
+    if not np.isclose(weight_sum, 1.0, rtol=0.0, atol=1.0e-12):
+        raise ValueError(f"GMS force weights must satisfy sum(nu_i)=1; got {weight_sum:.16g}")
+
+    stiffness_sums: dict[str, float] = {}
+    for site, parameters in FRICTION.items():
+        element_stiffness = GMS_STIFFNESS_FRACTIONS * parameters["sigma0"]
+        stiffness_sum = float(np.sum(element_stiffness))
+        if not np.isclose(stiffness_sum, parameters["sigma0"],
+                          rtol=1.0e-12, atol=1.0e-9):
+            raise ValueError(
+                f"GMS site {site} must satisfy sum(k_i)=sigma0; "
+                f"got {stiffness_sum:.16g} versus {parameters['sigma0']:.16g}"
+            )
+        stiffness_sums[site] = stiffness_sum
+    return {"weight_sum": weight_sum, "stiffness_sums": stiffness_sums}
 
 
 def physical_constants() -> dict[str, float]:
@@ -347,6 +381,15 @@ def command_position(t: float, quarter_step: float) -> float:
     return 0.0
 
 
+def presliding_command_position(t: float, microstep: float) -> float:
+    """Nested back-and-forth reversals quantized to 1/32 of a full step."""
+    if t < PRESLIDING_START:
+        return 0.0
+    index = min(int((t - PRESLIDING_START) // PRESLIDING_HOLD),
+                PRESLIDING_LEVELS.size - 1)
+    return float(PRESLIDING_LEVELS[index] * microstep)
+
+
 def stribeck(velocity: float, p: dict[str, float]) -> float:
     ratio = abs(velocity) / p["v_s"]
     return p["F_c"] + (p["F_s"] - p["F_c"]) * np.exp(-(ratio ** p["delta"]))
@@ -361,16 +404,24 @@ def lugre_site(velocity: float, z: float, p: dict[str, float]) -> tuple[float, f
 
 def gms_site(velocity: float, element_forces: np.ndarray,
              p: dict[str, float]) -> tuple[np.ndarray, float]:
-    """Return four GMS force-state derivatives and the total site force."""
+    """Return GMS derivatives after branch tests on the current RK trial state.
+
+    Ordering is intentional: zero velocity holds the state; otherwise the
+    reversal/re-stick test is evaluated first, then the yield test, and only
+    then is either the stuck or slip derivative assigned.  No derivative is
+    used to choose its own branch within the same RHS evaluation.
+    """
     threshold = np.maximum(GMS_WEIGHTS * stribeck(velocity, p), 1e-12)
     stiffness = GMS_STIFFNESS_FRACTIONS * p["sigma0"]
     derivatives = np.zeros(GMS_N)
     if abs(velocity) > 1e-14:
         direction = np.sign(velocity)
         for i in range(GMS_N):
-            unloading = velocity * element_forces[i] <= 0.0
+            re_stick = velocity * element_forces[i] <= 0.0
             below_yield = abs(element_forces[i]) < threshold[i]
-            if unloading or below_yield:
+            if re_stick:
+                derivatives[i] = stiffness[i] * velocity
+            elif below_yield:
                 derivatives[i] = stiffness[i] * velocity
             else:
                 # Stable slip attraction to F_i = sign(v) nu_i s(v).
@@ -412,8 +463,10 @@ def nonlinear_rhs(t: float, state: np.ndarray, case: dict[str, object], constant
     return derivative
 
 
-def rk4_case(case: dict[str, object], constants: dict[str, float], dt: float = 5.0e-6,
-             duration: float = 0.085) -> tuple[np.ndarray, np.ndarray]:
+def rk4_case_with_command(case: dict[str, object], constants: dict[str, float],
+                          command_function, duration: float,
+                          dt: float = 5.0e-6) -> tuple[np.ndarray, np.ndarray]:
+    """Integrate a case with an arbitrary zero-order-held position command."""
     times = np.arange(0.0, duration + 0.5 * dt, dt)
     states = np.zeros((times.size, STATE_SIZE), dtype=float)
     for i in range(times.size - 1):
@@ -422,13 +475,113 @@ def rk4_case(case: dict[str, object], constants: dict[str, float], dt: float = 5
         # Treat the discrete command as a true zero-order hold.  One midpoint
         # sample is fixed across all RK4 stages, so an endpoint discontinuity
         # cannot leak backward into the preceding integration interval.
-        held_command = command_position(t + 0.5 * dt, constants.get('quarter_step'))
+        held_command = float(command_function(t + 0.5 * dt))
         k1 = nonlinear_rhs(t, y, case, constants, held_command)
         k2 = nonlinear_rhs(t + 0.5 * dt, y + 0.5 * dt * k1, case, constants, held_command)
         k3 = nonlinear_rhs(t + 0.5 * dt, y + 0.5 * dt * k2, case, constants, held_command)
         k4 = nonlinear_rhs(t + dt, y + dt * k3, case, constants, held_command)
         states[i + 1] = y + dt * (k1 + 2.0 * k2 + 2.0 * k3 + k4) / 6.0
     return times, states
+
+
+def rk4_case(case: dict[str, object], constants: dict[str, float], dt: float = 5.0e-6,
+             duration: float = 0.085) -> tuple[np.ndarray, np.ndarray]:
+    return rk4_case_with_command(
+        case, constants,
+        lambda t: command_position(t, constants["quarter_step"]),
+        duration=duration, dt=dt,
+    )
+
+
+def friction_force_history(case: dict[str, object], states: np.ndarray,
+                           site: str) -> np.ndarray:
+    """Recover an executed site's constitutive force from integrated states."""
+    if site not in case["sites"]:
+        return np.zeros(states.shape[0])
+    velocity = states[:, 3] if site == "g" else states[:, 2] - states[:, 3]
+    p = FRICTION[site]
+    if case["friction"] == "lugre":
+        state = states[:, LUGRE_INDEX[site]]
+        return np.array([
+            lugre_site(float(v), float(z), p)[1] for v, z in zip(velocity, state)
+        ])
+    start = GMS_START[site]
+    stop = start + GMS_N
+    return np.sum(states[:, start:stop], axis=1) + p["sigma2"] * velocity
+
+
+def presliding_responses(constants: dict[str, float]) -> dict[str, object]:
+    """Run the matched guideway cases through a nested reversal sequence."""
+    microstep = constants["quarter_step"] / 8.0
+    duration = PRESLIDING_START + PRESLIDING_HOLD * PRESLIDING_LEVELS.size
+    command_function = lambda t: presliding_command_position(t, microstep)
+    results: dict[str, np.ndarray] = {}
+    forces: dict[str, np.ndarray] = {}
+    metrics: dict[str, dict[str, object]] = {}
+    times: np.ndarray | None = None
+
+    for key in ("A", "A2"):
+        times, states = rk4_case_with_command(
+            CASES[key], constants, command_function, duration=duration)
+        results[key] = states
+        forces[key] = friction_force_history(CASES[key], states, "g")
+
+    assert times is not None
+    command = np.array([command_function(t) for t in times])
+    active = times >= PRESLIDING_START
+    for key in ("A", "A2"):
+        error = command - results[key][:, 1]
+        endpoint_error = []
+        endpoint_force = []
+        endpoint_stage = []
+        for level_index in range(PRESLIDING_LEVELS.size):
+            plateau_end = PRESLIDING_START + (level_index + 1) * PRESLIDING_HOLD
+            window = (times >= plateau_end - 0.002) & (times < plateau_end - 0.5e-9)
+            if level_index == PRESLIDING_LEVELS.size - 1:
+                window = times >= plateau_end - 0.002
+            endpoint_error.append(float(np.mean(error[window])))
+            endpoint_force.append(float(np.mean(forces[key][window])))
+            endpoint_stage.append(float(np.mean(results[key][window, 1])))
+        endpoint_error_array = np.asarray(endpoint_error)
+        endpoint_force_array = np.asarray(endpoint_force)
+        error_mismatch = np.array([
+            abs(endpoint_error_array[first] - endpoint_error_array[second])
+            for first, second in PRESLIDING_RETURN_PAIRS
+        ])
+        force_mismatch = np.array([
+            abs(endpoint_force_array[first] - endpoint_force_array[second])
+            for first, second in PRESLIDING_RETURN_PAIRS
+        ])
+        metrics[key] = {
+            "whole_rms_nm": float(np.sqrt(np.mean(error[active] ** 2)) * 1e9),
+            "final_mean_nm": float(endpoint_error_array[-1] * 1e9),
+            "return_error_mismatch_nm": float(np.mean(error_mismatch) * 1e9),
+            "return_force_mismatch_N": float(np.mean(force_mismatch)),
+            "max_force_N": float(np.max(np.abs(forces[key]))),
+            "endpoint_error_nm": endpoint_error_array * 1e9,
+            "endpoint_force_N": endpoint_force_array,
+            "endpoint_stage_um": np.asarray(endpoint_stage) * 1e6,
+            "pair_error_mismatch_nm": error_mismatch * 1e9,
+            "pair_force_mismatch_N": force_mismatch,
+        }
+    return {
+        "times": times,
+        "command": command,
+        "results": results,
+        "forces": forces,
+        "metrics": metrics,
+        "microstep": microstep,
+        "duration": duration,
+    }
+
+
+def final_window_rms_error_nm(times: np.ndarray, states: np.ndarray,
+                              constants: dict[str, float]) -> float:
+    """Return RMS(command-stage) over the final 2 ms on the given time grid."""
+    command = np.array([command_position(t, constants["quarter_step"]) for t in times])
+    final_window = times >= (times[-1] - 0.002)
+    error = command - states[:, 1]
+    return float(np.sqrt(np.mean(error[final_window] ** 2)) * 1e9)
 
 
 def time_responses(constants: dict[str, float]) -> tuple[np.ndarray, np.ndarray, dict[str, np.ndarray], dict[str, dict[str, float]]]:
@@ -447,12 +600,37 @@ def time_responses(constants: dict[str, float]) -> tuple[np.ndarray, np.ndarray,
         first_peak = float(np.max(states[first_plateau, 1]))
         metrics[key] = {
             "mean_final_error_nm": float(np.mean(error[final_window]) * 1e9),
-            "rms_final_error_nm": float(np.sqrt(np.mean(error[final_window] ** 2)) * 1e9),
+            "rms_final_error_nm": final_window_rms_error_nm(times, states, constants),
             "max_stage_um": float(np.max(np.abs(states[:, 1])) * 1e6),
             "first_peak_um": first_peak * 1e6,
             "first_overshoot_pct": max(0.0, (first_peak / constants["quarter_step"] - 1.0) * 100.0),
         }
     return times, command, results, metrics
+
+
+def gms_step_halving_convergence(constants: dict[str, float], base_times: np.ndarray,
+                                 base_results: dict[str, np.ndarray]) -> dict[str, dict[str, object]]:
+    """Compare final-window RMS under h, h/2, and h/4 for all GMS cases."""
+    study: dict[str, dict[str, object]] = {}
+    for key in ("A2", "B2", "C2"):
+        rms_values: list[float] = []
+        for dt in GMS_CONVERGENCE_DTS:
+            if np.isclose(dt, 5.0e-6, rtol=0.0, atol=1.0e-15):
+                times, states = base_times, base_results[key]
+            else:
+                times, states = rk4_case(CASES[key], constants, dt=dt)
+            rms_values.append(final_window_rms_error_nm(times, states, constants))
+        coarse_difference = abs(rms_values[0] - rms_values[1])
+        fine_difference = abs(rms_values[1] - rms_values[2])
+        study[key] = {
+            "dt_s": GMS_CONVERGENCE_DTS,
+            "rms_nm": tuple(rms_values),
+            "coarse_difference_nm": coarse_difference,
+            "fine_difference_nm": fine_difference,
+            "fine_relative_pct": 100.0 * fine_difference / max(abs(rms_values[2]), 1.0e-15),
+            "difference_ratio": coarse_difference / max(fine_difference, 1.0e-15),
+        }
+    return study
 
 
 def plot_case_responses(frequencies: np.ndarray, responses: dict[str, np.ndarray],
@@ -545,6 +723,103 @@ def plot_pairwise_comparison(frequencies: np.ndarray, responses: dict[str, np.nd
     fig.suptitle("Topology-matched friction-model comparison", fontsize=15, fontweight="bold")
     fig.tight_layout(rect=(0.02, 0.02, 0.99, 0.96))
     output = ASSET_DIR / "lugre_gms_pairwise_comparison.svg"
+    fig.savefig(output, format="svg", bbox_inches="tight")
+    plt.close(fig)
+    return output
+
+
+def plot_presliding_memory(experiment: dict[str, object]) -> Path:
+    """Visualize nested reversal tracking and friction return-point memory."""
+    times = experiment["times"]
+    command = experiment["command"]
+    results = experiment["results"]
+    forces = experiment["forces"]
+    metrics = experiment["metrics"]
+    time_ms = times * 1e3
+
+    fig, axes = plt.subplots(2, 2, figsize=(12.0, 8.8))
+    ax_motion, ax_error = axes[0]
+    ax_memory, ax_metrics = axes[1]
+
+    ax_motion.step(time_ms, command * 1e6, where="post", color="#111111",
+                   linewidth=2.0, label="Command")
+    for key in ("A", "A2"):
+        case = CASES[key]
+        stage = results[key][:, 1]
+        ax_motion.plot(time_ms, stage * 1e6, color=case["color"],
+                       linestyle=case["ls"], linewidth=1.5, label=case["label"])
+        ax_error.plot(time_ms, (command - stage) * 1e9, color=case["color"],
+                      linestyle=case["ls"], linewidth=1.35, label=case["label"])
+        ax_memory.plot(stage * 1e6, forces[key], color=case["color"],
+                       linestyle=case["ls"], linewidth=1.0, alpha=0.65,
+                       label=case["label"])
+        ax_memory.plot(metrics[key]["endpoint_stage_um"],
+                       metrics[key]["endpoint_force_N"], color=case["color"],
+                       linestyle="none", marker="o" if key == "A" else "s",
+                       markersize=4.0, markerfacecolor="white")
+
+    ax_motion.set_title("Nested microstep command and actual stage motion")
+    ax_motion.set_ylabel("Position (um)")
+    ax_motion.legend(loc="upper right", fontsize=8)
+    ax_error.set_title("Tracking error over the same reversal history")
+    ax_error.set_ylabel(r"Error $x_{cmd}-x_s$ (nm)")
+    ax_error.axhline(0.0, color="#777777", linewidth=0.8)
+    ax_error.legend(loc="upper right", fontsize=8)
+    ax_memory.set_title("Guideway friction memory loops")
+    ax_memory.set_xlabel("Actual stage position (um)")
+    ax_memory.set_ylabel("Guideway friction force (N)")
+    ax_memory.axhline(0.0, color="#888888", linewidth=0.7)
+    ax_memory.axvline(0.0, color="#888888", linewidth=0.7)
+    ax_memory.legend(loc="best", fontsize=8)
+
+    categories = ("Whole-sequence\nRMS", "Return-point\nmismatch", "Final-origin\nabsolute error")
+    x_positions = np.arange(len(categories), dtype=float)
+    width = 0.34
+    lugre_values = np.array([
+        metrics["A"]["whole_rms_nm"],
+        metrics["A"]["return_error_mismatch_nm"],
+        abs(metrics["A"]["final_mean_nm"]),
+    ])
+    gms_values = np.array([
+        metrics["A2"]["whole_rms_nm"],
+        metrics["A2"]["return_error_mismatch_nm"],
+        abs(metrics["A2"]["final_mean_nm"]),
+    ])
+    bars_a = ax_metrics.bar(x_positions - width / 2.0, lugre_values, width,
+                            color=CASES["A"]["color"], label="LuGre A")
+    bars_a2 = ax_metrics.bar(x_positions + width / 2.0, gms_values, width,
+                             color=CASES["A2"]["color"], label="GMS A2")
+    ax_metrics.set_yscale("log")
+    ax_metrics.set_xticks(x_positions, categories)
+    ax_metrics.set_ylabel("Tracking-error metric (nm, log scale)")
+    ax_metrics.set_title("Tracking result: global and memory-sensitive metrics")
+    ax_metrics.legend(loc="upper right", fontsize=8)
+    for bars in (bars_a, bars_a2):
+        for bar in bars:
+            value = bar.get_height()
+            ax_metrics.text(bar.get_x() + bar.get_width() / 2.0, value * 1.08,
+                            f"{value:.2f}", ha="center", va="bottom", fontsize=7.4,
+                            rotation=90)
+
+    for axis in (ax_motion, ax_error):
+        axis.set_xlabel("Time (ms)")
+    for axis in axes.flat:
+        axis.grid(True, which="major", color="#d1d1d1", linewidth=0.7)
+        axis.grid(True, which="minor", color="#eeeeee", linewidth=0.45)
+
+    max_force = max(metrics[key]["max_force_N"] for key in ("A", "A2"))
+    macro_fraction = 100.0 * max_force / FRICTION["g"]["F_s"]
+    fig.suptitle("Presliding nested-reversal experiment: LuGre versus GMS",
+                 fontsize=15, fontweight="bold")
+    fig.text(
+        0.5, 0.012,
+        f"1 microstep = {experiment['microstep'] * 1e9:.2f} nm = 1/32 full step; "
+        f"peak friction = {max_force:.3f} N ({macro_fraction:.1f}% of macro breakaway). "
+        "Markers are 2 ms plateau-end means.",
+        ha="center", fontsize=8.4, color="#555555",
+    )
+    fig.tight_layout(rect=(0.02, 0.045, 0.99, 0.95), h_pad=2.0, w_pad=1.5)
+    output = ASSET_DIR / "presliding_memory_comparison.svg"
     fig.savefig(output, format="svg", bbox_inches="tight")
     plt.close(fig)
     return output
@@ -850,7 +1125,111 @@ def update_generated_summary(summary: str) -> None:
     )
     if not pattern.search(source):
         raise RuntimeError("Generated response summary markers are missing from the derivation document")
-    DERIVATION_MD.write_text(pattern.sub(summary, source), encoding="utf-8")
+    DERIVATION_MD.write_text(pattern.sub(lambda _match: summary, source), encoding="utf-8")
+
+
+def generated_presliding_summary(experiment: dict[str, object]) -> str:
+    metrics = experiment["metrics"]
+    lines = [
+        "<!-- BEGIN GENERATED PRESLIDING SUMMARY -->",
+        "| Executed metric | LuGre A | GMS A2 | GMS change relative to LuGre |",
+        "|---|---:|---:|---:|",
+    ]
+    rows = (
+        ("Whole-sequence RMS tracking error", "whole_rms_nm", "nm", False),
+        ("Mean repeated-return tracking mismatch", "return_error_mismatch_nm", "nm", False),
+        ("Mean repeated-return friction-force mismatch", "return_force_mismatch_N", "N", False),
+        ("Absolute mean error after final return to zero", "final_mean_nm", "nm", True),
+    )
+    for label, key, unit, use_absolute in rows:
+        lugre = float(metrics["A"][key])
+        gms = float(metrics["A2"][key])
+        if use_absolute:
+            lugre, gms = abs(lugre), abs(gms)
+        reduction = 100.0 * (1.0 - gms / lugre) if lugre > 0.0 else 0.0
+        precision = 4 if unit == "N" else 2
+        lines.append(
+            f"| {label} | {lugre:.{precision}f} {unit} | {gms:.{precision}f} {unit} | "
+            f"{reduction:.1f}% lower |"
+        )
+    max_force = max(float(metrics[key]["max_force_N"]) for key in ("A", "A2"))
+    lines.extend([
+        "",
+        f"The maximum executed guideway friction magnitude is **{max_force:.3f} N**, "
+        f"or **{100.0 * max_force / FRICTION['g']['F_s']:.1f}%** of the provisional "
+        f"{FRICTION['g']['F_s']:.1f} N macro breakaway level. The sequence therefore "
+        "probes partial slip rather than gross sliding.",
+        "",
+        "The whole-sequence RMS includes the unavoidable error at every instantaneous command edge. "
+        "The repeated-return and final-origin measures isolate the history dependence that this "
+        "experiment is intended to distinguish.",
+        "<!-- END GENERATED PRESLIDING SUMMARY -->",
+    ])
+    return "\n".join(lines)
+
+
+def update_generated_presliding_summary(summary: str) -> None:
+    source = DERIVATION_MD.read_text(encoding="utf-8")
+    pattern = re.compile(
+        r"<!-- BEGIN GENERATED PRESLIDING SUMMARY -->.*?<!-- END GENERATED PRESLIDING SUMMARY -->",
+        flags=re.DOTALL,
+    )
+    if not pattern.search(source):
+        raise RuntimeError("Generated presliding summary markers are missing from the derivation document")
+    DERIVATION_MD.write_text(pattern.sub(lambda _match: summary, source), encoding="utf-8")
+
+
+def generated_convergence_summary(study: dict[str, dict[str, object]]) -> str:
+    lines = [
+        "<!-- BEGIN GENERATED STEP HALVING SUMMARY -->",
+        "| Case | 10.0 us | 5.0 us | 2.5 us | $\\Delta R_{10\\to5}$ | $\\Delta R_{5\\to2.5}$ | Difference ratio |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for key in ("A2", "B2", "C2"):
+        result = study[key]
+        rms = result["rms_nm"]
+        lines.append(
+            f"| {key} | {rms[0]:.5f} nm | {rms[1]:.5f} nm | {rms[2]:.5f} nm | "
+            f"{result['coarse_difference_nm']:.5f} nm | {result['fine_difference_nm']:.5f} nm | "
+            f"{result['difference_ratio']:.2f} |"
+        )
+    monotone = all(
+        float(study[key]["fine_difference_nm"]) < float(study[key]["coarse_difference_nm"])
+        for key in ("A2", "B2", "C2")
+    )
+    max_relative = max(float(study[key]["fine_relative_pct"]) for key in ("A2", "B2", "C2"))
+    if monotone:
+        interpretation = (
+            "The successive change decreases for all three GMS cases, which is consistent with "
+            "time-step convergence for this reported metric."
+        )
+    else:
+        interpretation = (
+            "At least one case does not show a smaller second difference, so this metric is not yet "
+            "demonstrably converged and a finer run is required."
+        )
+    lines.extend([
+        "",
+        interpretation + f" The largest 5.0-to-2.5 us relative change is **{max_relative:.4f}%**.",
+        "",
+        "These values use the identical 85 ms zero-order-held command and the identical final 2 ms "
+        "RMS definition. Since GMS branch switching is evaluated at RK trial states without event "
+        "localization, the difference ratio is a sensitivity indicator, not a claimed fourth-order "
+        "convergence rate for the hybrid trajectory.",
+        "<!-- END GENERATED STEP HALVING SUMMARY -->",
+    ])
+    return "\n".join(lines)
+
+
+def update_generated_convergence_summary(summary: str) -> None:
+    source = DERIVATION_MD.read_text(encoding="utf-8")
+    pattern = re.compile(
+        r"<!-- BEGIN GENERATED STEP HALVING SUMMARY -->.*?<!-- END GENERATED STEP HALVING SUMMARY -->",
+        flags=re.DOTALL,
+    )
+    if not pattern.search(source):
+        raise RuntimeError("Generated step-halving summary markers are missing from the derivation document")
+    DERIVATION_MD.write_text(pattern.sub(lambda _match: summary, source), encoding="utf-8")
 
 
 def slugify(text: str) -> str:
@@ -1343,12 +1722,16 @@ def main() -> None:
     if not DESCRIPTION_MD.exists() or not DERIVATION_MD.exists():
         raise FileNotFoundError("Both Markdown source documents must exist before building")
     ASSET_DIR.mkdir(exist_ok=True)
+    gms_audit = validate_gms_partition()
     constants = physical_constants()
     frequencies, bode, linear_metrics = frequency_responses()
     times, command, time_data, time_metrics = time_responses(constants)
+    convergence = gms_step_halving_convergence(constants, times, time_data)
+    presliding = presliding_responses(constants)
     verification = full_reduced_verification(frequencies, constants)
     case_paths = plot_case_responses(frequencies, bode, times, command, time_data, constants)
     comparison_path = plot_pairwise_comparison(frequencies, bode, times, command, time_data)
+    presliding_path = plot_presliding_memory(presliding)
     diagram_path = plot_kinematic_diagram()
     verification_path = plot_full_reduced_verification(frequencies, verification)
     position_path = plot_position_dependence()
@@ -1360,11 +1743,14 @@ def main() -> None:
             obsolete_path.unlink()
     if not args.skip_summary_update:
         update_generated_summary(generated_summary(linear_metrics, time_metrics, verification))
+        update_generated_presliding_summary(generated_presliding_summary(presliding))
+        update_generated_convergence_summary(generated_convergence_summary(convergence))
     description_html = render_document(DESCRIPTION_MD)
     derivation_html = render_document(DERIVATION_MD)
     for case_path in case_paths:
         print(f"Built {case_path.relative_to(ROOT)}")
     print(f"Built {comparison_path.relative_to(ROOT)}")
+    print(f"Built {presliding_path.relative_to(ROOT)}")
     print(f"Built {diagram_path.relative_to(ROOT)}")
     print(f"Built {verification_path.relative_to(ROOT)}")
     print(f"Built {position_path.relative_to(ROOT)}")
@@ -1372,6 +1758,11 @@ def main() -> None:
     print(f"Built {rotor_stage_path.relative_to(ROOT)}")
     print(f"Built {description_html.name}")
     print(f"Built {derivation_html.name}")
+    print(f"GMS partition: sum(nu_i)={gms_audit['weight_sum']:.12f}; "
+          + "; ".join(
+              f"sum(k_i)_{site}={value:.6g}=sigma0_{site}"
+              for site, value in gms_audit["stiffness_sums"].items()
+          ))
     for key in CASES:
         modes = linear_metrics[key]["modes"]
         print(f"Case {key}: modes={modes[0]:.2f}, {modes[1]:.2f} Hz; "
@@ -1380,6 +1771,18 @@ def main() -> None:
               f"final-window RMS error={time_metrics[key]['rms_final_error_nm']:.2f} nm")
     print(f"Full/reduced residual: RMS={verification['rms_residual_nm']:.3f} nm; "
           f"peak={verification['peak_residual_nm']:.3f} nm")
+    for key in ("A", "A2"):
+        metric = presliding["metrics"][key]
+        print(f"Presliding {key}: RMS={metric['whole_rms_nm']:.3f} nm; "
+              f"return mismatch={metric['return_error_mismatch_nm']:.3f} nm; "
+              f"force closure={metric['return_force_mismatch_N']:.6f} N; "
+              f"final mean={metric['final_mean_nm']:.3f} nm")
+    for key in ("A2", "B2", "C2"):
+        result = convergence[key]
+        rms = result["rms_nm"]
+        print(f"Step halving {key}: RMS(10/5/2.5 us)="
+              f"{rms[0]:.6f}/{rms[1]:.6f}/{rms[2]:.6f} nm; "
+              f"fine relative change={result['fine_relative_pct']:.6f}%")
     print("Full-model modes below 3 kHz: " + ", ".join(
         f"{mode:.2f}" for mode in verification["full_modes"] if mode < 3000.0))
 

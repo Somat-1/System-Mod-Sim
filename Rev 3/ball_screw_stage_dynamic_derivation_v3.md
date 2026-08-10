@@ -445,6 +445,10 @@ Cases with suffix `2` use the same mechanical force vector as their unsuffixed c
 
 $F_{f,d}$ aggregates the four drivetrain-to-ground sites merged in Section 5.1: motor bearings, both coupling hubs, and the support bearings.
 
+### 8.1 Executed presliding discriminator
+
+The companion derivation includes a dedicated [nested-reversal memory experiment](Analytical_derivation_and_responses_v3.html#10-presliding-nested-reversal-memory-experiment). It compares only the topology-matched guideway cases A/A2 under a 1/32-full-step quantized command, with every move below the quarter-step bound. Repeated +2, +7, -2, and -6 microstep return points expose the distinction between LuGre's single local state and GMS's distributed nonlocal states. The executed plot and automatically generated table report ordinary RMS error separately from return-point closure and final-origin residual.
+
 ---
 
 ## 9. Identifiability

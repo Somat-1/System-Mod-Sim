@@ -512,16 +512,49 @@ The output is
 
 $$F_f=\sum_{i=1}^{4}F_i+\sigma_2v.$$
 
+The element force fractions and stiffnesses are normalized so that
+
+$$\boxed{\sum_{i=1}^{4}\nu_i=1},\qquad
+\boxed{\sum_{i=1}^{4}k_i=\sigma_0}.$$
+
+The builder verifies both identities before any simulation or rendering starts. It aborts rather than silently renormalizing an inconsistent parameter set. Therefore the element breakaway forces sum to the site Stribeck force and the stuck elements sum to the specified aggregate presliding stiffness.
+
 On reversal the affected element returns to the stuck branch. Different $k_i$ and $\nu_i$ create different yield distances and preserve non-local presliding memory.
+
+<details open>
+<summary>Exact re-stick test and derivative-evaluation ordering</summary>
+
+Each GMS call is evaluated from the **current Runge–Kutta trial state** in this order:
+
+1. Read the current site velocity $v$ and element forces $F_i$; compute $s(v)$, the thresholds $\nu_i s(v)$, and $k_i$.
+2. If $|v|\le10^{-14}$ m/s, hold every element state with $\dot F_i=0$. No branch transition is inferred from a zero-velocity sign.
+3. Otherwise evaluate the reversal/re-stick predicate **before assigning a derivative**: $vF_i\le0$. If true, select the stuck derivative $\dot F_i=k_iv$.
+4. If it is not a reversal, test the current-state yield condition $|F_i|<\nu_i s(v)$. A sub-threshold element also receives $\dot F_i=k_iv$.
+5. Only when neither test is true is the stable slip-attractor derivative evaluated.
+6. Compute the friction output from the unadvanced trial-state forces, $F_f=\sum_iF_i+\sigma_2v$, and return all derivatives to RK4. RK4 then forms its next trial state and repeats every test.
+
+Thus a derivative never selects its own branch during the same right-hand-side evaluation. There is currently no event localization or force-state projection at the exact threshold crossing; branch switching is resolved on the RK trial grid. This is why the time-step convergence check in Section 18 is required.
+
+</details>
 
 </details>
 
 ### 9.1 Executed provisional friction values
 
-| Site | $\sigma_0$ | $\sigma_1$ | $\sigma_2$ | $F_s$ | $F_c$ | $v_s$ |
-|---|---:|---:|---:|---:|---:|---:|
-| Guideway | [[input:g_sigma0=7.600e5]] | [[assumed:g_sigma1=3.0]] | [[assumed:g_sigma2=0.40]] | [[assumed:g_Fs=3.0]] | [[assumed:g_Fc=2.4]] | [[assumed:g_vs=2.5e-4]] |
-| Nut | [[assumed:n_sigma0=2.000e6]] | [[assumed:n_sigma1=5.0]] | [[assumed:n_sigma2=0.25]] | [[assumed:n_Fs=5.0]] | [[assumed:n_Fc=4.0]] | [[assumed:n_vs=2.0e-4]] |
+| Site | $\sigma_0$ | $\sigma_1$ | $\sigma_2$ | $F_s$ | $F_c$ | $v_s$ | GMS $C$ (N/s) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Guideway | [[input:g_sigma0=7.600e5]] | [[assumed:g_sigma1=3.0]] | [[assumed:g_sigma2=0.40]] | [[assumed:g_Fs=3.0]] | [[assumed:g_Fc=2.4]] | [[assumed:g_vs=2.5e-4]] | [[assumed:g_C=5.000e3]] |
+| Nut | [[assumed:n_sigma0=2.000e6]] | [[assumed:n_sigma1=5.0]] | [[assumed:n_sigma2=0.25]] | [[assumed:n_Fs=5.0]] | [[assumed:n_Fc=4.0]] | [[assumed:n_vs=2.0e-4]] | [[assumed:n_C=5.000e3]] |
+
+The four executed GMS elements use shared force fractions $\nu_i$ and site-scaled stiffnesses $k_i$:
+
+| Element $i$ | Force fraction $\nu_i$ | Guideway $k_{i,g}$ (N/m) | Nut $k_{i,n}$ (N/m) |
+|---:|---:|---:|---:|
+| 1 | [[assumed:gms_nu1=0.10]] | [[assumed:g_k1=3.040e5]] | [[assumed:n_k1=8.000e5]] |
+| 2 | [[assumed:gms_nu2=0.20]] | [[assumed:g_k2=2.280e5]] | [[assumed:n_k2=6.000e5]] |
+| 3 | [[assumed:gms_nu3=0.30]] | [[assumed:g_k3=1.520e5]] | [[assumed:n_k3=4.000e5]] |
+| 4 | [[assumed:gms_nu4=0.40]] | [[assumed:g_k4=7.600e4]] | [[assumed:n_k4=2.000e5]] |
+| **Executed sum** | **1.00** | **$7.600\times10^5=\sigma_{0,g}$** | **$2.000\times10^6=\sigma_{0,n}$** |
 
 These values make the two laws executable and comparable; they are not a substitute for identification data.
 
@@ -574,7 +607,101 @@ LuGre adds tangent damping $(\sigma_1+\sigma_2)\mathbf H^T\mathbf H$; the presen
 
 </details>
 
-## 10. Case 0 — frictionless modal baseline
+## 10. Presliding nested-reversal memory experiment
+
+The ordinary quarter-step sequence tests settling after large isolated reversals. It does not deliberately revisit nested reversal points, so it is a weak discriminator between a one-state LuGre law and a distributed-state GMS law. This separate experiment uses matched guideway cases A and A2 because guideway displacement is the directly observed stage displacement and reaches partial slip; the much smaller internal nut differential would hide the effect.
+
+![Presliding nested-reversal motion, tracking error, memory loops, and comparison metrics](rendered_assets/presliding_memory_comparison.svg)
+
+<details open>
+<summary>10.1 Exact quantized command and quarter-step-bound audit</summary>
+
+One experiment microstep is defined as
+
+$$q_\mu=\frac{1}{8}\left(\frac{1}{4}\text{ full step}\right)
+=\frac{5\ \mu\mathrm m}{32}=156.25\ \mathrm{nm}.$$
+
+After a 5 ms zero dwell, each listed level is held for 10 ms:
+
+| Plateau | Command (microsteps) | Command (nm) | Purpose |
+|---:|---:|---:|---|
+| 1 | 0 | 0.00 | origin |
+| 2 | +7 | +1093.75 | positive outer reversal |
+| 3 | +2 | +312.50 | first inner return level |
+| 4 | +6 | +937.50 | nested reversal |
+| 5 | +2 | +312.50 | revisit +2 |
+| 6 | +7 | +1093.75 | revisit +7 |
+| 7 | 0 | 0.00 | close positive branch |
+| 8 | -6 | -937.50 | negative outer reversal |
+| 9 | -2 | -312.50 | second inner return level |
+| 10 | -5 | -781.25 | nested reversal |
+| 11 | -2 | -312.50 | revisit -2 |
+| 12 | -6 | -937.50 | revisit -6 |
+| 13 | 0 | 0.00 | final positive step back to the origin |
+
+The largest increment is 7 microsteps = 1.09375 µm, below the 1.25 µm quarter-step bound. The sequence is back-and-forth, contains four repeated return-point pairs, and ends at the same command level at which it starts.
+
+</details>
+
+<details open>
+<summary>10.2 Why this remains presliding while still activating GMS memory</summary>
+
+For the first guideway GMS element, the zero-speed yield displacement predicted by the provisional parameters is
+
+$$z_{y,1}=\frac{\nu_1F_s}{k_1}
+=\frac{0.10(3.0)}{0.40(7.60\times10^5)}
+=0.987\ \mu\mathrm m.$$
+
+The 1.094 µm outer command can therefore yield the most compliant/lowest-threshold part of the distributed contact while the other elements remain stuck. That is partial slip: individual asperity groups can change branch without the aggregate interface reaching gross sliding. The executed force audit below also checks this dynamically; the maximum force remains far below the provisional macroscopic breakaway level $F_s=3$ N.
+
+This distinction matters. If every element stayed perfectly elastic, both laws would reduce almost to a spring and their loops would be indistinguishable. If every element entered gross sliding, the nested presliding memory would be erased. The chosen amplitude lies between those two uninformative limits for the current provisional parameters.
+
+</details>
+
+<details open>
+<summary>10.3 Nonlocal-memory mechanism: one LuGre state versus four GMS states</summary>
+
+LuGre compresses the guideway interface into one average bristle state $z_g$. At a given current $z_g$ and velocity it has no independent record of several earlier reversal points. It produces a local hysteresis loop, but nested minor-loop closure is not an independently stored property.
+
+GMS carries four element-force states $F_{1,g},\ldots,F_{4,g}$ with different stiffnesses and yield thresholds. A reversal can unload one element while another remains on a different branch. The vector of retained states therefore depends on more than the latest displacement and preserves the order of prior extrema. This is the nonlocal memory being exercised when +2, +7, -2, and -6 microsteps are revisited.
+
+The plotted force-position loops use the friction forces produced inside the time integration. They are not reconstructed from position afterward. Faint lines show the full dynamic trace; markers show the mean over the final 2 ms of each plateau.
+
+</details>
+
+<details open>
+<summary>10.4 Metrics, equations, and interpretation</summary>
+
+Let $\bar e_j$ and $\bar F_j$ be the mean tracking error and guideway friction force over the final 2 ms of plateau $j$. For the repeated-level pair set
+
+$$\mathcal P=\{(2,6),(3,5),(8,12),(9,11)\},$$
+
+where the plateau numbers are one-based as in the table, define
+
+$$E_{ret}=\frac{1}{|\mathcal P|}\sum_{(i,j)\in\mathcal P}|\bar e_i-\bar e_j|,$$
+
+$$F_{ret}=\frac{1}{|\mathcal P|}\sum_{(i,j)\in\mathcal P}|\bar F_i-\bar F_j|.$$
+
+$E_{ret}$ measures how closely tracking returns to the same result at a repeated command level; $F_{ret}$ directly measures constitutive return-point closure. The final-origin metric is $|\bar e_{13}|$. Whole-sequence RMS is also reported, but it is dominated by the commanded jumps and is less sensitive to hysteretic memory.
+
+<!-- BEGIN GENERATED PRESLIDING SUMMARY -->
+| Executed metric | LuGre A | GMS A2 | GMS change relative to LuGre |
+|---|---:|---:|---:|
+| Whole-sequence RMS tracking error | 210.75 nm | 209.85 nm | 0.4% lower |
+| Mean repeated-return tracking mismatch | 7.50 nm | 4.66 nm | 37.8% lower |
+| Mean repeated-return friction-force mismatch | 0.0986 N | 0.0035 N | 96.4% lower |
+| Absolute mean error after final return to zero | 16.06 nm | 2.75 nm | 82.9% lower |
+
+The maximum executed guideway friction magnitude is **0.940 N**, or **31.3%** of the provisional 3.0 N macro breakaway level. The sequence therefore probes partial slip rather than gross sliding.
+
+The whole-sequence RMS includes the unavoidable error at every instantaneous command edge. The repeated-return and final-origin measures isolate the history dependence that this experiment is intended to distinguish.
+<!-- END GENERATED PRESLIDING SUMMARY -->
+
+The comparison does **not** assert that GMS has lower pointwise error on every plateau. It asks the narrower, physically relevant question: does a model with distributed internal memories close repeated minor loops and return to the origin more consistently? For the current executable assumptions, the generated return-point and final-origin metrics answer yes. These are simulation results, not validation evidence; nested-reversal measurements are still required to identify the element distribution and decide whether the real guideway exhibits the predicted advantage.
+
+</details>
+
+## 11. Case 0 — frictionless modal baseline
 
 $$\mathbf f_0=[F_{mag}-c_m\dot x_d,\;0]^T.$$
 
@@ -582,7 +709,7 @@ $$\mathbf f_0=[F_{mag}-c_m\dot x_d,\;0]^T.$$
 
 This is the reference for structural modes and the damping repair. No LuGre or GMS state is present.
 
-## 11. Cases A and A2 — guideway friction
+## 12. Cases A and A2 — guideway friction
 
 The site velocity is $v_g=\dot x_s$ and the force vector is
 
@@ -598,7 +725,7 @@ $$\mathbf f_A=\begin{bmatrix}F_{mag}-c_m\dot x_d\\-F_{f,g}(\dot x_s)\end{bmatrix
 
 The mechanical topology is identical; only the guideway constitutive state law changes.
 
-## 12. Cases B and B2 — nut differential friction
+## 13. Cases B and B2 — nut differential friction
 
 The nut-site velocity is the relative motion $v_n=\dot x_d-\dot x_s$. Because the port is internal,
 
@@ -614,7 +741,7 @@ $$\mathbf f_B=\begin{bmatrix}F_{mag}-c_m\dot x_d-F_{f,n}(v_n)\\+F_{f,n}(v_n)\end
 
 Equal-and-opposite placement ensures that nut friction cannot create net external linear momentum.
 
-## 13. Cases C and C2 — guideway plus nut friction
+## 14. Cases C and C2 — guideway plus nut friction
 
 $$\mathbf f_C=\begin{bmatrix}F_{mag}-c_m\dot x_d-F_{f,n}(v_n)\\F_{f,n}(v_n)-F_{f,g}(\dot x_s)\end{bmatrix}.$$
 
@@ -626,7 +753,7 @@ $$\mathbf f_C=\begin{bmatrix}F_{mag}-c_m\dot x_d-F_{f,n}(v_n)\\F_{f,n}(v_n)-F_{f
 
 ![Case C2 combined GMS response](rendered_assets/response_case_C2.svg)
 
-## 14. Generated numerical summary
+## 15. Generated numerical summary
 
 <!-- BEGIN GENERATED RESPONSE SUMMARY -->
 | Case | Friction law | Presliding modes (Hz) | DC gain $X_s/X_{cmd}$ | First-step overshoot | Final-window RMS error |
@@ -654,13 +781,13 @@ The final column summarizes the last 2 ms of the nonlinear run; it is not an ide
 The literal table value is reported as an audit only; it is not silently used. The executable default uses the highlighted coupling-inertia assumption that closes the stated 59 kg reduction.
 <!-- END GENERATED RESPONSE SUMMARY -->
 
-## 15. Matched comparisons only
+## 16. Matched comparisons only
 
 ![Pairwise LuGre/GMS comparison for A/A2, B/B2, and C/C2](rendered_assets/lugre_gms_pairwise_comparison.svg)
 
 The comparison is organized by physical topology. A is compared only with A2, B only with B2, and C only with C2. The seven trajectories are not overlaid in one unreadable endpoint plot.
 
-## 16. Interpretation of commanded/actual motion
+## 17. Interpretation of commanded/actual motion
 
 The tracking error plotted throughout is
 
@@ -670,12 +797,12 @@ The input is a sequence of finite held positions, not a motion profile with shap
 
 Residual overshoot or friction-dependent settling in these provisional simulations should not be treated as identified hardware behavior until $\zeta_m$, $c_{ax}$, and all friction parameters are fitted.
 
-## 17. Verification checks and limitations
+## 18. Verification checks and limitations
 
 <details>
 <summary>Checks performed by construction</summary>
 
-1. $mathbf M$ is diagonal and positive for all executed parameters.
+1. $\mathbf M$ is diagonal and positive for all executed parameters.
 2. Every passive spring and damper is added by a positive-semidefinite outer product.
 3. The nut virtual-work vector applies $+rF_n$, $+F_n$, and $-F_n$ with consistent power.
 4. The GMS negative-velocity slip equilibrium is attracting.
@@ -683,8 +810,25 @@ Residual overshoot or friction-dependent settling in these provisional simulatio
 6. Every command increment is ≤1.25 µm.
 7. Full and reduced verification use the same command, sample grid, and damping repair.
 8. The generated metrics table is rewritten by the builder, tying numbers to executed code.
+9. The builder asserts $\sum_i\nu_i=1$ and $\sum_i k_i=\sigma_0$ for every defined GMS site before simulation.
 
 </details>
+
+### 18.1 GMS step-halving convergence
+
+The production nonlinear plots use fixed-step RK4 with $h=5$ µs. To test sensitivity of the requested final-window RMS result, the builder reruns A2, B2, and C2 using $h=10$, 5, and 2.5 µs. All command transitions fall exactly on all three grids, and the command remains one zero-order-held value across the four RK stages of each step.
+
+<!-- BEGIN GENERATED STEP HALVING SUMMARY -->
+| Case | 10.0 us | 5.0 us | 2.5 us | $\Delta R_{10\to5}$ | $\Delta R_{5\to2.5}$ | Difference ratio |
+|---|---:|---:|---:|---:|---:|---:|
+| A2 | 38.82684 nm | 38.79534 nm | 38.77948 nm | 0.03150 nm | 0.01586 nm | 1.99 |
+| B2 | 22.20974 nm | 22.19847 nm | 22.19280 nm | 0.01127 nm | 0.00567 nm | 1.99 |
+| C2 | 34.81904 nm | 34.78613 nm | 34.78818 nm | 0.03291 nm | 0.00204 nm | 16.11 |
+
+The successive change decreases for all three GMS cases, which is consistent with time-step convergence for this reported metric. The largest 5.0-to-2.5 us relative change is **0.0409%**.
+
+These values use the identical 85 ms zero-order-held command and the identical final 2 ms RMS definition. Since GMS branch switching is evaluated at RK trial states without event localization, the difference ratio is a sensitivity indicator, not a claimed fourth-order convergence rate for the hybrid trajectory.
+<!-- END GENERATED STEP HALVING SUMMARY -->
 
 <details>
 <summary>Known limitations and measurements that would remove assumptions</summary>
@@ -700,7 +844,7 @@ Residual overshoot or friction-dependent settling in these provisional simulatio
 
 </details>
 
-## 18. Variable and parameter glossary
+## 19. Variable and parameter glossary
 
 <details>
 <summary>Expand all symbols, states, ports, and units</summary>
