@@ -443,6 +443,739 @@ This is a representability issue, not a reason to add arbitrary fitted resonance
 
 ## 6. Reduction from ten DOFs to two
 
+### The reduction in one picture
+
+The ten-DOF model contains the measured stage motion, the motor/screw motion that drives it, and eight internal motions that describe how components deform between those two ends. The reduced model keeps the two end motions and replaces the eight internal motions by equivalent inertia, stiffness, damping, and force-port terms:
+
+$$
+\underbrace{\mathbf q\in\mathbb R^{10}}_{\text{all component motions}}
+\xrightarrow[\text{retain low-frequency endpoint behaviour}]
+{\text{change coordinates, then eliminate internal motion}}
+\underbrace{\mathbf x=
+\begin{bmatrix}x_d\\x_s\end{bmatrix}}_{\text{drive side and measured stage}}.
+$$
+
+$x_d=r\theta_m$ is the motor/screw rotation expressed as an equivalent linear displacement. It is not a second end-effector direction. The second DOF is required because the drivetrain can stretch:
+
+$$x_d-x_s\ne0.$$
+
+If only $x_s$ were retained, that stretch, its stored energy, the approximately 696 Hz relative mode, and the nut differential-friction velocity would all be forced to zero.
+
+The reduction uses four different operations. Keeping them separate is the key to understanding the derivation:
+
+| Operation | Engineering purpose | Exact or approximate? |
+|---|---|---|
+| Change coordinates | separate overall drive/stage motion from internal deformation | exact |
+| Group co-moving inertia | preserve kinetic energy of components moving together in the retained band | low-frequency approximation |
+| Condense spring junctions | preserve endpoint force versus endpoint displacement without retaining every junction coordinate | exact statically; frequency dependent dynamically |
+| Calibrate $k_{ax}$ | use the measured upper mode because the complete static stiffness has not been measured independently | parameter-identification assumption |
+
+The derivation below is organized around five key equations. Each equation is visible first; its toggle then explains what the operation is for, defines its local variables, and performs the matrix multiplication.
+
+### Key equation A — describe the same ten motions using two endpoint coordinates and eight internal deformations
+
+**Purpose:** separate motion that must remain from deformation that may be eliminated later.
+
+$$
+\boxed{
+\mathbf q=\mathbf T_r\mathbf x+\mathbf T_i\boldsymbol\eta},
+\qquad
+\mathbf x=\begin{bmatrix}x_d\\x_s\end{bmatrix}.
+$$
+
+This equation is only a change of coordinates. No DOF has been removed yet.
+
+<details>
+<summary>Derivation A — define every coordinate and multiply out $\mathbf T_r\mathbf x+\mathbf T_i\boldsymbol\eta$</summary>
+
+The local symbols are:
+
+| Symbol | Meaning |
+|---|---|
+| $\mathbf T=[\mathbf T_r\ \mathbf T_i]$ | complete $10\times10$ coordinate-transformation matrix. It reconstructs the original coordinates from $[\mathbf x^T\ \boldsymbol\eta^T]^T$. Its columns are motion patterns, not forces, modes, or transfer functions. |
+| $\mathbf T_r\in\mathbb R^{10\times2}$ | **retained-coordinate reconstruction block**: $\mathbf T_r\mathbf x$ tells how all ten physical coordinates move when only the two retained endpoint coordinates move and the internal deformations are zero. Here `r` means retained, not rotor. |
+| $\mathbf T_i\in\mathbb R^{10\times8}$ | **internal-coordinate reconstruction block**: $\mathbf T_i\boldsymbol\eta$ adds the relative rotations and axial deformations to the retained motion. Here `i` means internal, not the imaginary unit. |
+| $\boldsymbol\eta$ | eight-component internal-deformation vector $[\alpha_1,\alpha_2,\alpha_3,\alpha_4,u_b,u_e,u_f,\delta_m]^T$. It measures departures from rigid co-motion; it is a coordinate vector, not an efficiency. |
+| $\mathbf q$ | original ten mechanical coordinates |
+| $x_d=r\theta_m$ | retained drive displacement obtained from motor angle |
+| $x_s$ | retained measured stage displacement |
+| $r=L/(2\pi)$ | screw lead conversion, metres per radian |
+| $\alpha_1,\ldots,\alpha_4$ | relative rotations across the coupling and screw segments |
+| $u_b,u_e,u_f$ | internal screw axial coordinates |
+| $\delta_m=u_n-x_s$ | nut-to-stage mount deflection |
+
+In one line, $\mathbf T_r\mathbf x$ supplies the **overall endpoint motion**, while $\mathbf T_i\boldsymbol\eta$ supplies the **internal deformation superposed on it**. Because the two blocks together have ten independent columns, this step relabels the same ten DOFs rather than deleting any of them.
+
+Choose
+
+$$
+\mathbf q=
+\begin{bmatrix}
+\theta_m&\theta_c&\theta_{s1}&\theta_{s2}&\theta_{s3}&
+u_b&u_e&u_f&u_n&x_s
+\end{bmatrix}^T
+$$
+
+and
+
+$$
+\boldsymbol\eta=
+\begin{bmatrix}
+\alpha_1&\alpha_2&\alpha_3&\alpha_4&u_b&u_e&u_f&\delta_m
+\end{bmatrix}^T,
+$$
+
+where
+
+$$
+\alpha_1=\theta_c-\theta_m,\quad
+\alpha_2=\theta_{s1}-\theta_c,\quad
+\alpha_3=\theta_{s2}-\theta_{s1},\quad
+\alpha_4=\theta_{s3}-\theta_{s2}.
+$$
+
+The matrices are
+
+$$
+\mathbf T_r=
+\begin{bmatrix}
+1/r&0\\1/r&0\\1/r&0\\1/r&0\\1/r&0\\
+0&0\\0&0\\0&0\\0&1\\0&1
+\end{bmatrix},
+\qquad
+\mathbf T_i=
+\begin{bmatrix}
+0&0&0&0&0&0&0&0\\
+1&0&0&0&0&0&0&0\\
+1&1&0&0&0&0&0&0\\
+1&1&1&0&0&0&0&0\\
+1&1&1&1&0&0&0&0\\
+0&0&0&0&1&0&0&0\\
+0&0&0&0&0&1&0&0\\
+0&0&0&0&0&0&1&0\\
+0&0&0&0&0&0&0&1\\
+0&0&0&0&0&0&0&0
+\end{bmatrix}.
+$$
+
+Multiplication gives
+
+$$
+\mathbf T_r\mathbf x=
+\begin{bmatrix}
+x_d/r\\x_d/r\\x_d/r\\x_d/r\\x_d/r\\0\\0\\0\\x_s\\x_s
+\end{bmatrix},
+\qquad
+\mathbf T_i\boldsymbol\eta=
+\begin{bmatrix}
+0\\
+\alpha_1\\
+\alpha_1+\alpha_2\\
+\alpha_1+\alpha_2+\alpha_3\\
+\alpha_1+\alpha_2+\alpha_3+\alpha_4\\
+u_b\\u_e\\u_f\\\delta_m\\0
+\end{bmatrix}.
+$$
+
+Adding the two vectors reconstructs
+
+$$
+\begin{aligned}
+\theta_m&=x_d/r,\\
+\theta_c&=x_d/r+\alpha_1,\\
+\theta_{s1}&=x_d/r+\alpha_1+\alpha_2,\\
+\theta_{s2}&=x_d/r+\alpha_1+\alpha_2+\alpha_3,\\
+\theta_{s3}&=x_d/r+\alpha_1+\alpha_2+\alpha_3+\alpha_4,\\
+u_n&=x_s+\delta_m.
+\end{aligned}
+$$
+
+Thus $\mathbf T=[\mathbf T_r\ \mathbf T_i]$ has rank ten and is invertible. The original and transformed descriptions contain exactly the same information. Reduction begins only when the dynamics of $\boldsymbol\eta$ are approximated or eliminated.
+
+</details>
+
+### Key equation B — replace co-moving component inertias by two energy-equivalent masses
+
+**Purpose:** make the reduced model store the same retained-motion kinetic energy as the grouped components.
+
+$$
+\boxed{
+\mathbf M_r=
+\begin{bmatrix}m_d&0\\0&m_s\end{bmatrix}},
+\qquad
+\boxed{
+m_d=\frac{J_m+J_c+J_{s1}+J_{s2}+J_{s3}}{r^2}},
+\qquad
+\boxed{m_s=m_n+m_{stage}}.
+$$
+
+<details>
+<summary>Derivation B — kinetic-energy argument and the complete transformed mass multiplication</summary>
+
+The local symbols are:
+
+| Symbol | Meaning |
+|---|---|
+| $J_m,J_c,J_{s1},J_{s2},J_{s3}$ | motor, coupling, and screw polar inertias |
+| $m_n,m_{stage}$ | nut and stage translational masses |
+| $m_d$ | rotational drivetrain inertia reflected into linear units |
+| $m_s$ | retained nut-plus-stage mass |
+| $\mathbf M^{(q)}$ | original diagonal ten-DOF mass matrix |
+| $A_1=J_c+J_{s1}+J_{s2}+J_{s3}$ | cumulative inertia moved by the first relative rotation $\alpha_1$; the coupling and every downstream screw segment participate |
+| $A_2=J_{s1}+J_{s2}+J_{s3}$ | cumulative inertia moved by $\alpha_2$; only the screw segments downstream of the coupling participate |
+| $A_3=J_{s2}+J_{s3}$ | cumulative inertia moved by $\alpha_3$ |
+| $A_4=J_{s3}$ | inertia moved by the last relative rotation $\alpha_4$ |
+| `r` in $\mathbf M_{rr},\mathbf M_{re}$ | retained set $\mathbf x=[x_d,x_s]^T$; when it is the first subscript it labels matrix rows/equations, and when it is second it labels columns/accelerations |
+| `e` in $\mathbf M_{er},\mathbf M_{ee}$ | eliminated set $\boldsymbol\eta$; these are the same eight coordinates called **internal** by the `i` in $\mathbf T_i$, now labelled `e` because they will be eliminated |
+| $\mathbf M_{rr}\;(2\times2)$ | retained equations versus retained accelerations; this is the mass block kept by the executable two-DOF approximation |
+| $\mathbf M_{re}\;(2\times8)$ | retained equations versus internal accelerations; it measures how internal acceleration reacts on the retained equations |
+| $\mathbf M_{er}\;(8\times2)$ | internal equations versus retained accelerations; $\mathbf M_{er}=\mathbf M_{re}^T$ because the mass matrix is energy-derived and symmetric |
+| $\mathbf M_{ee}\;(8\times8)$ | internal equations versus internal accelerations; it contains the inertia associated with the coordinates that are subsequently condensed |
+
+The $A_1$--$A_4$ terms are bookkeeping abbreviations produced by the multiplication, not four new bodies or fitted parameters. The first block subscript always names the **equation row group** and the second names the **coordinate/acceleration column group**. For example, `re` reads “retained equations coupled to eliminated-coordinate accelerations.”
+
+The original mass matrix is
+
+$$
+\mathbf M^{(q)}=
+\operatorname{diag}
+(J_m,J_c,J_{s1},J_{s2},J_{s3},m_b,m_e,m_f,m_n,m_{stage}).
+$$
+
+For retained motion, set the internal velocities to zero:
+
+$$
+\dot{\boldsymbol\eta}=\mathbf0.
+$$
+
+This means the five rotating bodies share $\dot\theta=\dot x_d/r$, while the nut and stage share $\dot x_s$. Their energy is
+
+$$
+\begin{aligned}
+\mathcal T_{ret}
+&=\tfrac12(J_m+J_c+J_{s1}+J_{s2}+J_{s3})
+\left(\frac{\dot x_d}{r}\right)^2
++\tfrac12(m_n+m_{stage})\dot x_s^2\\
+&=\tfrac12m_d\dot x_d^2+\tfrac12m_s\dot x_s^2.
+\end{aligned}
+$$
+
+The same result follows from matrix multiplication:
+
+$$
+\mathbf M_{rr}
+=\mathbf T_r^T\mathbf M^{(q)}\mathbf T_r
+=
+\begin{bmatrix}
+(J_m+J_c+J_{s1}+J_{s2}+J_{s3})/r^2&0\\
+0&m_n+m_{stage}
+\end{bmatrix}.
+$$
+
+The complete transformed mass is
+
+$$
+\mathbf T^T\mathbf M^{(q)}\mathbf T
+=
+\begin{bmatrix}
+\mathbf M_{rr}&\mathbf M_{re}\\
+\mathbf M_{er}&\mathbf M_{ee}
+\end{bmatrix}.
+$$
+
+Define
+
+$$
+A_1=J_c+J_{s1}+J_{s2}+J_{s3},\quad
+A_2=J_{s1}+J_{s2}+J_{s3},\quad
+A_3=J_{s2}+J_{s3},\quad A_4=J_{s3}.
+$$
+
+Then the multiplication results are
+
+$$
+\mathbf M_{re}=
+\begin{bmatrix}
+A_1/r&A_2/r&A_3/r&A_4/r&0&0&0&0\\
+0&0&0&0&0&0&0&m_n
+\end{bmatrix},
+\qquad
+\mathbf M_{er}=\mathbf M_{re}^T,
+$$
+
+$$
+\mathbf M_{ee}=
+\begin{bmatrix}
+A_1&A_2&A_3&A_4&0&0&0&0\\
+A_2&A_2&A_3&A_4&0&0&0&0\\
+A_3&A_3&A_3&A_4&0&0&0&0\\
+A_4&A_4&A_4&A_4&0&0&0&0\\
+0&0&0&0&m_b&0&0&0\\
+0&0&0&0&0&m_e&0&0\\
+0&0&0&0&0&0&m_f&0\\
+0&0&0&0&0&0&0&m_n
+\end{bmatrix}.
+$$
+
+The off-diagonal block $\mathbf M_{re}$ is the mathematical evidence that exact dynamic elimination would be frequency dependent. The executable model keeps $\mathbf M_{rr}$ and neglects internal acceleration participation. It does **not** add $m_b,m_e,m_f$ arbitrarily to either endpoint; those masses belong to eliminated screw-deformation coordinates.
+
+<div class="live-equation" data-live-equation="inertia-aggregation">Live inertia aggregation loads in the browser.</div>
+
+<div class="live-equation" data-live-equation="reduced-mass">Live stage-side mass aggregation loads in the browser.</div>
+
+</details>
+
+### Key equation C — replace the internal spring network by one endpoint stiffness
+
+**Purpose:** preserve the force needed to create a given relative endpoint displacement $\Delta=x_d-x_s$ after internal spring-junction coordinates are removed.
+
+The exact static condensation of the full ten-DOF topology gives
+
+$$
+\boxed{
+\frac1{k_{link,full}}
+=
+\frac1{k_{ball}}
++\frac1{k_{brg}}+\frac1{k_{sha}}+\frac1{k_{mnt}}
++r^2\left(
+\frac1{k_{c1}}+\frac1{k_{c2}}+\frac1{k_{\theta a}}
+\right)}.
+$$
+
+The executable two-DOF model constrains the retained drive train to rotate together and therefore uses the axial-only link
+
+$$
+\boxed{
+\frac1{k_{ax}}
+=
+\frac1{k_{ball}}+\frac1{k_{brg}}+\frac1{k_{sha}}+\frac1{k_{mnt}}}.
+$$
+
+<details>
+<summary>Derivation C — equal-force spring argument, transformed stiffness matrices, and Schur complement</summary>
+
+The local symbols are:
+
+| Symbol | Meaning |
+|---|---|
+| $\Delta=x_d-x_s$ | total relative displacement between retained endpoints |
+| $k_{brg},k_{sha},k_{ball},k_{mnt}$ | bearing, loaded screw, ball-contact, and mount stiffnesses |
+| $k_{c1},k_{c2},k_{\theta a}$ | torsional stiffnesses that transmit load before the nut |
+| $\mathbf h_r,\mathbf h_e$ | ball-contact deformation incidence vectors in retained/internal coordinates |
+| $\mathbf K_{ee}$ | stiffness seen by the eight internal deformation coordinates |
+| $\epsilon_j$ | signed extension of compliant element $j$ under the common series force, $\epsilon_j=F/k_j$; it is an element deformation, not an additional retained DOF |
+| $j$ | index identifying one spring in the series load path |
+| $\mathbf K_{ab}$, $a,b\in\{r,e\}$ | stiffness block with row group $a$ and coordinate column group $b$; `r` means retained and `e` means the internal coordinates being eliminated |
+| $s$ | Laplace variable. On a sinusoidal frequency-response sweep $s=\mathrm i\omega$; this $\mathrm i$ is the imaginary unit and is unrelated to the `i` in $\mathbf T_i$. |
+| $\mathbf Z_{ab}(s)=s^2\mathbf M_{ab}+s\mathbf C_{ab}+\mathbf K_{ab}$ | **dynamic-stiffness block** between groups $a$ and $b$. It combines inertia, damping, and elasticity at the chosen complex frequency; it is not another physical spring. |
+| $\mathbf Z_{rr}$ | retained equations versus retained motion in the frequency domain |
+| $\mathbf Z_{re},\mathbf Z_{er}$ | cross-coupling blocks between retained and eliminated motion |
+| $\mathbf Z_{ee}$ | internal dynamic stiffness that must be inverted to solve the internal response |
+| $\mathbf Z_{cond}(s)$ | exact frequency-dependent dynamic stiffness seen at $x_d,x_s$ after the eight internal coordinates have been eliminated |
+
+The letters `i` and `e` therefore name the same eight-coordinate set from two viewpoints: **internal** when constructing $\mathbf T_i$, and **eliminated** when partitioning $\mathbf M$, $\mathbf C$, $\mathbf K$, or $\mathbf Z$. In $\mathbf Z_{re}$, the first letter identifies the retained equation rows and the second identifies eliminated-coordinate columns, exactly as for $\mathbf M_{re}$.
+
+For springs in series, the same force $F$ passes through every element. Each extension is
+
+$$\epsilon_j=\frac{F}{k_j}.$$
+
+Because total extension is the sum,
+
+$$
+\Delta=\sum_j\epsilon_j
+=F\sum_j\frac1{k_j},
+$$
+
+so
+
+$$
+k_{eq}=\frac{F}{\Delta}
+=\left(\sum_j\frac1{k_j}\right)^{-1}.
+$$
+
+This is why **compliances** $1/k_j$ add in series; the stiffnesses themselves do not.
+
+The same result follows from the matrices. In the transformed coordinates, ball-contact deformation is
+
+$$
+\delta_n
+=\mathbf h_r^T\mathbf x+\mathbf h_e^T\boldsymbol\eta,
+$$
+
+with
+
+$$
+\mathbf h_r=
+\begin{bmatrix}-1\\1\end{bmatrix},
+\qquad
+\mathbf h_e=
+\begin{bmatrix}-r\\-r\\-r\\0\\0\\-1\\0\\1\end{bmatrix}.
+$$
+
+The internal stiffness excluding ball contact is
+
+$$
+\mathbf K_{e0}
+=
+\operatorname{diag}
+\left(
+k_{c1},k_{c2},k_{\theta a},k_{\theta b},
+\mathbf K_{screw},k_{mnt}
+\right),
+$$
+
+where the $3\times3$ screw-translation block is
+
+$$
+\mathbf K_{screw}=
+\begin{bmatrix}
+k_{brg}+k_{sha}&-k_{sha}&0\\
+-k_{sha}&k_{sha}+k_{shb}&-k_{shb}\\
+0&-k_{shb}&k_{shb}
+\end{bmatrix}.
+$$
+
+From
+
+$$
+\mathcal V
+=\tfrac12K_m(x_d-x_{cmd})^2
++\tfrac12\boldsymbol\eta^T\mathbf K_{e0}\boldsymbol\eta
++\tfrac12k_{ball}
+(\mathbf h_r^T\mathbf x+\mathbf h_e^T\boldsymbol\eta)^2,
+$$
+
+the matrix multiplication gives
+
+$$
+\mathbf K_{rr}
+=
+\begin{bmatrix}K_m&0\\0&0\end{bmatrix}
++k_{ball}\mathbf h_r\mathbf h_r^T,
+$$
+
+$$
+\mathbf K_{re}=k_{ball}\mathbf h_r\mathbf h_e^T
+=k_{ball}
+\begin{bmatrix}
+r&r&r&0&0&1&0&-1\\
+-r&-r&-r&0&0&-1&0&1
+\end{bmatrix},
+$$
+
+$$
+\mathbf K_{er}=\mathbf K_{re}^T,
+\qquad
+\mathbf K_{ee}=\mathbf K_{e0}+k_{ball}\mathbf h_e\mathbf h_e^T.
+$$
+
+Static equilibrium of the internal coordinates means
+
+$$
+\mathbf K_{er}\mathbf x+\mathbf K_{ee}\boldsymbol\eta=\mathbf0,
+$$
+
+so
+
+$$
+\boldsymbol\eta=-\mathbf K_{ee}^{-1}\mathbf K_{er}\mathbf x.
+$$
+
+Substituting this result into the retained equation produces the Schur complement
+
+$$
+\boxed{
+\mathbf K_{cond}
+=\mathbf K_{rr}-\mathbf K_{re}\mathbf K_{ee}^{-1}\mathbf K_{er}}.
+$$
+
+Carrying out the inverse quadratic form gives
+
+$$
+\mathbf h_e^T\mathbf K_{e0}^{-1}\mathbf h_e
+=
+r^2\left(
+\frac1{k_{c1}}+\frac1{k_{c2}}+\frac1{k_{\theta a}}
+\right)
++\frac1{k_{brg}}+\frac1{k_{sha}}+\frac1{k_{mnt}}.
+$$
+
+Therefore
+
+$$
+\frac1{k_{link,full}}
+=\frac1{k_{ball}}
++\mathbf h_e^T\mathbf K_{e0}^{-1}\mathbf h_e,
+$$
+
+which is the visible key equation above. $k_{\theta b}$ and $k_{shb}$ vanish from the static result because their far ends are free overhangs; those coordinates follow their upstream nodes without carrying static force.
+
+The executable approximation sets
+
+$$\alpha_1=\alpha_2=\alpha_3=0,$$
+
+which removes the reflected torsional compliance but preserves the four-element axial chain.
+
+<div class="live-equation" data-live-equation="exact-static-condensation">Live exact-versus-executable static condensation loads in the browser.</div>
+
+For dynamic rather than static elimination, replace every stiffness block by
+
+$$
+\mathbf Z_{ab}(s)=s^2\mathbf M_{ab}+s\mathbf C_{ab}+\mathbf K_{ab}
+$$
+
+and use
+
+$$
+\boxed{
+\mathbf Z_{cond}(s)
+=\mathbf Z_{rr}(s)
+-\mathbf Z_{re}(s)\mathbf Z_{ee}^{-1}(s)\mathbf Z_{er}(s)}.
+$$
+
+Unlike the constant static Schur complement, this result is frequency dependent and retains the eliminated resonances.
+
+</details>
+
+### Key equation D — determine the executable $k_{ax}$ from the measured upper mode
+
+**Purpose:** supply the missing numerical stiffness datum. No independent static measurement of the complete installed load path is currently available.
+
+With $\lambda_2=(2\pi f_{2,target})^2$,
+
+$$
+\boxed{
+k_{ax}=
+\frac{\lambda_2m_s(K_m-\lambda_2m_d)}
+{K_m-\lambda_2(m_d+m_s)}}.
+$$
+
+Once $k_{ax}$ is known, the ball-contact stiffness closes the axial compliance budget:
+
+$$
+\boxed{
+\frac1{k_{ball}}
+=\frac1{k_{ax}}-\frac1{k_{brg}}-\frac1{k_{sha}}-\frac1{k_{mnt}}}.
+$$
+
+<details>
+<summary>Derivation D — determinant expansion, solution for $k_{ax}$, and what calibration means</summary>
+
+The local symbols are:
+
+| Symbol | Meaning |
+|---|---|
+| $f_{2,target}$ | selected measured upper-mode frequency |
+| $\lambda_2=(2\pi f_{2,target})^2$ | corresponding eigenvalue |
+| $K_m$ | reflected electromagnetic tangent stiffness |
+| $m_d,m_s$ | retained drive-side and stage-side masses |
+| $k_{ax}$ | equivalent axial-only stiffness being solved |
+
+For undamped free motion,
+
+$$
+\left(\mathbf K_r-\lambda\mathbf M_r\right)\boldsymbol\phi=\mathbf0.
+$$
+
+A nonzero mode shape $\boldsymbol\phi$ requires
+
+$$
+0=
+\det
+\begin{bmatrix}
+K_m+k_{ax}-\lambda_2m_d&-k_{ax}\\
+-k_{ax}&k_{ax}-\lambda_2m_s
+\end{bmatrix}.
+$$
+
+Multiplying the determinant gives
+
+$$
+(K_m+k_{ax}-\lambda_2m_d)
+(k_{ax}-\lambda_2m_s)-k_{ax}^2=0,
+$$
+
+which expands to
+
+$$
+m_dm_s\lambda_2^2
+-\left[m_dk_{ax}+m_s(K_m+k_{ax})\right]\lambda_2
++K_mk_{ax}=0.
+$$
+
+Collecting terms proportional to $k_{ax}$,
+
+$$
+k_{ax}\left[K_m-\lambda_2(m_d+m_s)\right]
+=\lambda_2m_s(K_m-\lambda_2m_d),
+$$
+
+and division gives the visible formula.
+
+<div class="live-equation" data-live-equation="modal-stiffness">Live modal stiffness calculation loads in the browser.</div>
+
+<div class="live-equation" data-live-equation="axial-compliance">Live axial compliance closure loads in the browser.</div>
+
+This is a calibration, not independent modal validation: the selected upper frequency determines $k_{ax}$. A future static force/displacement test would instead determine $k_{ax}$ directly and turn the upper-mode frequency into a prediction.
+
+</details>
+
+### Key equation E — assemble the final two-DOF equations
+
+**Purpose:** combine the energy-equivalent masses, condensed link, drive stiffness, damping, input, and physical friction ports into one executable plant.
+
+$$
+\boxed{
+\mathbf M_r\ddot{\mathbf x}
++\mathbf C_r\dot{\mathbf x}
++\mathbf K_r\mathbf x
+=\mathbf b_r x_{cmd}+\mathbf Q_f},
+\qquad
+\mathbf x=\begin{bmatrix}x_d\\x_s\end{bmatrix},
+$$
+
+with
+
+$$
+\boxed{
+\mathbf M_r=
+\begin{bmatrix}m_d&0\\0&m_s\end{bmatrix}},
+$$
+
+$$
+\boxed{
+\mathbf C_r=
+\begin{bmatrix}
+c_m+c_{ax}&-c_{ax}\\
+-c_{ax}&c_{ax}
+\end{bmatrix}},
+\qquad
+\boxed{
+\mathbf K_r=
+\begin{bmatrix}
+K_m+k_{ax}&-k_{ax}\\
+-k_{ax}&k_{ax}
+\end{bmatrix}},
+\qquad
+\boxed{
+\mathbf b_r=
+\begin{bmatrix}K_m\\0\end{bmatrix}}.
+$$
+
+<details>
+<summary>Derivation E — scalar force balances, matrix assembly, friction incidence, and why one DOF is insufficient</summary>
+
+The local symbols are:
+
+| Symbol | Meaning |
+|---|---|
+| $F_{ax}$ | spring/damper force transmitted between $x_d$ and $x_s$ |
+| $F_{f,d}$ | identifiable drive-side friction against ground |
+| $F_{f,n}$ | internal nut-interface friction |
+| $F_{f,g}$ | stage-guideway friction against ground |
+| $F_{mag},F_{det}$ | nonlinear magnetic and periodic detent forces |
+| $\mathbf H_d=[1\;0]$ | drive-port incidence row; maps generalized velocity to $v_d=\mathbf H_d\dot{\mathbf x}=\dot x_d$ |
+| $\mathbf H_n=[1\;-1]$ | nut-interface incidence row; maps to the relative velocity $v_n=\dot x_d-\dot x_s$ |
+| $\mathbf H_g=[0\;1]$ | guideway-port incidence row; maps to $v_g=\dot x_s$ |
+| subscripts $d,n,g$ | drive side, nut interface, and guideway respectively |
+| $\mathbf H_p^TF_{f,p}$ | virtual-work mapping that converts a scalar force at port $p$ into a two-component generalized-force vector |
+| $\mathbf Q_f\in\mathbb R^2$ | total generalized friction-force vector added to the right-hand side of the two-DOF equations; it collects the three physical friction ports with their correct signs |
+| $v_d,v_n,v_g$ | physical velocities supplied to the selected LuGre or GMS constitutive law at each port |
+
+An incidence row $\mathbf H_p$ contains only the **kinematic wiring and sign convention** of a friction port; it is not a friction coefficient. The model first evaluates the scalar port velocity $v_p=\mathbf H_p\dot{\mathbf x}$, uses that velocity in LuGre or GMS to obtain $F_{f,p}$, and then maps that scalar force back with $-\mathbf H_p^TF_{f,p}$. The minus sign makes a positive friction magnitude oppose positive port motion.
+
+Define
+
+$$
+F_{ax}
+=k_{ax}(x_d-x_s)+c_{ax}(\dot x_d-\dot x_s).
+$$
+
+Newton's law on the drive-side equivalent mass is
+
+$$
+m_d\ddot x_d
+=F_{mag}+F_{det}-c_m\dot x_d-F_{ax}-F_{f,n}-F_{f,d},
+$$
+
+and on the stage-side mass it is
+
+$$
+m_s\ddot x_s
+=F_{ax}+F_{f,n}-F_{f,g}.
+$$
+
+For the global linear baseline,
+
+$$
+F_{mag}\approx K_m(x_{cmd}-x_d),\qquad F_{det}=0,
+$$
+
+and collecting coefficients of $x_d,x_s,\dot x_d,\dot x_s$ gives the visible matrices.
+
+The friction velocities are described by incidence rows:
+
+$$
+v_d=
+\underbrace{\begin{bmatrix}1&0\end{bmatrix}}_{\mathbf H_d}
+\dot{\mathbf x},
+\qquad
+v_n=
+\underbrace{\begin{bmatrix}1&-1\end{bmatrix}}_{\mathbf H_n}
+\dot{\mathbf x},
+\qquad
+v_g=
+\underbrace{\begin{bmatrix}0&1\end{bmatrix}}_{\mathbf H_g}
+\dot{\mathbf x}.
+$$
+
+Virtual work gives
+
+$$
+\boxed{
+\mathbf Q_f
+=-\mathbf H_d^TF_{f,d}
+-\mathbf H_n^TF_{f,n}
+-\mathbf H_g^TF_{f,g}}.
+$$
+
+Multiplication shows the physical force directions:
+
+$$
+\mathbf Q_f
+=
+\begin{bmatrix}-F_{f,d}\\0\end{bmatrix}
++
+\begin{bmatrix}-F_{f,n}\\+F_{f,n}\end{bmatrix}
++
+\begin{bmatrix}0\\-F_{f,g}\end{bmatrix}.
+$$
+
+The nut force is equal and opposite because it is internal. Drive and guideway friction are grounded forces.
+
+If a one-DOF constraint $x_d=x_s=x$ is imposed, then
+
+$$
+x_d-x_s=0,\qquad
+\dot x_d-\dot x_s=0.
+$$
+
+Consequently the axial spring stores no energy, the upper relative mode disappears, and $v_n=0$, so the nut-interface friction law cannot act. The one-DOF equation
+
+$$
+(m_d+m_s)\ddot x+c_m\dot x+K_mx
+=K_mx_{cmd}-F_{f,aggregate}
+$$
+
+is therefore useful only well below the axial relative mode and cannot answer the friction questions for which this model was built.
+
+</details>
+
+<details class="supplementary-reference">
+<summary>Supplementary matrix reference — former step-by-step presentation and every expanded block</summary>
+
+The material below retains the exhaustive coordinate inventory, full $10\times10$ stiffness matrix, transformed block matrices, dynamic condensation, modal polynomial, and transfer-function reference. It is kept for auditability, but it is not required to follow the five-equation derivation above.
+
 The reduction is a **band-limited energy, compliance, and power-port approximation**. It does not claim that eight physical bodies disappear or that every eliminated deformation is zero. The visible reduction ladder is:
 
 | Main step | Operation | Result carried forward |
@@ -523,92 +1256,576 @@ The two beyond-nut coordinates $\theta_{s3}$ and $u_f$ require different treatme
 <details>
 <summary>Detailed Step 2 — formal projection, static condensation, and what is approximate</summary>
 
-Write the full coordinates as a retained motion plus internal deformation:
+The expressions below use one explicit, nonsingular coordinate basis. Nothing is left as an unnamed $\mathbf T_r$, $\mathbf T_i$, or partitioned matrix.
+
+<details>
+<summary>Step 2A — exact retained/internal coordinate definitions and the complete $\mathbf T_r,\mathbf T_i$ matrices</summary>
+
+Retain
 
 $$
-\mathbf q=\mathbf T_r\mathbf x+\mathbf T_i\boldsymbol\eta,
-\qquad
-\mathbf x=[x_d,x_s]^T.
+\mathbf x=
+\begin{bmatrix}x_d\\x_s\end{bmatrix},
+\qquad x_d=r\theta_m,
 $$
 
-The retained kinetic mapping uses
+and define eight internal coordinates
 
 $$
-\theta_m\approx\theta_c\approx\theta_{s1}\approx\theta_{s2}\approx\theta_{s3}
-=\frac{x_d}{r},
-\qquad
-u_n\approx x_s,
-$$
-
-while $\boldsymbol\eta$ contains the relative coupling/screw rotations and the bearing, screw, ball-contact, and mount deflections. Substitution into the kinetic energy gives the projected mass
-
-$$
-\mathbf M_r\approx\mathbf T_r^T\mathbf M\mathbf T_r.
-$$
-
-For the elastic coordinates, partition a transformed linear system into retained and eliminated blocks:
-
-$$
+\boldsymbol\eta=
 \begin{bmatrix}
-\mathbf M_{rr}&\mathbf M_{re}\\
-\mathbf M_{er}&\mathbf M_{ee}
+\alpha_1\\\alpha_2\\\alpha_3\\\alpha_4\\u_b\\u_e\\u_f\\\delta_m
 \end{bmatrix}
-\begin{bmatrix}\ddot{\mathbf x}\\\ddot{\boldsymbol\eta}\end{bmatrix}
-+
-\begin{bmatrix}
-\mathbf C_{rr}&\mathbf C_{re}\\
-\mathbf C_{er}&\mathbf C_{ee}
-\end{bmatrix}
-\begin{bmatrix}\dot{\mathbf x}\\\dot{\boldsymbol\eta}\end{bmatrix}
-+
-\begin{bmatrix}
-\mathbf K_{rr}&\mathbf K_{re}\\
-\mathbf K_{er}&\mathbf K_{ee}
-\end{bmatrix}
-\begin{bmatrix}\mathbf x\\\boldsymbol\eta\end{bmatrix}
 =
-\begin{bmatrix}\mathbf f_r\\\mathbf f_e\end{bmatrix}.
-$$
-
-The exact frequency-domain elimination uses the dynamic-stiffness matrix
-
-$$
-\mathbf Z(s)=s^2\mathbf M+s\mathbf C+\mathbf K
-$$
-
-and produces
-
-$$
-\boxed{
-\mathbf Z_{cond}(s)=
-\mathbf Z_{rr}(s)
--\mathbf Z_{re}(s)\mathbf Z_{ee}^{-1}(s)\mathbf Z_{er}(s)
-}.
-$$
-
-That expression is frequency dependent and retains every eliminated resonance. The executable two-DOF model instead uses the low-frequency/static limit for the load-path deformation:
-
-$$
-\boldsymbol\eta\approx-\mathbf K_{ee}^{-1}\mathbf K_{er}\mathbf x,
-\qquad
-\boxed{
-\mathbf K_{cond}=
-\mathbf K_{rr}-\mathbf K_{re}\mathbf K_{ee}^{-1}\mathbf K_{er}
-}.
-$$
-
-For a one-dimensional series chain, this Schur complement is exactly the reciprocal-compliance sum derived in Step 5. The retained mass is then built from coherent kinetic-energy groups rather than from the complete Guyan mass
-
-$$
-\mathbf M_{Guyan}=\mathbf T_G^T\mathbf M\mathbf T_G,
-\qquad
-\mathbf T_G=
 \begin{bmatrix}
-\mathbf I\\-\mathbf K_{ee}^{-1}\mathbf K_{er}
+\theta_c-\theta_m\\
+\theta_{s1}-\theta_c\\
+\theta_{s2}-\theta_{s1}\\
+\theta_{s3}-\theta_{s2}\\
+u_b\\u_e\\u_f\\u_n-x_s
 \end{bmatrix}.
 $$
 
-This distinction is important: the present model is a **hybrid static-compliance/retained-kinetic reduction**, not an exact coordinate transformation at every frequency. The full-versus-reduced residual in Section 7 is therefore an acceptance test, not a formality.
+The inverse reconstruction is
+
+$$
+\begin{aligned}
+\theta_m&=x_d/r,\\
+\theta_c&=x_d/r+\alpha_1,\\
+\theta_{s1}&=x_d/r+\alpha_1+\alpha_2,\\
+\theta_{s2}&=x_d/r+\alpha_1+\alpha_2+\alpha_3,\\
+\theta_{s3}&=x_d/r+\alpha_1+\alpha_2+\alpha_3+\alpha_4,\\
+u_b&=u_b,\quad u_e=u_e,\quad u_f=u_f,\quad
+u_n=x_s+\delta_m.
+\end{aligned}
+$$
+
+Therefore
+
+$$
+\boxed{\mathbf q=\mathbf T_r\mathbf x+\mathbf T_i\boldsymbol\eta}
+$$
+
+with the exact $10\times2$ retained matrix
+
+$$
+\boxed{
+\mathbf T_r=
+\begin{bmatrix}
+1/r&0\\
+1/r&0\\
+1/r&0\\
+1/r&0\\
+1/r&0\\
+0&0\\
+0&0\\
+0&0\\
+0&1\\
+0&1
+\end{bmatrix}}
+$$
+
+and exact $10\times8$ internal matrix
+
+$$
+\boxed{
+\mathbf T_i=
+\begin{bmatrix}
+0&0&0&0&0&0&0&0\\
+1&0&0&0&0&0&0&0\\
+1&1&0&0&0&0&0&0\\
+1&1&1&0&0&0&0&0\\
+1&1&1&1&0&0&0&0\\
+0&0&0&0&1&0&0&0\\
+0&0&0&0&0&1&0&0\\
+0&0&0&0&0&0&1&0\\
+0&0&0&0&0&0&0&1\\
+0&0&0&0&0&0&0&0
+\end{bmatrix}}.
+$$
+
+The combined matrix
+
+$$
+\mathbf T=\begin{bmatrix}\mathbf T_r&\mathbf T_i\end{bmatrix}\in\mathbb R^{10\times10}
+$$
+
+is nonsingular because the definitions above recover all ten original coordinates uniquely. Up to this point there is no approximation: $\mathbf x$ and $\boldsymbol\eta$ are merely a change of coordinates.
+
+</details>
+
+<details>
+<summary>Step 2B — full original-coordinate $\mathbf M^{(q)}$, $\mathbf K^{(q)}$, $\mathbf C^{(q)}$, and input vector</summary>
+
+In the original coordinate order
+
+$$
+\mathbf q=[\theta_m,\theta_c,\theta_{s1},\theta_{s2},\theta_{s3},u_b,u_e,u_f,u_n,x_s]^T,
+$$
+
+the mass matrix is
+
+$$
+\boxed{
+\mathbf M^{(q)}=
+\operatorname{diag}
+(J_m,J_c,J_{s1},J_{s2},J_{s3},m_b,m_e,m_f,m_n,m_{stage})
+}.
+$$
+
+For compact display in the $10\times10$ stiffness matrix, let
+
+$$
+k_a=k_{\theta a},\qquad
+k_b=k_{\theta b},\qquad
+k_N=k_{ball},\qquad
+k_T=k_{mnt}.
+$$
+
+Direct expansion of every outer-product contribution from Section 4 gives
+
+$$
+\boxed{
+\mathbf K^{(q)}=
+\begin{bmatrix}
+k_m+k_{c1}&-k_{c1}&0&0&0&0&0&0&0&0\\
+-k_{c1}&k_{c1}+k_{c2}&-k_{c2}&0&0&0&0&0&0&0\\
+0&-k_{c2}&k_{c2}+k_a&-k_a&0&0&0&0&0&0\\
+0&0&-k_a&k_a+k_b+r^2k_N&-k_b&0&rk_N&0&-rk_N&0\\
+0&0&0&-k_b&k_b&0&0&0&0&0\\
+0&0&0&0&0&k_{brg}+k_{sha}&-k_{sha}&0&0&0\\
+0&0&0&rk_N&0&-k_{sha}&k_{sha}+k_{shb}+k_N&-k_{shb}&-k_N&0\\
+0&0&0&0&0&0&-k_{shb}&k_{shb}&0&0\\
+0&0&0&-rk_N&0&0&-k_N&0&k_N+k_T&-k_T\\
+0&0&0&0&0&0&0&0&-k_T&k_T
+\end{bmatrix}}.
+$$
+
+The signs in rows 4, 7, and 9 come from
+
+$$
+\delta_n=u_n-u_e-r\theta_{s2},
+\qquad
+\mathbf h_n=
+[0,0,0,-r,0,0,-1,0,1,0]^T,
+$$
+
+through $k_N\mathbf h_n\mathbf h_n^T$.
+
+The full damping matrix has exactly the same element topology:
+
+$$
+\boxed{
+\mathbf C^{(q)}
+=
+\left.
+\mathbf K^{(q)}
+\right|_{
+k_m=0,\;
+k_j\mapsto c_j
+}
++c_{\theta m}\mathbf e_1\mathbf e_1^T
+}.
+$$
+
+Here $k_j\mapsto c_j$ applies to
+$c_{c1},c_{c2},c_{\theta a},c_{\theta b},c_{brg},c_{sha},
+c_{shb},c_{ball},c_{mnt}$; electromagnetic damping is the separate
+$c_{\theta m}$ term.
+
+When the imposed input is $x_{cmd}=r\theta_{cmd}$, the original-coordinate input vector is
+
+$$
+\boxed{
+\mathbf b_x^{(q)}
+=\frac{k_m}{r}\mathbf e_1
+=
+\begin{bmatrix}
+k_m/r&0&0&0&0&0&0&0&0&0
+\end{bmatrix}^T
+}.
+$$
+
+</details>
+
+<details>
+<summary>Step 2C — complete transformed mass blocks $\mathbf M_{rr},\mathbf M_{re},\mathbf M_{er},\mathbf M_{ee}$</summary>
+
+The transformed mass matrix is
+
+$$
+\overline{\mathbf M}
+=
+\mathbf T^T\mathbf M^{(q)}\mathbf T
+=
+\begin{bmatrix}
+\mathbf M_{rr}&\mathbf M_{re}\\
+\mathbf M_{er}&\mathbf M_{ee}
+\end{bmatrix},
+$$
+
+where
+
+$$
+\mathbf M_{rr}=\mathbf T_r^T\mathbf M^{(q)}\mathbf T_r,\quad
+\mathbf M_{re}=\mathbf T_r^T\mathbf M^{(q)}\mathbf T_i,\quad
+\mathbf M_{er}=\mathbf M_{re}^T,\quad
+\mathbf M_{ee}=\mathbf T_i^T\mathbf M^{(q)}\mathbf T_i.
+$$
+
+Define the cumulative rotational inertias
+
+$$
+\begin{aligned}
+A_1&=J_c+J_{s1}+J_{s2}+J_{s3},\\
+A_2&=J_{s1}+J_{s2}+J_{s3},\\
+A_3&=J_{s2}+J_{s3},\\
+A_4&=J_{s3},\\
+J_\Sigma&=J_m+A_1.
+\end{aligned}
+$$
+
+Then all four blocks are explicitly
+
+$$
+\boxed{
+\mathbf M_{rr}=
+\begin{bmatrix}
+J_\Sigma/r^2&0\\
+0&m_n+m_{stage}
+\end{bmatrix}}
+$$
+
+$$
+\boxed{
+\mathbf M_{re}=
+\begin{bmatrix}
+A_1/r&A_2/r&A_3/r&A_4/r&0&0&0&0\\
+0&0&0&0&0&0&0&m_n
+\end{bmatrix},
+\qquad
+\mathbf M_{er}=\mathbf M_{re}^T
+}
+$$
+
+and
+
+$$
+\boxed{
+\mathbf M_{ee}=
+\begin{bmatrix}
+A_1&A_2&A_3&A_4&0&0&0&0\\
+A_2&A_2&A_3&A_4&0&0&0&0\\
+A_3&A_3&A_3&A_4&0&0&0&0\\
+A_4&A_4&A_4&A_4&0&0&0&0\\
+0&0&0&0&m_b&0&0&0\\
+0&0&0&0&0&m_e&0&0\\
+0&0&0&0&0&0&m_f&0\\
+0&0&0&0&0&0&0&m_n
+\end{bmatrix}}.
+$$
+
+The nonzero $\mathbf M_{re}$ terms show exactly what is neglected when the internal accelerations are removed. Retaining only $\mathbf M_{rr}$ is the coherent-motion kinetic projection used by the executable two-DOF model; it is not the exact dynamic condensation.
+
+</details>
+
+<details>
+<summary>Step 2D — complete transformed stiffness, damping, and input blocks</summary>
+
+In the new coordinates the ball-contact deformation becomes
+
+$$
+\delta_n
+=
+\underbrace{\begin{bmatrix}-1&1\end{bmatrix}}_{\mathbf h_r^T}\mathbf x
++
+\underbrace{\begin{bmatrix}-r&-r&-r&0&0&-1&0&1\end{bmatrix}}_{\mathbf h_e^T}
+\boldsymbol\eta.
+$$
+
+All non-ball internal stiffness terms form
+
+$$
+\boxed{
+\mathbf K_{e0}=
+\begin{bmatrix}
+k_{c1}&0&0&0&0&0&0&0\\
+0&k_{c2}&0&0&0&0&0&0\\
+0&0&k_{\theta a}&0&0&0&0&0\\
+0&0&0&k_{\theta b}&0&0&0&0\\
+0&0&0&0&k_{brg}+k_{sha}&-k_{sha}&0&0\\
+0&0&0&0&-k_{sha}&k_{sha}+k_{shb}&-k_{shb}&0\\
+0&0&0&0&0&-k_{shb}&k_{shb}&0\\
+0&0&0&0&0&0&0&k_{mnt}
+\end{bmatrix}}.
+$$
+
+The transformed potential energy is therefore
+
+$$
+\mathcal V=
+\tfrac12K_m(x_d-x_{cmd})^2
++\tfrac12\boldsymbol\eta^T\mathbf K_{e0}\boldsymbol\eta
++\tfrac12k_{ball}
+(\mathbf h_r^T\mathbf x+\mathbf h_e^T\boldsymbol\eta)^2,
+\qquad K_m=\frac{k_m}{r^2}.
+$$
+
+Reading off the Hessian gives every transformed stiffness block:
+
+$$
+\boxed{
+\mathbf K_{rr}
+=
+\begin{bmatrix}K_m&0\\0&0\end{bmatrix}
++k_{ball}\mathbf h_r\mathbf h_r^T
+=
+\begin{bmatrix}
+K_m+k_{ball}&-k_{ball}\\
+-k_{ball}&k_{ball}
+\end{bmatrix}}
+$$
+
+$$
+\boxed{
+\mathbf K_{re}=k_{ball}\mathbf h_r\mathbf h_e^T,\qquad
+\mathbf K_{er}=k_{ball}\mathbf h_e\mathbf h_r^T}
+$$
+
+$$
+\boxed{
+\mathbf K_{ee}
+=\mathbf K_{e0}+k_{ball}\mathbf h_e\mathbf h_e^T}.
+$$
+
+For absolute clarity, the $2\times8$ coupling block is
+
+$$
+\boxed{
+\mathbf K_{re}
+=k_{ball}
+\begin{bmatrix}
+r&r&r&0&0&1&0&-1\\
+-r&-r&-r&0&0&-1&0&1
+\end{bmatrix}}.
+$$
+
+The internal $8\times8$ ball-contact addition is the following explicit rank-one matrix:
+
+$$
+\boxed{
+k_{ball}\mathbf h_e\mathbf h_e^T
+=k_{ball}
+\begin{bmatrix}
+r^2&r^2&r^2&0&0&r&0&-r\\
+r^2&r^2&r^2&0&0&r&0&-r\\
+r^2&r^2&r^2&0&0&r&0&-r\\
+0&0&0&0&0&0&0&0\\
+0&0&0&0&0&0&0&0\\
+r&r&r&0&0&1&0&-1\\
+0&0&0&0&0&0&0&0\\
+-r&-r&-r&0&0&-1&0&1
+\end{bmatrix}}.
+$$
+
+Define $\mathbf C_{e0}$ by replacing every structural stiffness in
+$\mathbf K_{e0}$ with its parallel damper:
+
+$$
+\mathbf C_{e0}
+=
+\left.\mathbf K_{e0}\right|_{k_j\mapsto c_j}.
+$$
+
+Then the complete transformed damping blocks are
+
+$$
+\boxed{
+\mathbf C_{rr}
+=
+\begin{bmatrix}c_m&0\\0&0\end{bmatrix}
++c_{ball}\mathbf h_r\mathbf h_r^T,\qquad
+c_m=\frac{c_{\theta m}}{r^2}}
+$$
+
+$$
+\boxed{
+\mathbf C_{re}=c_{ball}\mathbf h_r\mathbf h_e^T,\qquad
+\mathbf C_{er}=\mathbf C_{re}^T,\qquad
+\mathbf C_{ee}=\mathbf C_{e0}+c_{ball}\mathbf h_e\mathbf h_e^T}.
+$$
+
+Finally, transformation of the command input gives
+
+$$
+\boxed{
+\overline{\mathbf b}_x
+=\mathbf T^T\mathbf b_x^{(q)}
+=
+\begin{bmatrix}
+K_m&0&0&0&0&0&0&0&0&0
+\end{bmatrix}^T}.
+$$
+
+The command therefore excites only $x_d$; it does not directly force an eliminated coordinate.
+
+</details>
+
+<details>
+<summary>Step 2E — exact dynamic condensation and the full static Schur complement</summary>
+
+For $a,b\in\{r,e\}$ define the complete dynamic-stiffness blocks
+
+$$
+\boxed{
+\mathbf Z_{ab}(s)
+=s^2\mathbf M_{ab}+s\mathbf C_{ab}+\mathbf K_{ab}}.
+$$
+
+The transformed equations are
+
+$$
+\begin{bmatrix}
+\mathbf Z_{rr}&\mathbf Z_{re}\\
+\mathbf Z_{er}&\mathbf Z_{ee}
+\end{bmatrix}
+\begin{bmatrix}\mathbf X\\\boldsymbol\Eta\end{bmatrix}
+=
+\begin{bmatrix}\mathbf F_r\\\mathbf F_e\end{bmatrix}.
+$$
+
+Solving the internal row gives
+
+$$
+\boldsymbol\Eta
+=\mathbf Z_{ee}^{-1}
+(\mathbf F_e-\mathbf Z_{er}\mathbf X).
+$$
+
+Substitution into the retained row yields the exact condensed plant
+
+$$
+\boxed{
+\mathbf Z_{cond}(s)
+=
+\mathbf Z_{rr}(s)
+-\mathbf Z_{re}(s)\mathbf Z_{ee}^{-1}(s)\mathbf Z_{er}(s)}
+$$
+
+and the condensed force
+
+$$
+\boxed{
+\mathbf F_{cond}(s)
+=\mathbf F_r(s)-\mathbf Z_{re}(s)\mathbf Z_{ee}^{-1}(s)\mathbf F_e(s)}.
+$$
+
+This rational matrix retains the poles of the eliminated coordinates and is not a constant-matrix two-DOF model.
+
+In the static, unforced-internal limit,
+
+$$
+\boldsymbol\eta=-\mathbf K_{ee}^{-1}\mathbf K_{er}\mathbf x
+$$
+
+and
+
+$$
+\boxed{
+\mathbf K_{cond}
+=
+\mathbf K_{rr}-\mathbf K_{re}\mathbf K_{ee}^{-1}\mathbf K_{er}}.
+$$
+
+Using the rank-one structure in Step 2D gives
+
+$$
+\mathbf K_{cond}
+=
+\begin{bmatrix}K_m&0\\0&0\end{bmatrix}
++k_{link,full}\mathbf h_r\mathbf h_r^T,
+$$
+
+where
+
+$$
+\boxed{
+\frac1{k_{link,full}}
+=
+\frac1{k_{ball}}
++\mathbf h_e^T\mathbf K_{e0}^{-1}\mathbf h_e}.
+$$
+
+Evaluation of the inverse quadratic form gives the complete full-model static compliance:
+
+$$
+\boxed{
+\frac1{k_{link,full}}
+=
+\frac1{k_{ball}}
++r^2\left(
+\frac1{k_{c1}}+\frac1{k_{c2}}+\frac1{k_{\theta a}}
+\right)
++\frac1{k_{brg}}+\frac1{k_{sha}}+\frac1{k_{mnt}}}.
+$$
+
+Two apparent omissions are physical:
+
+- $k_{\theta b}$ terminates in the free rotational overhang $\theta_{s3}$, which follows $\theta_{s2}$ statically and carries no retained static force;
+- $k_{shb}$ terminates in the free axial overhang $u_f$, which follows $u_e$ statically and also carries no retained static force.
+
+<div class="live-equation" data-live-equation="exact-static-condensation">Live exact-versus-executable static condensation loads in the browser.</div>
+
+The executable two-DOF model imposes the common-rotation constraint
+
+$$
+\alpha_1=\alpha_2=\alpha_3=0
+$$
+
+instead of statically relaxing those three rotations. Its retained axial stiffness is consequently
+
+$$
+\boxed{
+\frac1{k_{ax}}
+=
+\frac1{k_{ball}}+\frac1{k_{brg}}+\frac1{k_{sha}}+\frac1{k_{mnt}}}.
+$$
+
+The difference is precisely the excluded reflected torsional compliance
+
+$$
+\boxed{
+\Delta C_\theta
+=r^2\left(
+\frac1{k_{c1}}+\frac1{k_{c2}}+\frac1{k_{\theta a}}
+\right)}.
+$$
+
+This is small for the present parameters but is not mathematically zero. The full-versus-reduced residual in Section 7 measures the combined consequence of this constraint and the discarded internal inertia.
+
+For comparison, a strict Guyan mass would use
+
+$$
+\mathbf R=-\mathbf K_{ee}^{-1}\mathbf K_{er},\qquad
+\mathbf T_G=
+\begin{bmatrix}\mathbf I_2\\\mathbf R\end{bmatrix}
+$$
+
+and
+
+$$
+\boxed{
+\mathbf M_{Guyan}
+=
+\mathbf M_{rr}
++\mathbf M_{re}\mathbf R
++\mathbf R^T\mathbf M_{er}
++\mathbf R^T\mathbf M_{ee}\mathbf R}.
+$$
+
+The executable model deliberately uses $\mathbf M_{rr}$ instead. It is therefore a **hybrid coherent-inertia/static-compliance/modal-calibrated reduction**, not an exact Guyan or exact dynamic condensation.
+
+</details>
 
 </details>
 
@@ -663,7 +1880,7 @@ $$
 
 Only inertias constrained to the same retained angular motion add directly. The coupling's published physical mass is **not** added again after its polar inertia $J_c$ has been included. Likewise, the screw's axial masses $m_b,m_e,m_f$ are not added to $m_d$: they belong to separate axial deformation coordinates in the ten-DOF energy.
 
-The coupling and screw torsional springs $k_{c1},k_{c2},k_{\theta a},k_{\theta b}$ also do not enter the four-element $k_{ax}$ sum. Their relative rotations are the coordinates being discarded, and their principal effect is the higher internal rotational-mode content tested by the full model.
+The coupling and screw torsional springs do not enter the executable four-element $k_{ax}$ sum because that reduction imposes $\alpha_1=\alpha_2=\alpha_3=0$. They are not all absent from the exact full-model condensation: Step 2E shows that $k_{c1}$, $k_{c2}$, and $k_{\theta a}$ contribute the reflected compliance $r^2(1/k_{c1}+1/k_{c2}+1/k_{\theta a})$. Only $k_{\theta b}$ drops out of the static link because it terminates in the free beyond-nut rotational stub. The full dynamic model retains all four and therefore retains their internal-mode content.
 
 </details>
 
@@ -764,10 +1981,11 @@ Exactly four compliances belong to this chain:
 - $1/k_{ball}$: ball/thread contact compliance;
 - $1/k_{mnt}$: nut-body-to-stage mount compliance.
 
-The following terms do **not** belong to it:
+The following terms do **not** belong to the executable axial-only chain, but their reasons differ:
 
 - $k_{shb}$ is the unloaded beyond-nut stub, so no retained stage force crosses it;
-- $k_{c1},k_{c2},k_{\theta a},k_{\theta b}$ govern discarded relative rotations rather than this condensed axial path;
+- $k_{c1}$, $k_{c2}$, and $k_{\theta a}$ are excluded by the common-rotation approximation even though the exact full static Schur complement contains their reflected compliances;
+- $k_{\theta b}$ terminates in the free rotational overhang and vanishes even from the exact static link;
 - $K_m=k_m/r^2$ grounds the drive coordinate to the commanded electromagnetic field and remains a separate spring;
 - detent is periodic and position dependent, so it is not absorbed into a global $k_{ax}$.
 
@@ -925,13 +2143,48 @@ This is why the one-output system still needs two mechanical DOFs, and why “te
 
 </details>
 
+</details>
+
 ## 7. Full-versus-reduced verification
 
 ![Full versus reduced Bode, bounded stepping, and reduction residual](rendered_assets/full_vs_reduced_verification.svg)
 
-The comparison is deliberately global-linear and frictionless so that it tests structural reduction rather than confounding it with different friction memories or a position-dependent detent tangent. The same zero-order-held closed command sequence drives both models: 0 → +78.125 nm → 0 → −78.125 nm → 0. The sequence uses the conservative 64-microstep STEP/DIR quantum and ends at its starting level. Its residual is reported both in nanometres and normalized by the 78.125 nm command amplitude; the normalized value is the amplitude-invariant reduction measure.
+The comparison is deliberately global-linear and frictionless so that it isolates structural reduction from friction memory and the position-dependent detent tangent. Both models receive the same zero-order-held sequence: 0 → +5 µm → 0 → −5 µm → 0. This is one physical full-step pitch and ends at its starting level. Because the audit is linear, changing from 1/64 step to one full step scales all displacements by 64 while leaving the normalized reduction error unchanged.
 
-The full model includes the discarded internal resonances. Agreement is expected only up to 900 Hz. This is a reduction check, not independent modal validation. The same measured 690 Hz feature set $k_{ax}$ and is then reproduced by the reduced model. The effective mass and mode identity remain alternative explanations if the compliance budget does not close. See [Appendix A](#appendix-a-position-dependent-axial-stiffness) for the carriage-position stiffness sweep.
+The full model includes every discarded internal resonance, including modes above the 3 kHz plot limit. This is a reduction and numerical-convergence check, not independent modal validation or a nonlinear actuator prediction. The same measured 690 Hz feature sets $k_{ax}$ and is then reproduced approximately by the reduced model. See [Appendix A](#appendix-a-position-dependent-axial-stiffness) for the carriage-position stiffness sweep.
+
+<!-- BEGIN GENERATED REDUCTION CONVERGENCE -->
+### Solver-convergence and residual audit
+
+The time-domain comparison now uses the physical 5.000 µm full-step pitch. Because both verification plants are linear, this rescales the displacement and residual in nanometres but does not change the normalized RMS or peak percentages.
+
+| RK4 step $h$ | Points/cycle at 2002.1 Hz | Maximum $\lvert R(h\lambda)\rvert$ | Result | RMS residual | Peak residual |
+|---:|---:|---:|---|---:|---:|
+| 25.00 µs | 20.0 | 2.904488 | **unstable** | not reportable | not reportable |
+| 12.50 µs | 40.0 | 0.999923 | stable | 270.309 nm (5.40618%) | 636.613 nm (12.73226%) |
+| 6.25 µs | 79.9 | 0.999961 | stable | 270.307 nm (5.40614%) | 636.726 nm (12.73452%) |
+| 2.50 µs | 199.8 | 0.999985 | stable | 270.306 nm (5.40613%) | 636.732 nm (12.73464%) |
+
+The 25 µs result is not a coarse but usable answer: it is mathematically unstable for this ten-DOF state matrix. The unplotted full model reaches 21.32 kHz, and the largest RK4 amplification magnitude is greater than one. The 12.5, 6.25, and production 2.5 µs results converge to the same output residual, so the rising envelope is not integration drift.
+
+Both static gains are unity to numerical precision ($G_{full}(0)=1.000000000000$ and $G_{red}(0)=1.000000000000$), and the residual is zero before the first edge. The four successive inter-edge peak magnitudes are 340.1, 379.5, 616.0, 636.7 nm. The strongest residual spectral energy is near 687.5 Hz; the visibly faster ripple is near 1987.4 Hz.
+
+The growth is therefore not explained by the 2002.1 Hz ripple alone. That full-model mode has $\zeta=0.01565$ and retains only 1.9% of its amplitude over the 20 ms edge spacing. The more important accumulation mechanism is the upper retained-mode mismatch: the full model has 690.8 Hz with $\zeta=0.00142$, whereas the reduced model has 695.8 Hz with $\zeta=0.01569$. The full-model mode retains about 88.4% over 20 ms, so successive edges arrive before it has decayed. This exposes a damping-consistency limitation in the reduction, not a time-integration failure.
+
+### 300 ms single-edge mechanism check
+
+![Single-edge full/reduced residual and 691/696 Hz envelope test](rendered_assets/full_reduced_single_edge_diagnostic.svg)
+
+After one 5 µm edge at 5 ms, the command is held unchanged through 300 ms. The 690.8/695.8 Hz frequency difference is 4.973 Hz, so a frequency-only beat would have its first envelope maximum at 100.5 ms after the edge and its first node at 201.1 ms. The observed band envelope instead reaches one early maximum at 32.8 ms and then decreases: 50 ms: 266.5 nm, 100 ms: 196.4 nm, 150 ms: 144.0 nm, 200 ms: 105.7 nm, 250 ms: 78.0 nm.
+
+An exponential fit from 50 to 250 ms gives a decay time constant of 161.3 ms. That matches the full model's 162.0 ms modal time constant, while the reduced mode decays in only 14.6 ms. There is no maximum near the predicted beat time, no node near 201 ms, and no subsequent envelope regrowth. **The test therefore rejects a sustained beat as the cause of the multi-edge growth.** The mechanism is the damping mismatch: each edge re-excites the slowly decaying full-model 691 Hz motion after the corresponding reduced-model motion has largely disappeared.
+
+### How to interpret the top-right trajectory
+
+The large oscillation is expected **inside this deliberately frictionless, global-linear audit**, but it is not a quantitative prediction of a real repeated full-step move. One full step changes the electrical equilibrium by 1.571 rad (90°). Applying the small-signal magnetic tangent across that entire jump initially requests 1.571 times the sinusoidal force limit. The ideal zero-rise-time edge also injects energy into every retained and discarded mode, while friction, detent nonlinearity, current-loop bandwidth, current rise, and torque saturation are absent.
+
+Accordingly, the top-right panel should be read as an amplitude-scaled structural comparison: do the two mathematical plants react alike to the same broadband edge? A physically predictive full-step trajectory requires applying the nonlinear magnetic force and driver/current dynamics to the full-order plant. The normalized reduction residual remains useful, but the absolute overshoot in this linear panel should not be interpreted as expected stage motion.
+<!-- END GENERATED REDUCTION CONVERGENCE -->
 
 ## 8. Friction constitutive laws
 
@@ -1271,6 +2524,35 @@ The legends report settled-window RMS and maximum **modeled command-stage deviat
 
 Each matched LuGre/GMS pair has the same presliding stiffness, so its resonance frequency is the same. LuGre adds $\sigma_1+\sigma_2$ tangent damping. The current GMS tangent adds only $\sigma_2$. This damping difference changes peak height, most visibly in C/C2.
 
+### 10.1 IDS back-and-forth microstepping comparison
+
+The appended **Microstepping Test Data/IDSdata.txt** file contains five Axis-1 displacement records labelled step sizes 1, 2, 4, 8, and 16. Each record begins with a quiet baseline and then alternates between two positions. Transition detection gives an approximately 1.17 s dwell at each level. The controller-counter exports independently confirm this timing for labels 1, 2, 8, and 16; no matching controller CSV was supplied for label 4.
+
+The measurement sign is normalized so the first move is positive. Only the pre-motion offset is removed: no drift correction, amplitude scaling, or fit to the simulation is applied.
+
+For the comparison below, the command amplitude is defined from the current 5 µm full-step pitch:
+
+$$
+\Delta x_{cmd}(n)=\frac{5\ \mu\mathrm m}{n},
+\qquad n\in\{1,2,4,8,16\}.
+$$
+
+The detected reversal times are reused for the simulations. Cases C and C2 are shown because they execute every identifiable friction port with the existing provisional LuGre and GMS parameters. These are forward predictions, not parameter fits to the IDS records.
+
+<!-- BEGIN GENERATED IDS MICROSTEPPING SUMMARY -->
+| Step-size label | Nominal command | IDS plateau | IDS minus nominal | IDS / nominal | Case C plateau | Case C2 plateau | Median dwell |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 5.0000 µm | 5.1813 µm | +181.3 nm | 103.6% | 4.9992 µm | 4.8969 µm | 1.167 s |
+| 2 | 2.5000 µm | 2.4583 µm | -41.7 nm | 98.3% | 2.4859 µm | 2.3897 µm | 1.155 s |
+| 4 | 1.2500 µm | 1.2778 µm | +27.8 nm | 102.2% | 0.9692 µm | 0.9313 µm | 1.177 s |
+| 8 | 0.6250 µm | 1.1823 µm | +557.3 nm | 189.2% | 0.4477 µm | 0.4313 µm | 1.177 s |
+| 16 | 0.3125 µm | 0.4065 µm | +94.0 nm | 130.1% | 0.2165 µm | 0.2131 µm | 1.167 s |
+
+The file label is interpreted as the microstep divisor, so the nominal command is the 5 µm full-step pitch divided by 1, 2, 4, 8, or 16. Axis-1 polarity is normalized so the first move is positive, and only the pre-motion offset is removed; the measured amplitude is not scaled or fitted to the model. The step-size-8 record reaches nearly twice its nominal 0.625 µm command, and step-size 16 is also high. The supplied files contain IDS and encoder-counter positions but no independent commanded-position channel. The controller counters corroborate the same two-level timing and relative motion for labels 1, 2, 8, and 16, but they cannot by themselves distinguish a microstep-configuration/label error from an unexpected plant response. These discrepancies are therefore retained rather than normalized away.
+
+Cases C and C2 are forward predictions using the same provisional full-port LuGre and GMS parameters as the rest of Revision 3. They are not fits to these IDS data. Both current predictions fall below the measured settled motion for labels 1, 4, 8, and 16. The increasing small-command shortfall points to provisional presliding friction/detent parameters or an incorrect nominal-command interpretation; this dataset alone cannot select between those explanations or establish that LuGre or GMS is the better law. The IDS median sample interval is approximately 88 ms (about 11.4 Hz), so these records compare plateau amplitude, drift, and reversal repeatability; they cannot validate the modeled 168 Hz or 696 Hz edge transients. The comparison-only solver uses 100 µs; halving it to 50 µs changed a representative settled C2 trajectory by 0.18 nm RMS.
+<!-- END GENERATED IDS MICROSTEPPING SUMMARY -->
+
 ## 11. Generated numerical summary
 
 <!-- BEGIN GENERATED RESPONSE SUMMARY -->
@@ -1306,8 +2588,8 @@ The displayed modes and gains are the global commutation linearization: periodic
 | Enabled detent torque | 0.005 N m |
 | Global commutation low pole | 167.86 Hz |
 | Local detent-tangent low-pole band | 137.06 to 193.82 Hz |
-| Full/reduced sequence RMS residual | 4.224 nm |
-| Full/reduced sequence peak residual | 9.949 nm |
+| Full/reduced sequence RMS residual | 270.306 nm |
+| Full/reduced sequence peak residual | 636.732 nm |
 | RMS residual / command amplitude | 5.406% |
 | Peak residual / command amplitude | 12.735% |
 
