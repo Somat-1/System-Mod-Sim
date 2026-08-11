@@ -17,7 +17,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
+from matplotlib.patches import Circle, FancyArrowPatch, FancyBboxPatch, Rectangle
 
 
 ROOT = Path(__file__).resolve().parent
@@ -30,15 +30,23 @@ DERIVATION_MD = ROOT / "Analytical_derivation_and_responses_v3.md"
 MODEL = {
     "lead": 1.0e-3,
     "rotor_teeth": 50,
-    "m_d": 59.0,
+    # Rated-current holding torque for the lower-current motor variant.
+    "T_max": 0.060,
+    # Published detent torque.  Phase zero places the report origin at a
+    # stable detent equilibrium and enables the detent term in every model.
+    "T_det": 0.005,
+    "detent_phase": 0.0,
     "m_s": 0.60,
     "k_ax": 1.14e7,
-    "K_m": 1.20e8,
     # Provisional: retained structural damping, not identified in the source.
     "c_ax": 55.0,
-    # Provisional electromagnetic modal damping ratio.  This represents the
-    # current-regulator/back-EMF damping missing from the original equations.
-    "zeta_m": 0.50,
+    # Provisional open-loop drive damping ratio.  Driver mode and tuning are
+    # not recorded, so the report executes a low-damping baseline and shows a
+    # sensitivity sweep rather than presenting one value as identified.
+    "zeta_m": 0.05,
+    # Conservative external STEP/DIR resolution.  The TMC2209 accepts up to
+    # 64 microsteps per full step and may interpolate internally to 256.
+    "microstep_divisor": 64,
 }
 
 
@@ -47,20 +55,17 @@ MODEL = {
 # coordinates named in the source document.  Values not measured in the source
 # are surfaced as highlighted assumptions in the Markdown documents.
 FULL = {
-    "J_m": 1.20e-6,
-    # The source-table placeholder 1.2e-6 kg m^2 is inconsistent with the
-    # stated 226 Hz mode.  5e-8 closes the 59 kg reflected-inertia budget.
-    "J_c": 5.00e-8,
-    "J_s1": 8.15e-8,
-    "J_s2": 8.15e-8,
-    "J_s3": 8.15e-8,
-    "m_b": 0.015,
-    "m_e": 0.015,
-    "m_f": 0.010,
+    # Component values.  Screw inertia and axial masses are derived below.
+    "J_m": 9.00e-7,
+    "J_c": 1.18e-6,
+    "screw_length": 0.320,
+    "screw_diameter": 8.00e-3,
+    "screw_density": 7850.0,
     "m_n": 0.050,
     "m_stage": 0.550,
-    "k_c1": 100.0,
-    "k_c2": 100.0,
+    # Datasheet series stiffness is 1.2 N m/deg = 68.7549 N m/rad.
+    # Two equal half-springs must each be twice the series value.
+    "k_c_series": 1.2 * 180.0 / np.pi,
     "k_theta_a": 211.0,
     "k_theta_b": 211.0,
     # 25 N/um is the closure-consistent bearing assumption discussed in Rev 3.
@@ -83,7 +88,13 @@ FULL_DOF_LABELS = (
 FRICTION = {
     "g": {"sigma0": 7.60e5, "sigma1": 3.0, "sigma2": 0.40,
           "F_s": 3.0, "F_c": 2.4, "v_s": 2.5e-4, "delta": 1.0, "C_gms": 5.0e3},
+    # Differential nut-contact microslip.  Its first GMS element yields at
+    # 0.25*F_s/sigma0 = 0.20 um, so this port can express actual partial slip.
     "n": {"sigma0": 2.00e6, "sigma1": 5.0, "sigma2": 0.25,
+          "F_s": 1.6, "F_c": 1.2, "v_s": 2.0e-4, "delta": 1.0, "C_gms": 5.0e3},
+    # Gross ball-nut rolling drag acts on common drivetrain motion, not on the
+    # differential elastic-deformation rate represented by site n.
+    "r": {"sigma0": 2.00e6, "sigma1": 5.0, "sigma2": 0.25,
           "F_s": 5.0, "F_c": 4.0, "v_s": 2.0e-4, "delta": 1.0, "C_gms": 5.0e3},
     "d": {"sigma0": 1.00e6, "sigma1": 4.0, "sigma2": 0.20,
           "F_s": 2.0, "F_c": 1.5, "v_s": 3.0e-4, "delta": 1.0, "C_gms": 5.0e3},
@@ -101,23 +112,24 @@ BODE_FOCUS_MIN_HZ = 100.0
 BODE_FOCUS_MAX_HZ = 3000.0
 
 
-# Nested reversals for the dedicated presliding-memory experiment.  One
-# microstep is 1/8 of the already bounded quarter-step command (1/32 full
-# step).  Repeated levels create return points without reaching gross sliding.
-PRESLIDING_LEVELS = np.array([0, 7, 2, 6, 2, 7, 0, -6, -2, -5, -2, -6, 0], dtype=float)
+# Nested reversals for the dedicated memory experiment.  Counts use the
+# conservative 64-microstep STEP/DIR quantum.  The outer excursion is large
+# enough to yield two guideway GMS elements, while the force signal remains the
+# primary discriminator.
+PRESLIDING_LEVELS = np.array([0, 48, 12, 42, 12, 48, 0, -46, -12, -40, -12, -46, 0], dtype=float)
 PRESLIDING_START = 0.005
 PRESLIDING_HOLD = 0.010
 PRESLIDING_RETURN_PAIRS = ((1, 5), (2, 4), (7, 11), (8, 10))
 
 
 CASES = OrderedDict([
-    ("0", {"label": "Case 0 — frictionless", "sites": (), "friction": "none", "color": "#252525", "ls": "--"}),
-    ("A", {"label": "Case A — guideway / LuGre", "sites": ("g",), "friction": "lugre", "color": "#277da1", "ls": "-"}),
-    ("A2", {"label": "Case A2 — guideway / GMS", "sites": ("g",), "friction": "gms", "color": "#70b7cf", "ls": "--"}),
-    ("B", {"label": "Case B — nut / LuGre", "sites": ("n",), "friction": "lugre", "color": "#e07a15", "ls": "-"}),
-    ("B2", {"label": "Case B2 — nut / GMS", "sites": ("n",), "friction": "gms", "color": "#f5b35f", "ls": "--"}),
-    ("C", {"label": "Case C — guideway + nut / LuGre", "sites": ("g", "n"), "friction": "lugre", "color": "#218c74", "ls": "-"}),
-    ("C2", {"label": "Case C2 — guideway + nut / GMS", "sites": ("g", "n"), "friction": "gms", "color": "#72c9ad", "ls": "--"}),
+    ("0", {"label": "Case 0: frictionless", "sites": (), "friction": "none", "color": "#252525", "ls": "--"}),
+    ("A", {"label": "Case A: drivetrain + guideway / LuGre", "sites": ("d", "g"), "friction": "lugre", "color": "#277da1", "ls": "-"}),
+    ("A2", {"label": "Case A2: drivetrain + guideway / GMS", "sites": ("d", "g"), "friction": "gms", "color": "#70b7cf", "ls": "--"}),
+    ("B", {"label": "Case B: drivetrain + nut rolling/microslip / LuGre", "sites": ("d", "r", "n"), "friction": "lugre", "color": "#e07a15", "ls": "-"}),
+    ("B2", {"label": "Case B2: drivetrain + nut rolling/microslip / GMS", "sites": ("d", "r", "n"), "friction": "gms", "color": "#f5b35f", "ls": "--"}),
+    ("C", {"label": "Case C: all friction ports / LuGre", "sites": ("d", "g", "r", "n"), "friction": "lugre", "color": "#218c74", "ls": "-"}),
+    ("C2", {"label": "Case C2: all friction ports / GMS", "sites": ("d", "g", "r", "n"), "friction": "gms", "color": "#72c9ad", "ls": "--"}),
 ])
 
 PAIRS = (("A", "A2"), ("B", "B2"), ("C", "C2"))
@@ -126,12 +138,25 @@ PAIRS = (("A", "A2"), ("B", "B2"), ("C", "C2"))
 H = {
     "g": np.array([0.0, 1.0]),
     "n": np.array([1.0, -1.0]),
+    "r": np.array([1.0, 0.0]),
     "d": np.array([1.0, 0.0]),
 }
 
-LUGRE_INDEX = {"g": 4, "n": 5, "d": 6}
-GMS_START = {"g": 7, "n": 7 + GMS_N, "d": 7 + 2 * GMS_N}
-STATE_SIZE = 7 + 3 * GMS_N
+SITE_KEYS = tuple(FRICTION)
+LUGRE_INDEX = {site: 4 + index for index, site in enumerate(SITE_KEYS)}
+GMS_BASE = 4 + len(SITE_KEYS)
+GMS_START = {site: GMS_BASE + index * GMS_N for index, site in enumerate(SITE_KEYS)}
+STATE_SIZE = GMS_BASE + len(SITE_KEYS) * GMS_N
+
+
+def save_svg(fig: plt.Figure, output: Path) -> None:
+    """Write deterministic SVG text without Matplotlib's trailing spaces."""
+    fig.savefig(output, format="svg", bbox_inches="tight")
+    svg = output.read_text(encoding="utf-8")
+    output.write_text(
+        "\n".join(line.rstrip() for line in svg.splitlines()) + "\n",
+        encoding="utf-8",
+    )
 
 
 def validate_gms_partition() -> dict[str, object]:
@@ -158,29 +183,81 @@ def validate_gms_partition() -> dict[str, object]:
     return {"weight_sum": weight_sum, "stiffness_sums": stiffness_sums}
 
 
+def validate_case_topology() -> None:
+    """Reject regressions in the friction-port allocation."""
+    expected_sites = {
+        "0": set(),
+        "A": {"d", "g"}, "A2": {"d", "g"},
+        "B": {"d", "r", "n"}, "B2": {"d", "r", "n"},
+        "C": {"d", "g", "r", "n"}, "C2": {"d", "g", "r", "n"},
+    }
+    for key, expected in expected_sites.items():
+        actual = set(CASES[key]["sites"])
+        if actual != expected:
+            raise ValueError(f"Case {key} friction sites are {sorted(actual)}, expected {sorted(expected)}")
+    nut_first_yield = float(np.min(
+        GMS_WEIGHTS * FRICTION["n"]["F_s"] /
+        (GMS_STIFFNESS_FRACTIONS * FRICTION["n"]["sigma0"])
+    ))
+    if not np.isclose(nut_first_yield, 0.20e-6, rtol=0.0, atol=1.0e-12):
+        raise ValueError(f"Nut microslip first yield is {nut_first_yield:.6g} m, expected 0.20 um")
+
+
 def physical_constants() -> dict[str, float]:
     lead = MODEL["lead"]
     teeth = MODEL["rotor_teeth"]
     r = lead / (2.0 * np.pi)
     kappa = 2.0 * np.pi * teeth / lead
-    t_max = MODEL["K_m"] * r * r / teeth
+    t_max = MODEL["T_max"]
+    t_det = MODEL["T_det"]
+    k_m = teeth * t_max / r**2
+    k_det = 4.0 * teeth * t_det * np.cos(MODEL["detent_phase"]) / r**2
+    k_drive = k_m + k_det
     f_max = t_max / r
     full_step = lead / (4.0 * teeth)
-    c_m = 2.0 * MODEL["zeta_m"] * np.sqrt(MODEL["K_m"] * MODEL["m_d"])
+    component = component_parameters()
+    m_d = component["J_total"] / r**2
+    c_m = 2.0 * MODEL["zeta_m"] * np.sqrt(k_drive * m_d)
     return {
         "r": r,
         "kappa": kappa,
         "T_max": t_max,
+        "T_det": t_det,
         "F_max": f_max,
+        "K_m": k_m,
+        "K_det": k_det,
+        "K_drive": k_drive,
+        "m_d": m_d,
         "c_m": c_m,
         "full_step": full_step,
         "quarter_step": full_step / 4.0,
+        "command_step": full_step / MODEL["microstep_divisor"],
+        "interpolated_step": full_step / 256.0,
     }
+
+
+def component_parameters() -> dict[str, float]:
+    """Derive screw inertia and lumped masses from the 0.320 m component."""
+    p = dict(FULL)
+    radius = 0.5 * p["screw_diameter"]
+    area = np.pi * radius**2
+    screw_mass = p["screw_density"] * area * p["screw_length"]
+    screw_inertia = 0.5 * screw_mass * radius**2
+    p["screw_mass"] = screw_mass
+    p["screw_inertia"] = screw_inertia
+    for key in ("J_s1", "J_s2", "J_s3"):
+        p[key] = screw_inertia / 3.0
+    for key in ("m_b", "m_e", "m_f"):
+        p[key] = screw_mass / 3.0
+    p["k_c1"] = 2.0 * p["k_c_series"]
+    p["k_c2"] = 2.0 * p["k_c_series"]
+    p["J_total"] = p["J_m"] + p["J_c"] + screw_inertia
+    return p
 
 
 def full_parameters() -> dict[str, float]:
     """Return the ten-DOF parameters and close the measured axial compliance."""
-    p = dict(FULL)
+    p = component_parameters()
     remaining_compliance = (
         1.0 / MODEL["k_ax"]
         - 1.0 / p["k_brg"]
@@ -191,9 +268,7 @@ def full_parameters() -> dict[str, float]:
         raise ValueError("Full-model axial compliance budget cannot be closed")
     p["k_ball"] = 1.0 / remaining_compliance
     r = physical_constants()["r"]
-    p["J_total"] = p["J_m"] + p["J_c"] + p["J_s1"] + p["J_s2"] + p["J_s3"]
     p["m_d_reflected"] = p["J_total"] / r**2
-    p["literal_table_m_d"] = (1.2e-6 + 1.2e-6 + p["J_s1"] + p["J_s2"] + p["J_s3"]) / r**2
     return p
 
 
@@ -222,10 +297,14 @@ def full_linear_matrices() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarr
     stiffness = np.zeros((10, 10), dtype=float)
     zeta = p["zeta_internal"]
 
-    k_m_rot = MODEL["K_m"] * r**2
-    stiffness[0, 0] += k_m_rot
+    constants = physical_constants()
+    k_m_rot = constants["K_m"] * r**2
+    k_det_rot = constants["K_det"] * r**2
+    stiffness[0, 0] += k_m_rot + k_det_rot
     # The same damping repair validated in Rev 2, expressed in rotational units.
-    damping[0, 0] += 2.0 * MODEL["zeta_m"] * np.sqrt(k_m_rot * p["J_total"])
+    damping[0, 0] += 2.0 * MODEL["zeta_m"] * np.sqrt(
+        (k_m_rot + k_det_rot) * p["J_total"]
+    )
 
     rotational_pairs = (
         (0, 1, p["k_c1"]),
@@ -291,7 +370,7 @@ def _rk4_linear(mass: np.ndarray, damping: np.ndarray, stiffness: np.ndarray,
         return np.concatenate((velocity, acceleration))
 
     for i in range(times.size - 1):
-        held_command = command_position(times[i] + 0.5 * dt, constants["quarter_step"])
+        held_command = command_position(times[i] + 0.5 * dt, constants["command_step"])
         y = states[i]
         k1 = rhs(y, held_command)
         k2 = rhs(y + 0.5 * dt * k1, held_command)
@@ -310,7 +389,7 @@ def full_reduced_verification(frequencies: np.ndarray, constants: dict[str, floa
     reduced_times, reduced_states = _rk4_linear(reduced_m, reduced_c, reduced_k, reduced_b, constants)
     if not np.array_equal(times, reduced_times):
         raise RuntimeError("Full and reduced verification time grids differ")
-    command = np.array([command_position(t, constants["quarter_step"]) for t in times])
+    command = np.array([command_position(t, constants["command_step"]) for t in times])
     full_stage = full_states[:, 9]
     reduced_stage = reduced_states[:, 1]
     residual = full_stage - reduced_stage
@@ -332,13 +411,15 @@ def full_reduced_verification(frequencies: np.ndarray, constants: dict[str, floa
 
 def linear_matrices(sites: tuple[str, ...], friction_model: str) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Return M, C, K, B for the presliding linearization of one case."""
-    m_d, m_s = MODEL["m_d"], MODEL["m_s"]
-    k_ax, k_m, c_ax = MODEL["k_ax"], MODEL["K_m"], MODEL["c_ax"]
+    constants = physical_constants()
+    m_d, m_s = constants["m_d"], MODEL["m_s"]
+    k_ax, k_m, k_det, c_ax = (
+        MODEL["k_ax"], constants["K_m"], constants["K_det"], MODEL["c_ax"]
+    )
     coupling = np.array([[1.0, -1.0], [-1.0, 1.0]])
     mass = np.diag([m_d, m_s])
-    constants = physical_constants()
     damping = c_ax * coupling + constants["c_m"] * np.outer(H["d"], H["d"])
-    stiffness = np.array([[k_m + k_ax, -k_ax], [-k_ax, k_ax]], dtype=float)
+    stiffness = np.array([[k_m + k_det + k_ax, -k_ax], [-k_ax, k_ax]], dtype=float)
     for site in sites:
         outer = np.outer(H[site], H[site])
         p = FRICTION[site]
@@ -365,26 +446,36 @@ def frequency_responses() -> tuple[np.ndarray, dict[str, np.ndarray], dict[str, 
         responses[key] = response
         omega2 = np.linalg.eigvals(np.linalg.solve(mass, stiffness))
         modes = np.sort(np.sqrt(np.maximum(np.real(omega2), 0.0)) / (2.0 * np.pi))
-        dc_gain = float((np.linalg.solve(stiffness, input_vector))[1])
-        metrics[key] = {"modes": modes, "dc_gain": dc_gain}
+        tangent_dc_gain = float((np.linalg.solve(stiffness, input_vector))[1])
+        first_yield = min(
+            (float(np.min(GMS_WEIGHTS * FRICTION[site]["F_s"] /
+                          (GMS_STIFFNESS_FRACTIONS * FRICTION[site]["sigma0"])))
+             for site in case["sites"]),
+            default=np.inf,
+        )
+        metrics[key] = {
+            "modes": modes,
+            "tangent_dc_gain": tangent_dc_gain,
+            "first_yield_m": first_yield,
+        }
     return frequencies, responses, metrics
 
 
-def command_position(t: float, quarter_step: float) -> float:
-    """Closed four-increment sequence; every move is at most one quarter step."""
+def command_position(t: float, command_step: float) -> float:
+    """Closed four-increment sequence at the configured STEP/DIR quantum."""
     if t < 0.005:
         return 0.0
     if t < 0.025:
-        return quarter_step
+        return command_step
     if t < 0.045:
         return 0.0
     if t < 0.065:
-        return -quarter_step
+        return -command_step
     return 0.0
 
 
 def presliding_command_position(t: float, microstep: float) -> float:
-    """Nested back-and-forth reversals quantized to 1/32 of a full step."""
+    """Nested back-and-forth reversals quantized to the STEP/DIR input."""
     if t < PRESLIDING_START:
         return 0.0
     index = min(int((t - PRESLIDING_START) // PRESLIDING_HOLD),
@@ -435,16 +526,19 @@ def gms_site(velocity: float, element_forces: np.ndarray,
 def nonlinear_rhs(t: float, state: np.ndarray, case: dict[str, object], constants: dict[str, float],
                   held_command: float | None = None) -> np.ndarray:
     x_d, x_s, v_d, v_s = state[:4]
-    command = command_position(t, constants["quarter_step"])
+    command = command_position(t, constants["command_step"])
     if held_command is not None:
         command = held_command
     lag = constants["kappa"] * (command - x_d)
     magnetic_force = constants["F_max"] * np.sin(lag)
+    detent_force = -(constants["T_det"] / constants["r"]) * np.sin(
+        4.0 * constants["kappa"] * x_d + MODEL["detent_phase"]
+    )
     electromagnetic_damping = constants["c_m"] * v_d
     axial_force = MODEL["k_ax"] * (x_d - x_s) + MODEL["c_ax"] * (v_d - v_s)
 
-    velocities = {"g": v_s, "n": v_d - v_s, "d": v_d}
-    forces = {"g": 0.0, "n": 0.0, "d": 0.0}
+    velocities = {site: float(H[site] @ np.array([v_d, v_s])) for site in SITE_KEYS}
+    forces = {site: 0.0 for site in SITE_KEYS}
     derivative = np.zeros_like(state)
     if case["friction"] == "lugre":
         for site in case["sites"]:
@@ -458,9 +552,10 @@ def nonlinear_rhs(t: float, state: np.ndarray, case: dict[str, object], constant
             derivative[start:stop], forces[site] = gms_site(
                 velocities[site], state[start:stop], FRICTION[site])
 
-    a_d = (magnetic_force - electromagnetic_damping - axial_force
-           - forces["n"] - forces["d"]) / MODEL["m_d"]
-    a_s = (axial_force + forces["n"] - forces["g"]) / MODEL["m_s"]
+    friction_generalized = sum(H[site] * forces[site] for site in SITE_KEYS)
+    a_d = (magnetic_force + detent_force - electromagnetic_damping - axial_force
+           - friction_generalized[0]) / constants["m_d"]
+    a_s = (axial_force - friction_generalized[1]) / MODEL["m_s"]
     derivative[:4] = (v_d, v_s, a_d, a_s)
     return derivative
 
@@ -490,7 +585,7 @@ def rk4_case(case: dict[str, object], constants: dict[str, float], dt: float = 5
              duration: float = 0.085) -> tuple[np.ndarray, np.ndarray]:
     return rk4_case_with_command(
         case, constants,
-        lambda t: command_position(t, constants["quarter_step"]),
+        lambda t: command_position(t, constants["command_step"]),
         duration=duration, dt=dt,
     )
 
@@ -500,7 +595,7 @@ def friction_force_history(case: dict[str, object], states: np.ndarray,
     """Recover an executed site's constitutive force from integrated states."""
     if site not in case["sites"]:
         return np.zeros(states.shape[0])
-    velocity = states[:, 3] if site == "g" else states[:, 2] - states[:, 3]
+    velocity = H[site][0] * states[:, 2] + H[site][1] * states[:, 3]
     p = FRICTION[site]
     if case["friction"] == "lugre":
         state = states[:, LUGRE_INDEX[site]]
@@ -514,7 +609,7 @@ def friction_force_history(case: dict[str, object], states: np.ndarray,
 
 def presliding_responses(constants: dict[str, float]) -> dict[str, object]:
     """Run the matched guideway cases through a nested reversal sequence."""
-    microstep = constants["quarter_step"] / 8.0
+    microstep = constants["command_step"]
     duration = PRESLIDING_START + PRESLIDING_HOLD * PRESLIDING_LEVELS.size
     command_function = lambda t: presliding_command_position(t, microstep)
     results: dict[str, np.ndarray] = {}
@@ -581,7 +676,7 @@ def presliding_responses(constants: dict[str, float]) -> dict[str, object]:
 def final_window_rms_error_nm(times: np.ndarray, states: np.ndarray,
                               constants: dict[str, float]) -> float:
     """Return RMS(command-stage) over the final 2 ms on the given time grid."""
-    command = np.array([command_position(t, constants["quarter_step"]) for t in times])
+    command = np.array([command_position(t, constants["command_step"]) for t in times])
     final_window = times >= (times[-1] - 0.002)
     error = command - states[:, 1]
     return float(np.sqrt(np.mean(error[final_window] ** 2)) * 1e9)
@@ -595,7 +690,7 @@ def time_responses(constants: dict[str, float]) -> tuple[np.ndarray, np.ndarray,
         times, states = rk4_case(case, constants)
         results[key] = states
     assert times is not None
-    command = np.array([command_position(t, constants["quarter_step"]) for t in times])
+    command = np.array([command_position(t, constants["command_step"]) for t in times])
     final_window = times >= (times[-1] - 0.002)
     first_plateau = (times >= 0.005) & (times < 0.025)
     for key, states in results.items():
@@ -608,7 +703,7 @@ def time_responses(constants: dict[str, float]) -> tuple[np.ndarray, np.ndarray,
             "max_abs_deviation_nm": float(np.max(np.abs(error)) * 1e9),
             "max_stage_um": float(np.max(np.abs(states[:, 1])) * 1e6),
             "first_peak_um": first_peak * 1e6,
-            "first_overshoot_pct": max(0.0, (first_peak / constants["quarter_step"] - 1.0) * 100.0),
+            "first_overshoot_pct": max(0.0, (first_peak / constants["command_step"] - 1.0) * 100.0),
         }
     return times, command, results, metrics
 
@@ -698,58 +793,123 @@ def plot_case_responses(frequencies: np.ndarray, responses: dict[str, np.ndarray
             ha="center", fontsize=8.2, color="#555555",
         )
         fig.text(0.5, 0.012,
-                 f"Nonlinear magnetic force; zeta_m={MODEL['zeta_m']:.2f}; each command increment <= {constants['quarter_step'] * 1e6:.2f} µm.",
+                 f"Nonlinear magnetic and detent force; zeta_m={MODEL['zeta_m']:.2f}; "
+                 f"each command increment = {constants['command_step'] * 1e9:.2f} nm at 1/{MODEL['microstep_divisor']} full step.",
                  ha="center", fontsize=8.5, color="#555555")
         fig.tight_layout(rect=(0.02, 0.075, 0.99, 0.95))
         output = ASSET_DIR / f"response_case_{key}.svg"
-        fig.savefig(output, format="svg", bbox_inches="tight")
+        save_svg(fig, output)
         plt.close(fig)
         outputs.append(output)
     return outputs
 
 
-def plot_pairwise_comparison(frequencies: np.ndarray, responses: dict[str, np.ndarray],
-                             times: np.ndarray, command: np.ndarray,
-                             results: dict[str, np.ndarray],
-                             time_metrics: dict[str, dict[str, float]]) -> Path:
-    """Compare each LuGre case only with its topology-matched GMS case."""
-    fig, axes = plt.subplots(3, 2, figsize=(11.5, 10.5))
-    time_ms = times * 1e3
-    for row, (lugre_key, gms_key) in enumerate(PAIRS):
-        ax_bode, ax_error = axes[row]
-        for key in (lugre_key, gms_key):
-            case = CASES[key]
-            metric = time_metrics[key]
-            metric_label = (f"{case['label']} | RMS {metric['rms_sequence_deviation_nm']:.1f} nm; "
-                            f"max {metric['max_abs_deviation_nm']:.1f} nm")
-            magnitude = 20.0 * np.log10(np.maximum(np.abs(responses[key]), 1e-15))
-            ax_bode.semilogx(frequencies, magnitude, color=case["color"],
-                             linestyle=case["ls"], linewidth=1.7, label=metric_label)
-            error = command - results[key][:, 1]
-            ax_error.plot(time_ms, error * 1e9, color=case["color"],
-                          linestyle=case["ls"], linewidth=1.45, label=metric_label)
-        ax_bode.axhline(0.0, color="#888888", linewidth=0.7)
-        ax_bode.set_ylabel("Magnitude (dB)")
-        ax_bode.set_ylim(-90.0, 30.0)
-        ax_bode.set_xlim(BODE_FOCUS_MIN_HZ, BODE_FOCUS_MAX_HZ)
-        ax_bode.set_title(f"{lugre_key}/{gms_key}: Bode magnitude")
-        ax_bode.legend(loc="lower left", fontsize=8)
-        ax_error.axhline(0.0, color="#888888", linewidth=0.7)
-        ax_error.set_ylabel("Modeled command-stage deviation (nm)")
-        ax_error.set_title(f"{lugre_key}/{gms_key}: nonlinear sequence")
-        ax_error.legend(loc="upper right", fontsize=8)
-        for axis in (ax_bode, ax_error):
-            axis.grid(True, which="major", color="#d1d1d1", linewidth=0.7)
-            axis.grid(True, which="minor", color="#eeeeee", linewidth=0.45)
-    axes[-1, 0].set_xlabel("Frequency (Hz)")
-    axes[-1, 1].set_xlabel("Time (ms)")
-    fig.suptitle("Topology-matched friction-model response comparison", fontsize=15, fontweight="bold")
-    fig.text(0.5, 0.008,
-             "RMS and max labels summarize open-loop command-stage deviation, not closed-loop tracking performance.",
-             ha="center", fontsize=8.3, color="#555555")
-    fig.tight_layout(rect=(0.02, 0.03, 0.99, 0.96))
+def plot_case_response_overlay(frequencies: np.ndarray,
+                               responses: dict[str, np.ndarray]) -> Path:
+    """Overlay every case and quantify the small differences near resonance."""
+    fig = plt.figure(figsize=(12.2, 9.0))
+    grid = fig.add_gridspec(2, 2, height_ratios=(1.08, 1.0), hspace=0.30, wspace=0.25)
+    ax_full = fig.add_subplot(grid[0, :])
+    ax_zoom = fig.add_subplot(grid[1, 0])
+    ax_delta = fig.add_subplot(grid[1, 1])
+
+    magnitudes = {
+        key: 20.0 * np.log10(np.maximum(np.abs(response), 1e-15))
+        for key, response in responses.items()
+    }
+    short_labels = {
+        "0": "0: frictionless",
+        "A": "A: guideway LuGre",
+        "A2": "A2: guideway GMS",
+        "B": "B: nut LuGre",
+        "B2": "B2: nut GMS",
+        "C": "C: both LuGre",
+        "C2": "C2: both GMS",
+    }
+    for key, case in CASES.items():
+        for axis in (ax_full, ax_zoom):
+            axis.semilogx(
+                frequencies, magnitudes[key], color=case["color"],
+                linestyle=case["ls"], linewidth=1.8,
+                label=short_labels[key] if axis is ax_full else None,
+            )
+
+    ax_full.axhline(0.0, color="#888888", linewidth=0.7)
+    ax_full.set_xlim(BODE_FOCUS_MIN_HZ, BODE_FOCUS_MAX_HZ)
+    ax_full.set_ylim(-90.0, 30.0)
+    ax_full.set_title("All command-to-stage Bode responses")
+    ax_full.set_ylabel("Magnitude (dB)")
+    ax_full.legend(loc="lower left", ncol=2, fontsize=8)
+
+    zoom_mask = (frequencies >= 620.0) & (frequencies <= 830.0)
+    zoom_indices = np.flatnonzero(zoom_mask)
+    baseline_index = zoom_indices[np.argmax(magnitudes["0"][zoom_mask])]
+    baseline_frequency = float(frequencies[baseline_index])
+    annotations = (
+        ("0", "0", (682.0, 14.2)),
+        ("A2", "A/A2", (720.0, 15.2)),
+        ("B2", "B/B2", (750.0, 12.8)),
+        ("C2", "C/C2", (796.0, 14.8)),
+    )
+    for key, label, text_position in annotations:
+        peak_index = zoom_indices[np.argmax(magnitudes[key][zoom_mask])]
+        peak_frequency = float(frequencies[peak_index])
+        peak_magnitude = float(magnitudes[key][peak_index])
+        if key == "0":
+            note = f"{label}: {peak_frequency:.0f} Hz"
+        else:
+            shift_hz = peak_frequency - baseline_frequency
+            shift_pct = 100.0 * shift_hz / baseline_frequency
+            note = f"{label}: {peak_frequency:.0f} Hz\n+{shift_hz:.1f} Hz ({shift_pct:.1f}%)"
+        ax_zoom.annotate(
+            note, xy=(peak_frequency, peak_magnitude),
+            xytext=text_position, textcoords="data", ha="center", fontsize=7.8,
+            color=CASES[key]["color"],
+            arrowprops={"arrowstyle": "->", "color": CASES[key]["color"], "lw": 0.8},
+        )
+    ax_zoom.set_xlim(620.0, 830.0)
+    ax_zoom.set_ylim(2.0, 16.2)
+    ax_zoom.set_title("Higher resonance: topology shifts the peak")
+    ax_zoom.set_xlabel("Frequency (Hz)")
+    ax_zoom.set_ylabel("Magnitude (dB)")
+
+    for lugre_key, gms_key in PAIRS:
+        difference = magnitudes[gms_key] - magnitudes[lugre_key]
+        ax_delta.semilogx(
+            frequencies, difference, color=CASES[gms_key]["color"],
+            linewidth=1.9, label=f"{lugre_key}/{gms_key}",
+        )
+        maximum_index = int(np.argmax(np.abs(difference)))
+        maximum = float(difference[maximum_index])
+        maximum_frequency = float(frequencies[maximum_index])
+        ax_delta.plot(maximum_frequency, maximum, "o", color=CASES[gms_key]["color"], ms=4)
+        ax_delta.annotate(
+            f"{abs(maximum):.2f} dB at {maximum_frequency:.0f} Hz",
+            xy=(maximum_frequency, maximum), xytext=(7, 7), textcoords="offset points",
+            fontsize=7.6, color=CASES[gms_key]["color"],
+        )
+    ax_delta.axhline(0.0, color="#888888", linewidth=0.7)
+    ax_delta.set_xlim(BODE_FOCUS_MIN_HZ, BODE_FOCUS_MAX_HZ)
+    ax_delta.set_ylim(-0.1, 1.2)
+    ax_delta.set_title("GMS minus LuGre magnitude")
+    ax_delta.set_xlabel("Frequency (Hz)")
+    ax_delta.set_ylabel("Difference (dB)")
+    ax_delta.legend(loc="upper left", fontsize=8)
+
+    for axis in (ax_full, ax_zoom, ax_delta):
+        axis.grid(True, which="major", color="#d1d1d1", linewidth=0.7)
+        axis.grid(True, which="minor", color="#eeeeee", linewidth=0.45)
+
+    fig.suptitle("Revision 3 response comparison", fontsize=15, fontweight="bold")
+    fig.text(
+        0.5, 0.012,
+        "Matched LuGre and GMS cases share presliding stiffness. Their visible Bode gap comes from tangent damping.",
+        ha="center", fontsize=8.4, color="#555555",
+    )
+    fig.subplots_adjust(left=0.075, right=0.98, bottom=0.08, top=0.91,
+                        hspace=0.34, wspace=0.26)
     output = ASSET_DIR / "lugre_gms_pairwise_comparison.svg"
-    fig.savefig(output, format="svg", bbox_inches="tight")
+    save_svg(fig, output)
     plt.close(fig)
     return output
 
@@ -823,6 +983,14 @@ def plot_presliding_memory(experiment: dict[str, object]) -> Path:
     ax_metrics.set_ylabel("Command-stage deviation metric (nm, log scale)")
     ax_metrics.set_title("Open-loop response: global and memory-sensitive metrics")
     ax_metrics.legend(loc="upper right", fontsize=8)
+    ax_metrics.text(
+        0.02, 0.03,
+        f"Primary force metric: return mismatch "
+        f"{metrics['A']['return_force_mismatch_N']:.4f} N LuGre, "
+        f"{metrics['A2']['return_force_mismatch_N']:.4f} N GMS",
+        transform=ax_metrics.transAxes, fontsize=7.6, color="#555555",
+        bbox={"boxstyle": "round,pad=0.24", "facecolor": "white", "edgecolor": "#c9cfd4"},
+    )
     for bars in (bars_a, bars_a2):
         for bar in bars:
             value = bar.get_height()
@@ -838,100 +1006,477 @@ def plot_presliding_memory(experiment: dict[str, object]) -> Path:
 
     max_force = max(metrics[key]["max_force_N"] for key in ("A", "A2"))
     macro_fraction = 100.0 * max_force / FRICTION["g"]["F_s"]
-    fig.suptitle("Presliding nested-reversal experiment: LuGre versus GMS",
+    fig.suptitle("Force-instrumented partial-slip experiment: LuGre versus GMS",
                  fontsize=15, fontweight="bold")
     fig.text(
         0.5, 0.012,
-        f"1 microstep = {experiment['microstep'] * 1e9:.2f} nm = 1/32 full step; "
+        f"1 STEP/DIR quantum = {experiment['microstep'] * 1e9:.2f} nm = 1/{MODEL['microstep_divisor']} full step; "
         f"peak friction = {max_force:.3f} N ({macro_fraction:.1f}% of macro breakaway). "
         "Markers are 2 ms plateau-end means.",
         ha="center", fontsize=8.4, color="#555555",
     )
     fig.tight_layout(rect=(0.02, 0.045, 0.99, 0.95), h_pad=2.0, w_pad=1.5)
     output = ASSET_DIR / "presliding_memory_comparison.svg"
-    fig.savefig(output, format="svg", bbox_inches="tight")
+    save_svg(fig, output)
     plt.close(fig)
     return output
 
 
 def plot_kinematic_diagram() -> Path:
-    """Render both the ten-DOF topology and its two-DOF reduction."""
-    fig, (full_ax, reduced_ax) = plt.subplots(2, 1, figsize=(13.2, 8.3),
-                                              gridspec_kw={"height_ratios": [1.55, 1.0]})
-    for ax in (full_ax, reduced_ax):
-        ax.axis("off")
+    """Render the full topology, retained reduction, and rejected one-DOF collapse."""
+    constants = physical_constants()
+    parameters = full_parameters()
+    r = constants["r"]
+    drive_color = "#dceef6"
+    stage_color = "#dff2ea"
+    dropped_color = "#eeeeee"
+    spring_color = "#d97800"
+    discarded_spring_color = "#8a8a8a"
+    friction_color = "#b23a48"
+    damping_color = "#6a4c93"
+    rigid_color = "#39434d"
 
-    full_ax.set_xlim(0.0, 13.0)
-    full_ax.set_ylim(0.0, 5.4)
-    full_ax.text(6.5, 5.12, "Revision 3 full topology — ten independent generalized coordinates",
-                 ha="center", fontsize=15, fontweight="bold")
+    fig = plt.figure(figsize=(16.2, 11.2))
+    grid = fig.add_gridspec(2, 3, height_ratios=(1.78, 1.0), width_ratios=(1.0, 1.0, 0.84),
+                            hspace=0.20, wspace=0.14)
+    full_ax = fig.add_subplot(grid[0, :])
+    reduced_ax = fig.add_subplot(grid[1, :2])
+    rejected_ax = fig.add_subplot(grid[1, 2])
+    for axis in (full_ax, reduced_ax, rejected_ax):
+        axis.axis("off")
 
-    def node(ax: plt.Axes, x: float, y: float, label: str, index: int, color: str) -> None:
-        box = FancyBboxPatch((x - 0.46, y - 0.34), 0.92, 0.68, boxstyle="round,pad=0.04",
-                             facecolor=color, edgecolor="#39434d", linewidth=1.25)
+    def node(ax: plt.Axes, x: float, y: float, label: str, index: int | None,
+             color: str, subtitle: str = "", width: float = 0.92) -> None:
+        box = FancyBboxPatch((x - width / 2.0, y - 0.31), width, 0.62,
+                             boxstyle="round,pad=0.04", facecolor=color,
+                             edgecolor=rigid_color, linewidth=1.2, zorder=4)
         ax.add_patch(box)
-        ax.text(x, y + 0.04, label, ha="center", va="center", fontsize=10)
-        ax.text(x, y - 0.23, f"q{index}", ha="center", va="center", fontsize=7.5, color="#59636d")
+        ax.text(x, y + 0.06, label, ha="center", va="center", fontsize=9.4, zorder=5)
+        lower = subtitle if subtitle else (f"q{index}" if index is not None else "")
+        ax.text(x, y - 0.19, lower, ha="center", va="center", fontsize=7.2,
+                color="#59636d", zorder=5)
 
-    torsion_x = np.linspace(1.1, 8.7, 5)
-    for i, (x, label) in enumerate(zip(torsion_x, FULL_DOF_LABELS[:5]), start=1):
-        node(full_ax, x, 3.95, label, i, "#dceef6")
-    for x1, x2, spring_label in zip(torsion_x[:-1], torsion_x[1:],
-                                    (r"$k_{c1}$", r"$k_{c2}$", r"$k_{\theta a}$", r"$k_{\theta b}$")):
-        full_ax.plot([x1 + 0.47, x2 - 0.47], [3.95, 3.95], color="#277da1", linewidth=2)
-        full_ax.text((x1 + x2) / 2.0, 4.18, spring_label, ha="center", fontsize=9)
-    full_ax.add_patch(FancyArrowPatch((0.05, 3.95), (0.62, 3.95), arrowstyle="-|>",
-                                      mutation_scale=14, color="#c08a00", linewidth=2))
-    full_ax.text(0.34, 4.25, "$T_{mag}$", ha="center", fontsize=9, color="#8a6200")
+    def spring(ax: plt.Axes, start: tuple[float, float], end: tuple[float, float],
+               color: str = spring_color, linewidth: float = 1.7, amplitude: float = 0.075,
+               linestyle: str = "-") -> None:
+        p0, p1 = np.asarray(start, dtype=float), np.asarray(end, dtype=float)
+        delta = p1 - p0
+        length = np.linalg.norm(delta)
+        unit = delta / length
+        normal = np.array([-unit[1], unit[0]])
+        points = [p0, p0 + 0.15 * delta]
+        for i in range(9):
+            fraction = 0.18 + i * 0.08
+            points.append(p0 + fraction * delta + (amplitude if i % 2 == 0 else -amplitude) * normal)
+        points.extend([p0 + 0.85 * delta, p1])
+        points = np.asarray(points)
+        ax.plot(points[:, 0], points[:, 1], color=color, linewidth=linewidth,
+                linestyle=linestyle, solid_capstyle="round", zorder=2)
 
-    axial_x = np.linspace(1.1, 10.6, 5)
-    for index, x, label in zip(range(6, 11), axial_x, FULL_DOF_LABELS[5:]):
-        node(full_ax, x, 1.45, label, index, "#dff2ea")
-    for x1, x2, spring_label in zip(axial_x[:-1], axial_x[1:],
-                                    (r"$k_{sha}$", r"$k_{shb}$", "nut contact", r"$k_{mnt}$")):
-        full_ax.plot([x1 + 0.47, x2 - 0.47], [1.45, 1.45], color="#218c74", linewidth=2)
-        full_ax.text((x1 + x2) / 2.0, 1.71, spring_label, ha="center", fontsize=9)
-    full_ax.plot([0.28, 0.28], [0.84, 2.06], color="#59636d", linewidth=3)
-    full_ax.plot([0.28, 0.64], [1.45, 1.45], color="#59636d", linewidth=2)
-    full_ax.text(0.33, 0.61, "$k_{brg}$ to ground", ha="left", fontsize=8.5)
+    def dashpot(ax: plt.Axes, start: tuple[float, float], end: tuple[float, float],
+                color: str = damping_color, linewidth: float = 1.5, width: float = 0.10) -> None:
+        p0, p1 = np.asarray(start, dtype=float), np.asarray(end, dtype=float)
+        delta = p1 - p0
+        length = np.linalg.norm(delta)
+        unit = delta / length
+        normal = np.array([-unit[1], unit[0]])
+        a, b, c, d = (p0 + f * delta for f in (0.28, 0.40, 0.65, 0.78))
+        ax.plot(*zip(p0, a), color=color, linewidth=linewidth)
+        ax.plot(*zip(a - width * normal, a + width * normal), color=color, linewidth=linewidth)
+        ax.plot(*zip(a, c), color=color, linewidth=linewidth)
+        ax.plot(*zip(b - width * normal, d - width * normal), color=color, linewidth=linewidth)
+        ax.plot(*zip(b + width * normal, d + width * normal), color=color, linewidth=linewidth)
+        ax.plot(*zip(d - width * normal, d + width * normal), color=color, linewidth=linewidth)
+        ax.plot(*zip(d, p1), color=color, linewidth=linewidth)
 
-    # Highlight the only cross-branch coupling: delta_n = u_n-u_e-r theta_s2.
-    theta_nut_x = torsion_x[3]
-    ue_x, un_x = axial_x[1], axial_x[3]
-    full_ax.plot([theta_nut_x, theta_nut_x], [3.59, 2.72], color="#d97800", linewidth=2)
-    full_ax.plot([theta_nut_x, ue_x, un_x], [2.72, 2.25, 2.25], color="#d97800", linewidth=2)
-    full_ax.plot([ue_x, ue_x], [2.25, 1.80], color="#d97800", linewidth=2)
-    full_ax.plot([un_x, un_x], [2.25, 1.80], color="#d97800", linewidth=2)
-    full_ax.text(7.45, 2.52, r"ball-contact port: $\delta_n=u_n-u_e-r\theta_{s2}$",
-                 ha="center", fontsize=9.5, color="#a45600", fontweight="bold")
-    full_ax.text(11.35, 3.98, "Rotational branch", color="#1f5d73", fontsize=10, fontweight="bold")
-    full_ax.text(11.35, 1.48, "Axial branch", color="#176a55", fontsize=10, fontweight="bold")
-    full_ax.text(6.5, 0.15, "The command is an input, not a DOF. Friction states add internal states but not mechanical DOFs.",
-                 ha="center", fontsize=9, color="#555555")
+    def friction(ax: plt.Axes, start: tuple[float, float], end: tuple[float, float],
+                 label: str, fontsize: float = 7.4, tag: str = "",
+                 defined_only: bool = False) -> None:
+        x0, y0 = start
+        x1, y1 = end
+        horizontal = abs(x1 - x0) >= abs(y1 - y0)
+        cx, cy = (x0 + x1) / 2.0, (y0 + y1) / 2.0
+        if horizontal:
+            block_w, block_h = min(0.62, abs(x1 - x0) * 0.43), 0.23
+            ax.plot([x0, cx - block_w / 2.0], [y0, cy], color=friction_color, linewidth=1.5)
+            ax.plot([cx + block_w / 2.0, x1], [cy, y1], color=friction_color, linewidth=1.5)
+        else:
+            block_w, block_h = 0.34, min(0.48, abs(y1 - y0) * 0.43)
+            ax.plot([x0, cx], [y0, cy - block_h / 2.0], color=friction_color, linewidth=1.5)
+            ax.plot([cx, x1], [cy + block_h / 2.0, y1], color=friction_color, linewidth=1.5)
+        block = FancyBboxPatch((cx - block_w / 2.0, cy - block_h / 2.0), block_w, block_h,
+                               boxstyle="round,pad=0.025", facecolor="#f8dce1",
+                               edgecolor=friction_color, linewidth=1.1, zorder=3,
+                               linestyle="--" if defined_only else "-")
+        ax.add_patch(block)
+        ax.text(cx, cy, label, ha="center", va="center", fontsize=fontsize,
+                color="#8d2936", zorder=4)
+        if tag:
+            ax.text(cx, cy - block_h / 2.0 - 0.10, tag, ha="center", va="top",
+                    fontsize=5.8, color="#8d2936", zorder=4)
 
-    reduced_ax.set_xlim(0.0, 13.0)
-    reduced_ax.set_ylim(0.0, 3.2)
-    reduced_ax.text(6.5, 2.94, "Band-limited reduction — two retained mechanical DOFs",
-                    ha="center", fontsize=14, fontweight="bold")
-    node(reduced_ax, 3.15, 1.55, r"$x_d,\;m_d$", 1, "#dceef6")
-    node(reduced_ax, 9.55, 1.55, r"$x_s,\;m_s$", 2, "#dff2ea")
-    reduced_ax.add_patch(FancyArrowPatch((0.55, 1.55), (2.65, 1.55), arrowstyle="-|>",
-                                         mutation_scale=14, color="#c08a00", linewidth=2))
-    reduced_ax.text(1.55, 1.82, "$F_{mag}(x_{cmd}-x_d)$", ha="center", fontsize=9)
-    reduced_ax.plot([3.62, 9.08], [1.72, 1.72], color="#555555", linewidth=2)
-    reduced_ax.plot([3.62, 9.08], [1.33, 1.33], color="#777777", linewidth=1.6)
-    reduced_ax.text(6.35, 2.02, "$k_{ax}$: retained series compliance", ha="center", fontsize=9.5)
-    reduced_ax.text(6.35, 1.04, "$c_{ax}$ and internal nut-friction port", ha="center", fontsize=9)
-    reduced_ax.plot([3.15, 3.15], [1.18, 0.55], color="#6a4c93", linewidth=2)
-    reduced_ax.plot([9.55, 9.55], [1.18, 0.55], color="#b23a48", linewidth=2)
-    reduced_ax.text(2.15, 0.42, "$c_m$ and $F_{f,d}$", fontsize=9, color="#6a4c93")
-    reduced_ax.text(9.75, 0.42, "$F_{f,g}$", fontsize=9, color="#9b2f3d")
-    reduced_ax.text(6.5, 0.12, "Internal masses are collapsed only after their compliance, frequency separation, and identifiability are audited.",
-                    ha="center", fontsize=8.8, color="#555555")
+    def ground(ax: plt.Axes, x: float, y: float, width: float = 0.48) -> None:
+        ax.plot([x - width / 2.0, x + width / 2.0], [y, y], color=rigid_color, linewidth=2.0)
+        for offset in np.linspace(-width / 2.0, width / 2.0, 5):
+            ax.plot([x + offset, x + offset - 0.08], [y, y - 0.10], color=rigid_color, linewidth=0.8)
 
-    fig.tight_layout(h_pad=1.2)
+    def wall(ax: plt.Axes, x: float, y: float, height: float = 0.72) -> None:
+        ax.plot([x, x], [y - height / 2.0, y + height / 2.0], color=rigid_color, linewidth=2.2)
+        for offset in np.linspace(-height / 2.0, height / 2.0, 5):
+            ax.plot([x, x - 0.10], [y + offset, y + offset - 0.08], color=rigid_color, linewidth=0.8)
+
+    components = component_parameters()
+    coupling_reflected = parameters["k_c_series"] / r**2
+    torsion_reflected = parameters["k_theta_a"] / r**2
+    shares = {
+        "brg": 100.0 * MODEL["k_ax"] / parameters["k_brg"],
+        "sha": 100.0 * MODEL["k_ax"] / parameters["k_sha"],
+        "ball": 100.0 * MODEL["k_ax"] / parameters["k_ball"],
+        "mnt": 100.0 * MODEL["k_ax"] / parameters["k_mnt"],
+    }
+    reduced_mass, _, reduced_stiffness, _ = linear_matrices((), "none")
+    reduced_modes = _linear_modes(reduced_mass, reduced_stiffness)
+    full_mass, _, full_stiffness, _, _ = full_linear_matrices()
+    eigenvalues, eigenvectors = np.linalg.eig(np.linalg.solve(full_mass, full_stiffness))
+    order = np.argsort(np.real(eigenvalues))
+    modal_frequencies = np.sqrt(np.maximum(np.real(eigenvalues[order]), 0.0)) / (2.0 * np.pi)
+    modal_vectors = np.real(eigenvectors[:, order])
+    participation = np.diag(full_mass)[:, None] * modal_vectors**2
+    participation /= np.maximum(np.sum(participation, axis=0, keepdims=True), 1e-30)
+
+    def first_stub_mode(dof: int) -> float:
+        candidates = np.where((modal_frequencies > 900.0) & (participation[dof] > 0.15))[0]
+        return float(modal_frequencies[candidates[0]]) if candidates.size else float("nan")
+
+    torsional_stub_mode = first_stub_mode(4)
+    axial_stub_mode = first_stub_mode(7)
+
+    full_ax.set_xlim(0.0, 15.6)
+    full_ax.set_ylim(0.0, 7.75)
+    full_ax.text(7.8, 7.50, "Ten-DOF physical topology and reduction map",
+                 ha="center", fontsize=15, fontweight="bold")
+    stations = ((2.0, "motor"), (3.55, "coupling"), (5.15, "bearing"),
+                (6.55, "screw"), (8.35, "nut"), (10.55, "stage"),
+                (11.55, "guideways"))
+    for x_pos, label in stations:
+        full_ax.plot([x_pos, x_pos], [0.24, 6.86], color="#dfe3e6", linewidth=0.7,
+                     linestyle=(0, (2, 4)), zorder=0)
+        full_ax.text(x_pos, 7.06, label, ha="center", fontsize=8.2, color="#59636d",
+                     bbox={"boxstyle": "round,pad=0.20", "facecolor": "#f5f6f7",
+                           "edgecolor": "#d4d8dc"})
+
+    # Commanded magnetic field and motor-side grounding.
+    wall(full_ax, 0.48, 5.30, 0.95)
+    full_ax.text(0.48, 5.94, r"moving datum $x_{cmd}$", ha="center", fontsize=8.3)
+    node(full_ax, 2.0, 5.30, r"$\theta_m$", 1, drive_color,
+         rf"q1; $J={parameters['J_m']:.2e}$")
+    spring(full_ax, (0.50, 5.30), (1.52, 5.30), color="#c08a00")
+    full_ax.text(1.02, 5.57, r"$K_m$", ha="center", fontsize=8.2, color="#8a6200")
+    spring(full_ax, (1.72, 4.97), (1.72, 4.05), color="#c08a00", amplitude=0.06)
+    ground(full_ax, 1.72, 3.91, 0.42)
+    full_ax.text(1.08, 4.43, r"$K_{det}(x_d)$", fontsize=7.4, color="#8a6200")
+    dashpot(full_ax, (2.00, 4.97), (2.00, 4.05), width=0.08)
+    ground(full_ax, 2.00, 3.91, 0.42)
+    friction(full_ax, (2.33, 4.97), (2.33, 4.05), r"$T_{mb}$", 6.7)
+    ground(full_ax, 2.33, 3.91, 0.42)
+
+    # Rotational masses migrate to m_d; their internal spring compliance is discarded.
+    node(full_ax, 3.55, 5.30, r"$\theta_c$", 2, drive_color,
+         rf"q2; $J={parameters['J_c']:.2e}$")
+    node(full_ax, 5.15, 5.30, r"$\theta_{{s1}}$", 3, drive_color,
+         rf"q3; $J={parameters['J_s1']:.2e}$")
+    node(full_ax, 8.35, 5.30, r"$\theta_{{s2}}$", 4, drive_color,
+         rf"q4; $J={parameters['J_s2']:.2e}$")
+    spring(full_ax, (2.48, 5.45), (3.07, 5.45), color=discarded_spring_color,
+           amplitude=0.055, linestyle="--")
+    friction(full_ax, (2.48, 5.08), (3.07, 5.08), r"$T_{h1}$", 6.5)
+    spring(full_ax, (4.03, 5.45), (4.67, 5.45), color=discarded_spring_color,
+           amplitude=0.055, linestyle="--")
+    friction(full_ax, (4.03, 5.08), (4.67, 5.08), r"$T_{h2}$", 6.5)
+    spring(full_ax, (5.63, 5.30), (7.87, 5.30), color=discarded_spring_color,
+           amplitude=0.065, linestyle="--")
+    full_ax.text(6.75, 5.56, r"$k_{\theta a}$", ha="center", fontsize=8.0, color="#666666")
+    friction(full_ax, (5.15, 4.97), (5.15, 4.05), r"$T_{brg}$", 6.6)
+    ground(full_ax, 5.15, 3.91, 0.44)
+
+    node(full_ax, 8.35, 6.42, r"$\theta_{{s3}}$", 5, drive_color,
+         rf"q5; $J={parameters['J_s3']:.2e}$")
+    spring(full_ax, (8.35, 5.63), (8.35, 6.09), color=discarded_spring_color,
+           amplitude=0.045, linestyle="--")
+    full_ax.text(8.70, 5.92, r"$k_{\theta b}$", fontsize=7.4, color="#666666")
+
+    # The four full drivetrain friction torques aggregate into the reduced F_f,d port.
+    aggregate_sources = (2.33, 2.78, 4.35, 5.15)
+    for x_pos in aggregate_sources:
+        full_ax.plot([x_pos, x_pos], [4.02 if x_pos in (2.33, 5.15) else 4.91, 3.67],
+                     color="#9a6aae", linewidth=0.8, linestyle="--", zorder=1)
+    full_ax.plot([aggregate_sources[0], aggregate_sources[-1]], [3.67, 3.67],
+                 color="#9a6aae", linewidth=1.1, linestyle="--")
+    full_ax.add_patch(FancyArrowPatch((5.15, 3.67), (5.84, 3.67), arrowstyle="-|>",
+                                      mutation_scale=9, color="#9a6aae", linewidth=1.1))
+    friction(full_ax, (5.84, 3.67), (6.72, 3.67), r"$F_{f,d}$", 6.5,
+             tag="A/A2, B/B2, C/C2")
+    full_ax.text(4.02, 3.45, r"$T_{mb},T_{h1},T_{h2},T_{brg}$ aggregate; executed in every friction case",
+                 ha="center", fontsize=6.7, color="#6a4c93")
+
+    # Axial masses u_b, u_e, and u_f are dropped; their retained load-path springs stay orange.
+    wall(full_ax, 4.03, 2.05, 0.86)
+    node(full_ax, 5.15, 2.05, r"$u_b$", 6, dropped_color,
+         rf"q6; $m={parameters['m_b']:.3f}$ kg")
+    node(full_ax, 6.55, 2.05, r"$u_e$", 7, dropped_color,
+         rf"q7; $m={parameters['m_e']:.3f}$ kg")
+    node(full_ax, 6.55, 0.63, r"$u_f$", 8, dropped_color,
+         rf"q8; $m={parameters['m_f']:.3f}$ kg")
+    node(full_ax, 8.35, 2.05, r"$u_n$", 9, stage_color,
+         rf"q9; $m={parameters['m_n']:.3f}$ kg")
+    node(full_ax, 10.55, 2.05, r"$x_s$", 10, stage_color,
+         rf"q10; $m={parameters['m_stage']:.3f}$ kg", width=1.04)
+    spring(full_ax, (4.05, 2.05), (4.67, 2.05), amplitude=0.055)
+    spring(full_ax, (5.63, 2.05), (6.07, 2.05), amplitude=0.052)
+    spring(full_ax, (6.55, 1.72), (6.55, 0.96), color=discarded_spring_color,
+           amplitude=0.055, linestyle="--")
+    full_ax.text(6.82, 1.30, r"$k_{shb}$", fontsize=7.2, color="#666666")
+    full_ax.text(4.36, 2.38, rf"$k_{{brg}}$ {shares['brg']:.0f}%", ha="center",
+                 fontsize=7.1, color="#9a5600")
+    full_ax.text(5.85, 2.38, rf"$k_{{sha}}(x_s)$ {shares['sha']:.0f}%", ha="center",
+                 fontsize=7.1, color="#9a5600")
+
+    # Nut-column transformer. Rotation drops vertically; ball stiffness and friction share two nodes.
+    transformer = FancyBboxPatch((7.97, 2.66), 0.76, 0.66, boxstyle="round,pad=0.04",
+                                 facecolor="#fff2dc", edgecolor=spring_color,
+                                 linewidth=1.4, zorder=4)
+    full_ax.add_patch(transformer)
+    full_ax.text(8.35, 3.08, "TF", ha="center", va="center", fontsize=8.8,
+                 fontweight="bold", color="#9a5600", zorder=5)
+    full_ax.text(8.35, 2.87, r"$r$: $u_t=u_e+r\theta_{s2}$", ha="center", va="center",
+                 fontsize=6.1, color="#9a5600", zorder=5)
+    full_ax.add_patch(FancyArrowPatch((8.35, 4.97), (8.35, 3.34), arrowstyle="-|>",
+                                      mutation_scale=9, color=rigid_color, linewidth=1.4))
+    full_ax.plot([7.03, 7.45], [2.05, 2.05], color=rigid_color, linewidth=1.4)
+    full_ax.plot([7.97, 7.45], [2.78, 2.18], color=rigid_color, linewidth=1.3)
+    spring(full_ax, (7.45, 2.18), (7.87, 2.18), amplitude=0.043)
+    friction(full_ax, (7.45, 1.73), (7.87, 1.73), r"$F_{f,n}$", 6.1,
+             tag="B/B2, C/C2")
+    full_ax.plot([7.45, 7.45], [1.73, 2.18], color=rigid_color, linewidth=1.0)
+    full_ax.plot([7.87, 7.87], [1.73, 2.18], color=rigid_color, linewidth=1.0)
+    full_ax.text(7.66, 2.42, rf"$k_{{ball}}$ {shares['ball']:.0f}%", ha="center",
+                 fontsize=7.0, color="#9a5600")
+    friction(full_ax, (8.92, 3.18), (9.78, 3.18), r"$F_{f,r}$", 6.1,
+             tag="B/B2, C/C2")
+    full_ax.text(9.35, 3.49, r"gross nut rolling drag, $v_r=\dot x_d$",
+                 ha="center", fontsize=6.5, color="#8d2936")
+    spring(full_ax, (8.83, 2.05), (10.03, 2.05), amplitude=0.062)
+    full_ax.text(9.43, 2.38, rf"$k_{{mnt}}$ {shares['mnt']:.0f}%", ha="center",
+                 fontsize=7.1, color="#9a5600")
+
+    # Guideway port remains stage referenced and carries case tags.
+    full_ax.plot([11.06, 11.55], [2.05, 2.05], color=rigid_color, linewidth=1.5)
+    full_ax.plot([11.15, 11.95], [1.53, 1.53], color=rigid_color, linewidth=1.8)
+    for pad_x in (11.27, 11.47, 11.67, 11.87):
+        full_ax.add_patch(Rectangle((pad_x - 0.065, 1.34), 0.13, 0.13,
+                                    facecolor="#f8dce1", edgecolor=friction_color, linewidth=0.8))
+    friction(full_ax, (11.55, 1.34), (11.55, 0.54), r"$F_{f,g}$", 6.4,
+             tag="A/A2, C/C2")
+    ground(full_ax, 11.55, 0.40, 0.58)
+
+    # Right-hand evidence column removes numeric labels from the mechanism drawing.
+    evidence = FancyBboxPatch((12.20, 4.22), 3.08, 2.68, boxstyle="round,pad=0.08",
+                              facecolor="#f7fafc", edgecolor="#8da2b2", linewidth=1.0)
+    full_ax.add_patch(evidence)
+    full_ax.text(13.74, 6.66, "reduction evidence", ha="center", fontsize=8.6,
+                 fontweight="bold", color="#425b6b")
+    evidence_lines = (
+        rf"$K_m={constants['K_m']:.2e}$ N/m",
+        rf"drive pole {reduced_modes[0]:.0f} Hz; 140 to 190 Hz step-dependent band",
+        rf"$k_c/r^2={coupling_reflected:.2e}$ N/m, discarded compliance",
+        rf"$k_\theta/r^2={torsion_reflected:.2e}$ N/m per link, discarded",
+        rf"$k_{{ax}}={MODEL['k_ax']:.2e}$ N/m, relative mode {reduced_modes[1]:.0f} Hz",
+        rf"stub-rich modes {torsional_stub_mode/1000:.2f}/{axial_stub_mode/1000:.2f} kHz, above band",
+    )
+    full_ax.text(12.40, 6.35, "\n".join(evidence_lines), ha="left", va="top",
+                 fontsize=7.1, linespacing=1.42, color="#425b6b")
+
+    full_ax.text(12.22, 3.95, r"sign key: $+x$ right; $+\theta$ by RH rule about $+x$; $r=L/(2\pi)$",
+                 fontsize=6.9, color="#176a55")
+    full_ax.text(12.22, 3.68, r"$\delta_n=u_n-u_e-r\theta_{s2}$; $v_n=-\dot\delta_n$",
+                 fontsize=7.6, color="#9a5600", fontweight="bold")
+
+    # Separate legends for mass destination and spring retention.
+    full_ax.text(12.22, 3.36, "mass fill", fontsize=7.2, fontweight="bold", color="#4d555c")
+    for y_pos, color, label in ((3.10, drive_color, "migrates to $m_d$"),
+                                (2.84, stage_color, "migrates to $m_s$"),
+                                (2.58, dropped_color, "mass dropped")):
+        full_ax.add_patch(Rectangle((12.22, y_pos - 0.09), 0.22, 0.18,
+                                    facecolor=color, edgecolor="#777777", linewidth=0.7))
+        full_ax.text(12.53, y_pos, label, va="center", fontsize=6.7, color="#4d555c")
+    full_ax.text(14.05, 3.36, "spring stroke", fontsize=7.2, fontweight="bold", color="#4d555c")
+    spring(full_ax, (14.05, 3.08), (14.55, 3.08), color=spring_color, amplitude=0.04)
+    full_ax.text(14.63, 3.08, "retained", va="center", fontsize=6.7, color="#4d555c")
+    spring(full_ax, (14.05, 2.75), (14.55, 2.75), color=discarded_spring_color,
+           amplitude=0.04, linestyle="--")
+    full_ax.text(14.63, 2.75, "discarded", va="center", fontsize=6.7, color="#4d555c")
+
+    exclusion = FancyBboxPatch((12.20, 0.28), 3.08, 1.98, boxstyle="round,pad=0.08",
+                               facecolor="#fbfbfb", edgecolor="#8a8a8a", linewidth=1.0,
+                               linestyle="--")
+    full_ax.add_patch(exclusion)
+    full_ax.text(13.74, 2.02, "deliberately absent", ha="center", fontsize=8.0,
+                 fontweight="bold", color="#555555")
+    full_ax.text(12.43, 1.69, "base compliance\npayload bracket\npitch, yaw, roll\nscrew bending",
+                 ha="left", va="top", fontsize=7.0, linespacing=1.35, color="#555555")
+
+    # Two-DOF panel with distinct structural, damping, and friction elements.
+    reduced_ax.set_xlim(0.0, 10.0)
+    reduced_ax.set_ylim(0.0, 4.35)
+    reduced_ax.text(5.0, 4.06, "Retained two-DOF model: executable through the axial mode",
+                    ha="center", fontsize=12.7, fontweight="bold")
+    wall(reduced_ax, 0.38, 2.30, 0.82)
+    reduced_ax.text(0.38, 2.87, r"$x_{cmd}$", ha="center", fontsize=8.2)
+    node(reduced_ax, 2.35, 2.30, r"$x_d$", 1, drive_color,
+         rf"$m_d={constants['m_d']:.2f}$ kg", width=1.18)
+    node(reduced_ax, 7.70, 2.30, r"$x_s$", 2, stage_color,
+         rf"$m_s={MODEL['m_s']:.2f}$ kg", width=1.12)
+    spring(reduced_ax, (0.40, 2.30), (1.76, 2.30), color="#c08a00")
+    reduced_ax.text(1.15, 2.66, r"$K_m(x_{cmd}-x_d)$", ha="center", fontsize=7.7)
+    reduced_ax.text(1.15, 2.47, rf"drive pole {reduced_modes[0]:.0f} Hz", ha="center",
+                    fontsize=6.5, color="#8a6200")
+    spring(reduced_ax, (2.95, 2.60), (7.14, 2.60), amplitude=0.08)
+    dashpot(reduced_ax, (2.95, 2.05), (7.14, 2.05), width=0.10)
+    friction(reduced_ax, (2.95, 1.60), (7.14, 1.60), r"$F_{f,n}$", 7.0,
+             tag="B/B2, C/C2")
+    reduced_ax.text(5.03, 2.87, rf"$k_{{ax}}$ structural compliance; relative mode {reduced_modes[1]:.0f} Hz",
+                    ha="center", fontsize=7.7,
+                    color="#9a5600")
+    reduced_ax.text(5.03, 1.83, r"$c_{ax}$", ha="center", fontsize=7.4, color=damping_color)
+    reduced_ax.text(5.03, 1.18, r"internal equal-opposite port, $v_n=\dot x_d-\dot x_s$",
+                    ha="center", fontsize=7.4, color="#8d2936")
+    spring(reduced_ax, (2.05, 1.97), (2.05, 0.66), color="#c08a00", amplitude=0.06)
+    ground(reduced_ax, 2.05, 0.52, 0.44)
+    reduced_ax.text(1.15, 1.20, r"$K_{det}(x_d)$", fontsize=7.0, color="#8a6200")
+    dashpot(reduced_ax, (2.35, 1.97), (2.35, 0.66), width=0.08)
+    ground(reduced_ax, 2.35, 0.52, 0.44)
+    friction(reduced_ax, (2.68, 1.97), (2.68, 0.66), r"$F_{f,d}$", 6.2,
+             tag="A/B/C")
+    ground(reduced_ax, 2.68, 0.52, 0.44)
+    friction(reduced_ax, (3.18, 1.40), (3.18, 0.66), r"$F_{f,r}$", 6.2,
+             tag="B/B2, C/C2")
+    ground(reduced_ax, 3.18, 0.52, 0.44)
+    friction(reduced_ax, (7.70, 1.97), (7.70, 0.66), r"$F_{f,g}$", 6.2,
+             tag="A/A2, C/C2")
+    ground(reduced_ax, 7.70, 0.52, 0.50)
+    reduced_ax.text(5.0, 0.08, "F_f,d is active in every friction case. F_f,r carries gross nut rolling drag. F_f,n remains internal microslip.",
+                    ha="center", fontsize=7.6, color="#555555")
+
+    # One-DOF panel makes the identifiability loss explicit.
+    rejected_ax.set_xlim(0.0, 4.2)
+    rejected_ax.set_ylim(0.0, 4.35)
+    rejected_ax.text(2.1, 4.06, "One DOF: rejected",
+                     ha="center", fontsize=12.7, fontweight="bold", color="#9b2f3d")
+    rejected_ax.add_patch(FancyBboxPatch((0.12, 0.22), 3.96, 3.45, boxstyle="round,pad=0.08",
+                                        facecolor="#fffafa", edgecolor="#b23a48",
+                                        linewidth=1.3, linestyle="--"))
+    wall(rejected_ax, 0.42, 2.25, 0.76)
+    node(rejected_ax, 2.10, 2.25, r"$x,\ m_d+m_s$", 1, "#eef1f3", width=1.20)
+    spring(rejected_ax, (0.44, 2.25), (1.48, 2.25), color="#c08a00", amplitude=0.06)
+    friction(rejected_ax, (2.10, 1.92), (2.10, 1.25), r"merged $F_f$", 6.0)
+    ground(rejected_ax, 2.10, 1.10, 0.50)
+    rejected_ax.text(2.10, 0.88, r"$v_n=\dot x_d-\dot x_s=0$", ha="center",
+                     fontsize=8.4, color="#9b2f3d", fontweight="bold")
+    rejected_ax.plot([0.96, 3.24], [0.38, 0.68], color="#b23a48", linewidth=2.0)
+    rejected_ax.plot([0.96, 3.24], [0.68, 0.38], color="#b23a48", linewidth=2.0)
+    rejected_ax.text(2.10, 3.42, "loses the 696 Hz relative mode\nmerges nut and guideway sites\nremoves the nut-friction port",
+                     ha="center", va="top", fontsize=7.7, linespacing=1.35, color="#6a3038")
+
+    fig.subplots_adjust(left=0.025, right=0.985, top=0.975, bottom=0.035)
     output = ASSET_DIR / "kinematic_diagram.svg"
-    fig.savefig(output, format="svg", bbox_inches="tight")
+    save_svg(fig, output)
+    plt.close(fig)
+    return output
+
+
+def plot_reduced_bond_graph() -> Path:
+    """Render the reduced-model bond graph and friction incidence audit."""
+    fig, ax = plt.subplots(figsize=(13.2, 6.3))
+    ax.axis("off")
+    ax.set_xlim(0.0, 13.2)
+    ax.set_ylim(0.0, 6.3)
+    ax.text(6.6, 6.02, "Reduced-model bond graph and power-port audit",
+            ha="center", fontsize=15, fontweight="bold")
+
+    def junction(x: float, y: float, label: str, color: str) -> None:
+        circle = Circle((x, y), 0.38, facecolor=color, edgecolor="#39434d", linewidth=1.4, zorder=4)
+        ax.add_patch(circle)
+        ax.text(x, y + 0.07, "1", ha="center", va="center", fontsize=11,
+                fontweight="bold", zorder=5)
+        ax.text(x, y - 0.16, label, ha="center", va="center", fontsize=7.2, zorder=5)
+
+    def element(x: float, y: float, label: str, color: str = "#f5f6f7", width: float = 1.28) -> None:
+        box = FancyBboxPatch((x - width / 2.0, y - 0.27), width, 0.54,
+                             boxstyle="round,pad=0.04", facecolor=color,
+                             edgecolor="#59636d", linewidth=1.0, zorder=3)
+        ax.add_patch(box)
+        ax.text(x, y, label, ha="center", va="center", fontsize=8.2, zorder=4)
+
+    def bond(start: tuple[float, float], end: tuple[float, float], color: str = "#59636d",
+             arrow_fraction: float = 0.67) -> None:
+        ax.plot([start[0], end[0]], [start[1], end[1]], color=color, linewidth=1.8, zorder=1)
+        x = start[0] + arrow_fraction * (end[0] - start[0])
+        y = start[1] + arrow_fraction * (end[1] - start[1])
+        dx, dy = end[0] - start[0], end[1] - start[1]
+        scale = max(np.hypot(dx, dy), 1e-9)
+        ax.add_patch(FancyArrowPatch((x - 0.12 * dx / scale, y - 0.12 * dy / scale),
+                                     (x + 0.12 * dx / scale, y + 0.12 * dy / scale),
+                                     arrowstyle="-|>", mutation_scale=10, color=color,
+                                     linewidth=1.2, zorder=2))
+
+    drive_x, center_x, stage_x, graph_y = 3.25, 6.60, 9.95, 3.65
+    junction(drive_x, graph_y, r"$\dot x_d$", "#dceef6")
+    junction(stage_x, graph_y, r"$\dot x_s$", "#dff2ea")
+    zero = Circle((center_x, graph_y), 0.36, facecolor="#fde8ca", edgecolor="#d97800",
+                  linewidth=1.4, zorder=4)
+    ax.add_patch(zero)
+    ax.text(center_x, graph_y + 0.07, "0", ha="center", va="center", fontsize=11,
+            fontweight="bold", zorder=5)
+    ax.text(center_x, graph_y - 0.16, r"$F_{ax}$", ha="center", va="center", fontsize=7.2,
+            zorder=5)
+    bond((3.63, graph_y), (6.24, graph_y), "#d97800")
+    bond((9.57, graph_y), (6.96, graph_y), "#d97800")
+
+    element(1.05, graph_y, r"Se: $F_{mag}+F_{det}$", "#fff2c7", 1.75)
+    bond((1.93, graph_y), (2.87, graph_y), "#c08a00")
+    element(drive_x, 5.05, r"I: $m_d$", "#dceef6")
+    bond((drive_x, 4.78), (drive_x, 4.03), "#277da1")
+    element(stage_x, 5.05, r"I: $m_s$", "#dff2ea")
+    bond((stage_x, 4.78), (stage_x, 4.03), "#218c74")
+
+    element(5.02, 2.25, r"C: $1/k_{ax}$", "#fde8ca")
+    element(6.60, 2.25, r"R: $c_{ax}$", "#e7e0ef")
+    element(8.18, 2.25, r"R: $F_{f,n}$", "#f8dce1")
+    bond((center_x, 3.29), (5.02, 2.52), "#d97800")
+    bond((center_x, 3.29), (6.60, 2.52), "#6a4c93")
+    bond((center_x, 3.29), (8.18, 2.52), "#b23a48")
+
+    element(2.00, 2.25, r"R: $c_m,F_{f,d},F_{f,r}$", "#eee8f3", 2.08)
+    bond((3.03, 3.38), (2.36, 2.52), "#6a4c93")
+    element(11.18, 2.25, r"R: $F_{f,g}$", "#f8dce1", 1.45)
+    bond((10.17, 3.38), (10.82, 2.52), "#b23a48")
+
+    ax.text(6.60, 4.30, r"internal port: $v_n=\dot x_d-\dot x_s$",
+            ha="center", fontsize=8.5, color="#8d2936")
+    ax.text(4.70, 3.92, r"$-F_{f,n}$", fontsize=8.0, color="#8d2936")
+    ax.text(8.05, 3.92, r"$+F_{f,n}$", fontsize=8.0, color="#8d2936")
+    ax.text(6.60, 1.48,
+            r"$\mathbf{H}_g=[0,1],\quad \mathbf{H}_n=[1,-1],\quad \mathbf{H}_r=\mathbf{H}_d=[1,0]$",
+            ha="center", fontsize=10.0, color="#39434d")
+    ax.text(6.60, 0.92,
+            r"$\mathbf{Q}_f=-\mathbf{H}^T F_f,\qquad P_f=\dot{\mathbf{x}}^{T}\mathbf{Q}_f=-v_fF_f\leq0$",
+            ha="center", fontsize=10.0, color="#39434d")
+    ax.text(6.60, 0.35,
+            "Each bond carries force and velocity. The paired nut bonds show equal-opposite generalized force and preserve power.",
+            ha="center", fontsize=8.4, color="#555555")
+    fig.tight_layout()
+    output = ASSET_DIR / "reduced_bond_graph.svg"
+    save_svg(fig, output)
     plt.close(fig)
     return output
 
@@ -983,7 +1528,7 @@ def plot_full_reduced_verification(frequencies: np.ndarray, verification: dict[s
     fig.suptitle("Revision 3 full-versus-reduced executable verification", fontsize=15, fontweight="bold")
     fig.tight_layout(rect=(0.02, 0.02, 0.99, 0.95))
     output = ASSET_DIR / "full_vs_reduced_verification.svg"
-    fig.savefig(output, format="svg", bbox_inches="tight")
+    save_svg(fig, output)
     plt.close(fig)
     return output
 
@@ -992,7 +1537,7 @@ def plot_position_dependence() -> Path:
     positions = np.array([50.0, 150.0, 250.0])
     k_sha = np.array([2.0e8, 6.7e7, 4.0e7])
     k_ax = np.array([1.29e7, 1.14e7, 1.02e7])
-    mode = np.array([736.0, 694.0, 657.0])
+    mode = np.array([739.9, 695.6, 657.9])
     fig, left = plt.subplots(figsize=(10.2, 4.6))
     right = left.twinx()
     left.plot(positions, k_ax / 1e6, marker="o", color="#277da1", linewidth=2,
@@ -1011,22 +1556,23 @@ def plot_position_dependence() -> Path:
     left.legend(lines, [line.get_label() for line in lines], loc="center right")
     fig.tight_layout()
     output = ASSET_DIR / "position_dependence.svg"
-    fig.savefig(output, format="svg", bbox_inches="tight")
+    save_svg(fig, output)
     plt.close(fig)
     return output
 
 
 def plot_stepper_resonance_visibility() -> Path:
     """Show how damping and output selection hide or expose the low motor mode."""
+    constants = physical_constants()
     frequencies = np.logspace(np.log10(80.0), np.log10(400.0), 1400)
     mass, _baseline_damping, stiffness, input_vector = linear_matrices((), "none")
     coupling = np.array([[1.0, -1.0], [-1.0, 1.0]])
     low_mode = _linear_modes(mass, stiffness)[0]
-    damping_ratios = (0.02, 0.10, MODEL["zeta_m"])
-    colors = ("#b23a48", "#d97800", "#277da1")
+    damping_ratios = (0.02, MODEL["zeta_m"], 0.10, 0.50)
+    colors = ("#b23a48", "#277da1", "#d97800", "#7a7a7a")
     fig, (stage_ax, drive_ax) = plt.subplots(1, 2, figsize=(11.4, 4.7), sharex=True)
     for zeta, color in zip(damping_ratios, colors):
-        c_m = 2.0 * zeta * np.sqrt(MODEL["K_m"] * MODEL["m_d"])
+        c_m = 2.0 * zeta * np.sqrt(constants["K_drive"] * constants["m_d"])
         damping = MODEL["c_ax"] * coupling + c_m * np.outer(H["d"], H["d"])
         stage_response = _matrix_frequency_response(
             frequencies, mass, damping, stiffness, input_vector, 1)
@@ -1054,11 +1600,11 @@ def plot_stepper_resonance_visibility() -> Path:
     fig.suptitle("Low-frequency stepper-mode visibility: damping and output selection",
                  fontsize=14, fontweight="bold")
     fig.text(0.5, 0.012,
-             "Detent torque is not included in this sensitivity plot because its amplitude and equilibrium phase are not identified.",
+             f"Published detent torque {constants['T_det']:.3f} N m is enabled at the stable zero-phase equilibrium.",
              ha="center", fontsize=8.5, color="#555555")
     fig.tight_layout(rect=(0.02, 0.05, 0.99, 0.93))
     output = ASSET_DIR / "stepper_resonance_visibility.svg"
-    fig.savefig(output, format="svg", bbox_inches="tight")
+    save_svg(fig, output)
     plt.close(fig)
     return output
 
@@ -1072,9 +1618,9 @@ def plot_rotor_stage_transfer_functions(frequencies: np.ndarray) -> Path:
         frequencies, mass, damping, stiffness, input_vector, 1)
     rotor_to_stage = stage_response / drive_response
     transfers = (
-        (drive_response, r"$X_d/X_{cmd}$ — command to rotor-equivalent drive", "#b23a48", "-"),
-        (stage_response, r"$X_s/X_{cmd}$ — command to stage", "#277da1", "-"),
-        (rotor_to_stage, r"$X_s/X_d$ — rotor-equivalent drive to stage", "#218c74", "--"),
+        (drive_response, r"$X_d/X_{cmd}$: command to rotor-equivalent drive", "#b23a48", "-"),
+        (stage_response, r"$X_s/X_{cmd}$: command to stage", "#277da1", "-"),
+        (rotor_to_stage, r"$X_s/X_d$: rotor-equivalent drive to stage", "#218c74", "--"),
     )
     modes = _linear_modes(mass, stiffness)
     fig, (magnitude_ax, phase_ax) = plt.subplots(1, 2, figsize=(12.0, 4.9), sharex=True)
@@ -1107,7 +1653,7 @@ def plot_rotor_stage_transfer_functions(frequencies: np.ndarray) -> Path:
              ha="center", fontsize=8.5, color="#555555")
     fig.tight_layout(rect=(0.02, 0.05, 0.99, 0.93))
     output = ASSET_DIR / "rotor_stage_transfer_functions.svg"
-    fig.savefig(output, format="svg", bbox_inches="tight")
+    save_svg(fig, output)
     plt.close(fig)
     return output
 
@@ -1117,15 +1663,18 @@ def generated_summary(linear_metrics: dict[str, dict[str, float | np.ndarray]],
                       verification: dict[str, object]) -> str:
     lines = [
         "<!-- BEGIN GENERATED RESPONSE SUMMARY -->",
-        "| Case | Friction law | Presliding modes (Hz) | DC gain $X_s/X_{cmd}$ | First-step overshoot | Full-sequence RMS deviation | Peak absolute deviation | Final-window RMS deviation |",
-        "|---|---|---:|---:|---:|---:|---:|---:|",
+        "| Case | Friction law | Presliding modes (Hz) | Presliding tangent gain $X_s/X_{cmd}$ | Smallest first-yield travel | First-step overshoot | Full-sequence RMS deviation | Peak absolute deviation | Final-window RMS deviation |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for key, case in CASES.items():
         modes = linear_metrics[key]["modes"]
         mode_text = f"{modes[0]:.1f}, {modes[1]:.1f}"
         friction_label = {"none": "none", "lugre": "LuGre", "gms": "GMS"}[case["friction"]]
+        first_yield = float(linear_metrics[key]["first_yield_m"])
+        yield_text = "not applicable" if not np.isfinite(first_yield) else f"{first_yield * 1e6:.3f} µm"
         lines.append(
-            f"| {key} | {friction_label} | {mode_text} | {linear_metrics[key]['dc_gain']:.5f} | "
+            f"| {key} | {friction_label} | {mode_text} | {linear_metrics[key]['tangent_dc_gain']:.5f} | "
+            f"{yield_text} | "
             f"{time_metrics[key]['first_overshoot_pct']:.1f}% | "
             f"{time_metrics[key]['rms_sequence_deviation_nm']:.1f} nm | "
             f"{time_metrics[key]['max_abs_deviation_nm']:.1f} nm | "
@@ -1133,20 +1682,26 @@ def generated_summary(linear_metrics: dict[str, dict[str, float | np.ndarray]],
         )
     lines.extend([
         "",
+        "The tangent gain is a local presliding linearization. It is valid only below the listed first-yield travel and is not a full-range tracking gain. Sustained travel produces bounded friction offsets in the nonlinear model. "
         "The three deviation columns use $d(t)=x_{cmd}(t)-x_s(t)$. They describe the open-loop modeled plant response under each friction law, not closed-loop servo tracking performance. The final column summarizes the last 2 ms of the nonlinear run and is not an identified settling specification. "
-        "All cases include the separately highlighted electromagnetic damping assumption; Case 0 remains frictionless.",
+        "All cases include rated-current commutation, enabled detent torque, and the highlighted electromagnetic damping assumption. Case 0 remains frictionless.",
         "",
         "### Generated reduction audit",
         "",
         "| Quantity | Executed value |",
         "|---|---:|",
         f"| Closure-derived $k_{{ball}}$ | {verification['parameters']['k_ball'] / 1e6:.3f} MN/m |",
+        f"| Motor rotor inertia | {verification['parameters']['J_m']:.3e} kg m² |",
+        f"| Coupling inertia | {verification['parameters']['J_c']:.3e} kg m² |",
+        f"| 0.320 m screw inertia | {verification['parameters']['screw_inertia']:.3e} kg m² |",
+        f"| 0.320 m screw mass | {verification['parameters']['screw_mass']:.4f} kg |",
         f"| Full-model reflected drivetrain mass | {verification['parameters']['m_d_reflected']:.3f} kg |",
-        f"| Literal source-table reflected mass | {verification['parameters']['literal_table_m_d']:.3f} kg |",
+        f"| Rated-current holding torque | {MODEL['T_max']:.3f} N m |",
+        f"| Enabled detent torque | {MODEL['T_det']:.3f} N m |",
         f"| Full/reduced sequence RMS residual | {verification['rms_residual_nm']:.3f} nm |",
         f"| Full/reduced sequence peak residual | {verification['peak_residual_nm']:.3f} nm |",
         "",
-        "The literal table value is reported as an audit only; it is not silently used. The executable default uses the highlighted coupling-inertia assumption that closes the stated 59 kg reduction.",
+        "The reduced drive mass is derived from the listed component inertias and the current lead. It is not an independent input.",
         "<!-- END GENERATED RESPONSE SUMMARY -->",
     ])
     return "\n".join(lines)
@@ -1163,11 +1718,63 @@ def update_generated_summary(summary: str) -> None:
     DERIVATION_MD.write_text(pattern.sub(lambda _match: summary, source), encoding="utf-8")
 
 
+def generated_bode_comparison(frequencies: np.ndarray,
+                              responses: dict[str, np.ndarray]) -> str:
+    magnitudes = {
+        key: 20.0 * np.log10(np.maximum(np.abs(response), 1e-15))
+        for key, response in responses.items()
+    }
+    peak_mask = (frequencies >= 620.0) & (frequencies <= 830.0)
+    peak_indices = np.flatnonzero(peak_mask)
+
+    def peak(key: str) -> tuple[float, float]:
+        index = peak_indices[np.argmax(magnitudes[key][peak_mask])]
+        return float(frequencies[index]), float(magnitudes[key][index])
+
+    baseline_frequency, _ = peak("0")
+    lines = [
+        "<!-- BEGIN GENERATED BODE COMPARISON -->",
+        "| Topology | Local peak | Shift from Case 0 | Largest GMS/LuGre gap | Cause |",
+        "|---|---:|---:|---:|---|",
+        f"| Case 0 | {baseline_frequency:.1f} Hz | reference | not applicable | No friction tangent |",
+    ]
+    rows = (
+        ("A/A2", "A", "A2", "Guideway presliding stiffness acts against ground"),
+        ("B/B2", "B", "B2", "Nut microslip shifts the relative mode; rolling and drivetrain tangents act on the drive"),
+        ("C/C2", "C", "C2", "All four friction tangents are active"),
+    )
+    for label, lugre_key, gms_key, cause in rows:
+        peak_frequency, _ = peak(gms_key)
+        shift = peak_frequency - baseline_frequency
+        shift_percent = 100.0 * shift / baseline_frequency
+        difference = magnitudes[gms_key] - magnitudes[lugre_key]
+        maximum_index = int(np.argmax(np.abs(difference)))
+        maximum = abs(float(difference[maximum_index]))
+        maximum_frequency = float(frequencies[maximum_index])
+        lines.append(
+            f"| {label} | {peak_frequency:.1f} Hz | +{shift:.1f} Hz, +{shift_percent:.1f}% | "
+            f"{maximum:.2f} dB at {maximum_frequency:.0f} Hz | {cause} |"
+        )
+    lines.append("<!-- END GENERATED BODE COMPARISON -->")
+    return "\n".join(lines)
+
+
+def update_generated_bode_comparison(summary: str) -> None:
+    source = DERIVATION_MD.read_text(encoding="utf-8")
+    pattern = re.compile(
+        r"<!-- BEGIN GENERATED BODE COMPARISON -->.*?<!-- END GENERATED BODE COMPARISON -->",
+        flags=re.DOTALL,
+    )
+    if not pattern.search(source):
+        raise RuntimeError("Generated Bode comparison markers are missing from the derivation document")
+    DERIVATION_MD.write_text(pattern.sub(lambda _match: summary, source), encoding="utf-8")
+
+
 def generated_presliding_summary(experiment: dict[str, object]) -> str:
     metrics = experiment["metrics"]
     lines = [
         "<!-- BEGIN GENERATED PRESLIDING SUMMARY -->",
-        "| Executed metric | LuGre A | GMS A2 | GMS change relative to LuGre |",
+        "| Executed metric | LuGre A | GMS A2 | GMS minus LuGre |",
         "|---|---:|---:|---:|",
     ]
     rows = (
@@ -1182,11 +1789,10 @@ def generated_presliding_summary(experiment: dict[str, object]) -> str:
         gms = float(metrics["A2"][key])
         if use_absolute:
             lugre, gms = abs(lugre), abs(gms)
-        reduction = 100.0 * (1.0 - gms / lugre) if lugre > 0.0 else 0.0
         precision = 4 if unit == "N" else 2
         lines.append(
             f"| {label} | {lugre:.{precision}f} {unit} | {gms:.{precision}f} {unit} | "
-            f"{reduction:.1f}% lower |"
+            f"{gms - lugre:+.{precision}f} {unit} |"
         )
     max_force = max(float(metrics[key]["max_force_N"]) for key in ("A", "A2"))
     lines.extend([
@@ -1198,7 +1804,8 @@ def generated_presliding_summary(experiment: dict[str, object]) -> str:
         "",
         "The whole-sequence RMS includes the unavoidable error at every instantaneous command edge. "
         "The repeated-return and final-origin measures isolate the history dependence that this "
-        "experiment is intended to distinguish.",
+        "experiment is intended to distinguish. The provisional parameters do not guarantee that "
+        "GMS closes more tightly than LuGre; measured force loops must decide that question.",
         "<!-- END GENERATED PRESLIDING SUMMARY -->",
     ])
     return "\n".join(lines)
@@ -1295,6 +1902,17 @@ def render_inline(text: str) -> str:
         )
 
     text = re.sub(r"\[\[(input|assumed):([A-Za-z0-9_]+)=([^\]]+)\]\]", parameter_input, text)
+
+    def derived_output(match: re.Match[str]) -> str:
+        key, value = match.group(1), match.group(2)
+        escaped_key = html.escape(key, quote=True)
+        escaped_value = html.escape(value.strip())
+        return keep(
+            f'<output class="derived-output" data-derived="{escaped_key}" '
+            f'aria-label="Derived value {escaped_key}">{escaped_value}</output>'
+        )
+
+    text = re.sub(r"\[\[derived:([A-Za-z0-9_]+)=([^\]]+)\]\]", derived_output, text)
     text = re.sub(r"`([^`]+)`", lambda m: keep(f"<code>{html.escape(m.group(1))}</code>"), text)
     text = re.sub(r"\$([^$\n]+)\$", lambda m: keep(f"\\({m.group(1)}\\)"), text)
     text = re.sub(
@@ -1371,7 +1989,11 @@ def markdown_to_html(source: str) -> tuple[str, list[tuple[int, str, str]]]:
             count = used_ids.get(base, 0)
             used_ids[base] = count + 1
             section_id = base if count == 0 else f"{base}-{count + 1}"
-            output.append(f'<h{level} id="{section_id}">{render_inline(title)}</h{level}>')
+            heading_class = "appendix-heading" if level == 2 and title.startswith("Appendix") else ""
+            class_attribute = f' class="{heading_class}"' if heading_class else ""
+            output.append(
+                f'<h{level} id="{section_id}"{class_attribute}>{render_inline(title)}</h{level}>'
+            )
             if level in (2, 3):
                 toc.append((level, re.sub(r"[*`$]", "", title), section_id))
             i += 1
@@ -1491,13 +2113,17 @@ nav {{ position:sticky; top:4.4rem; align-self:start; max-height:calc(100vh - 5.
 nav .caption {{ font-size:.78rem; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:.6rem; }}
 nav a {{ display:block; color:var(--muted); text-decoration:none; border-left:2px solid transparent; padding:.24rem .35rem; font-size:.88rem; }} nav a:hover {{ color:var(--accent); border-color:var(--accent); }} nav .toc-level-3 {{ padding-left:1.15rem; font-size:.81rem; }}
 article {{ width:100%; max-width:1100px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:clamp(1.25rem,4vw,3.7rem); box-shadow:0 12px 32px rgba(22,36,46,.07); }}
-h1,h2,h3,h4 {{ line-height:1.24; scroll-margin-top:5rem; }} h1 {{ font-size:clamp(2rem,4vw,3rem); margin-top:0; }} h2 {{ margin-top:2.8rem; padding-bottom:.38rem; border-bottom:1px solid var(--line); }} h3 {{ margin-top:2rem; color:var(--accent); }}
+h1,h2,h3,h4 {{ line-height:1.24; scroll-margin-top:5rem; }} h1 {{ font-size:clamp(2rem,4vw,3rem); margin-top:0; }}
+h2 {{ margin:4.5rem -.8rem 1.5rem; padding:1rem 1.1rem; border:1px solid var(--line); border-left:6px solid var(--accent); border-radius:9px; background:var(--soft); box-shadow:0 8px 22px rgba(22,36,46,.06); }}
+h2.appendix-heading {{ border-left-color:var(--assumed-line); background:color-mix(in srgb,var(--assumed) 28%,var(--card)); }}
+h3 {{ margin-top:2.2rem; color:var(--accent); }}
 p {{ margin:.85rem 0; }} a {{ color:var(--accent); }} strong {{ color:var(--text); }} hr {{ border:0; border-top:1px solid var(--line); margin:2rem 0; }}
 blockquote {{ margin:1.2rem 0; padding:.75rem 1rem; background:var(--soft); border-left:4px solid var(--accent); border-radius:0 8px 8px 0; color:var(--muted); }}
 .table-wrap {{ overflow-x:auto; margin:1.2rem 0; }} table {{ width:100%; border-collapse:collapse; font-size:.92rem; }} th,td {{ border:1px solid var(--line); padding:.55rem .65rem; vertical-align:top; }} th {{ background:var(--soft); }}
 .parameter-input {{ width:100%; min-width:7rem; padding:.38rem .48rem; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:5px; font:inherit; font-variant-numeric:tabular-nums; }}
 .parameter-input:focus {{ outline:2px solid var(--accent); outline-offset:1px; }}
 .assumed-input {{ background:var(--assumed); border-color:var(--assumed-line); font-weight:700; }}
+.derived-output {{ display:inline-block; width:100%; min-width:7rem; padding:.38rem .48rem; color:var(--accent); background:var(--soft); border:1px dashed var(--accent); border-radius:5px; font-variant-numeric:tabular-nums; font-weight:700; }}
 .edit-note {{ margin:0 0 1.2rem; padding:.7rem .9rem; border:1px solid var(--line); border-radius:8px; background:var(--soft); color:var(--muted); font-size:.86rem; }}
 .save-status {{ display:inline-block; margin-left:.55rem; padding:.14rem .45rem; border-radius:999px; border:1px solid var(--line); background:var(--card); color:var(--muted); font-weight:650; }}
 .save-status.ok {{ color:#176a55; border-color:#4fa88e; }} .save-status.warn {{ color:#9b5b00; border-color:#d49b00; }}
@@ -1509,6 +2135,7 @@ blockquote {{ margin:1.2rem 0; padding:.75rem 1rem; background:var(--soft); bord
 .live-plot-card h4 {{ margin:.1rem 0 .35rem; color:var(--accent); }}
 .live-plot-card svg {{ display:block; width:100%; height:auto; color:var(--text); }}
 details {{ margin:1rem 0; border:1px solid var(--line); border-radius:9px; background:color-mix(in srgb,var(--soft) 45%,var(--card)); padding:.2rem .9rem .8rem; }} details details {{ margin-left:.45rem; }} summary {{ cursor:pointer; font-weight:700; padding:.75rem .1rem; color:var(--accent); }}
+.parameter-group {{ margin:1.15rem 0; border-left:5px solid var(--accent); background:var(--soft); }} .parameter-group summary {{ font-size:1.04rem; }}
 pre {{ overflow:auto; background:var(--code); color:#e8edf2; border-radius:9px; padding:1rem; font-size:.87rem; }} code {{ font-family:Cascadia Code,Consolas,monospace; }} p code,li code,td code {{ background:var(--soft); border:1px solid var(--line); border-radius:4px; padding:.1rem .28rem; }}
 .display-math {{ overflow-x:auto; padding:.5rem 0; }} img {{ display:block; max-width:100%; height:auto; margin:1.3rem auto; border-radius:6px; }}
 .footer {{ color:var(--muted); font-size:.78rem; margin-top:3rem; padding-top:1rem; border-top:1px solid var(--line); }}
@@ -1518,7 +2145,7 @@ pre {{ overflow:auto; background:var(--code); color:#e8edf2; border-radius:9px; 
 </head>
 <body>
 <div class="topbar"><span class="name">{html.escape(title)}</span><button onclick="setDetails(true)">Expand derivations</button><button onclick="setDetails(false)">Collapse</button><button onclick="saveParameterInputs()">Save variables</button><button onclick="saveEditedHtml()">Save HTML copy</button><button onclick="resetParameterInputs()">Reset inputs</button><button class="hide-small" onclick="toggleTheme()">Theme</button><button class="hide-small" onclick="window.print()">Print</button></div>
-<div class="layout"><nav><div class="caption">On this page</div>{''.join(toc_html)}</nav><article><div class="edit-note"><span class="assumed-swatch"></span>Amber inputs are unidentified assumptions. Values auto-save to browser storage and the page URL; “Save HTML copy” embeds them in a chosen HTML file. The live transfer panel recalculates immediately. Publication SVGs are regenerated only by the Python build.<span id="parameter-save-status" class="save-status">Loading values…</span></div>{body}<div class="footer">Rendered from {html.escape(markdown_path.name)} · {generated}</div></article></div>
+<div class="layout"><nav><div class="caption">On this page</div>{''.join(toc_html)}</nav><article><div class="edit-note"><span class="assumed-swatch"></span>Amber inputs are unidentified assumptions. Values auto-save to browser storage and the page URL; “Save HTML copy” embeds them in a chosen HTML file. Derived outputs and the live transfer panel recalculate immediately. Publication SVGs require a Python build.<span id="parameter-save-status" class="save-status">Loading values…</span></div>{body}<div class="footer">Rendered from {html.escape(markdown_path.name)} · {generated}</div></article></div>
 <script>
 function setDetails(open) {{ document.querySelectorAll('details').forEach(d => d.open=open); }}
 function toggleTheme() {{ const root=document.documentElement; root.dataset.theme=root.dataset.theme==='dark'?'light':'dark'; }}
@@ -1556,7 +2183,7 @@ function persistParameterInputs(showStatus=true) {{
   if (showStatus) {{
     const time = new Date().toLocaleTimeString();
     if (browserStorageSaved || urlSaved) setParameterStatus('Variables saved · ' + time, 'ok');
-    else setParameterStatus('Browser storage unavailable — use Save HTML copy', 'warn');
+    else setParameterStatus('Browser storage unavailable; use Save HTML copy', 'warn');
   }}
   return browserStorageSaved || urlSaved;
 }}
@@ -1632,21 +2259,42 @@ function cDiv(a, b) {{
   return {{re:(a.re*b.re+a.im*b.im)/denominator, im:(a.im*b.re-a.re*b.im)/denominator}};
 }}
 function liveTransferData() {{
-  const md = parameterNumber('reduced_drive_mass', 59.0);
+  const lead = parameterNumber('lead', 1.0e-3);
+  const teeth = parameterNumber('rotor_teeth', 50);
+  const jm = parameterNumber('J_m', 9.0e-7);
+  const jc = parameterNumber('J_c', 1.18e-6);
+  const screwLength = parameterNumber('screw_length', 0.320);
+  const screwDiameter = parameterNumber('screw_diameter', 8.0e-3);
+  const screwDensity = parameterNumber('screw_density', 7850.0);
+  const tmax = parameterNumber('holding_torque', 0.060);
+  const tdet = parameterNumber('detent_torque', 0.005);
+  const detentPhase = parameterNumber('detent_phase', 0.0);
+  const couplingSeries = parameterNumber('k_c_series', 68.7549);
   const ms = parameterNumber('reduced_stage_mass', 0.60);
-  const km = parameterNumber('magnetic_stiffness', 1.20e8);
   const kax = parameterNumber('reduced_axial_stiffness', 1.14e7);
   const cax = parameterNumber('axial_damping', 55.0);
-  const zeta = parameterNumber('electromagnetic_zeta', 0.50);
-  if (!(md>0 && ms>0 && km>0 && kax>0 && cax>=0 && zeta>=0))
-    throw new Error('Masses and stiffnesses must be positive; damping values must be non-negative.');
-  const cm = 2*zeta*Math.sqrt(km*md);
+  const zeta = parameterNumber('electromagnetic_zeta', 0.05);
+  const microstepDivisor = parameterNumber('microstep_divisor', 64);
+  if (!(lead>0 && teeth>0 && jm>0 && jc>=0 && screwLength>0 && screwDiameter>0 &&
+        screwDensity>0 && tmax>0 && tdet>=0 && ms>0 && kax>0 && cax>=0 && zeta>=0 && microstepDivisor>=1))
+    throw new Error('Geometry, masses, torque, and stiffness must be positive; damping and detent torque cannot be negative.');
+  const r = lead/(2*Math.PI);
+  const screwRadius = screwDiameter/2;
+  const screwMass = screwDensity*Math.PI*screwRadius*screwRadius*screwLength;
+  const screwInertia = 0.5*screwMass*screwRadius*screwRadius;
+  const jTotal = jm+jc+screwInertia;
+  const md = jTotal/(r*r);
+  const km = teeth*tmax/(r*r);
+  const kdet = 4*teeth*tdet*Math.cos(detentPhase)/(r*r);
+  const kdrive = km+kdet;
+  if (!(kdrive>0)) throw new Error('The selected detent phase makes the net drive tangent non-positive.');
+  const cm = 2*zeta*Math.sqrt(kdrive*md);
   const frequencies=[], drive=[], stage=[], rotorStage=[];
   const count=560, logMin=Math.log10(100), logMax=Math.log10(3000);
   for (let i=0; i<count; i++) {{
     const frequency = Math.pow(10, logMin + (logMax-logMin)*i/(count-1));
     const omega = 2*Math.PI*frequency;
-    const a = {{re:km+kax-md*omega*omega, im:omega*(cm+cax)}};
+    const a = {{re:kdrive+kax-md*omega*omega, im:omega*(cm+cax)}};
     const b = {{re:-kax, im:-omega*cax}};
     const d = {{re:kax-ms*omega*omega, im:omega*cax}};
     const determinant = cSub(cMul(a,d), cMul(b,b));
@@ -1654,11 +2302,58 @@ function liveTransferData() {{
     const gs = cDiv(cMul({{re:-km,im:0}},b), determinant);
     frequencies.push(frequency); drive.push(gd); stage.push(gs); rotorStage.push(cDiv(gs,gd));
   }}
-  const qa=md*ms, qb=md*kax+ms*(km+kax), qc=km*kax;
+  const qa=md*ms, qb=md*kax+ms*(kdrive+kax), qc=kdrive*kax;
   const discriminant=Math.max(qb*qb-4*qa*qc,0);
   const roots=[(qb-Math.sqrt(discriminant))/(2*qa),(qb+Math.sqrt(discriminant))/(2*qa)];
   const modes=roots.map(value => Math.sqrt(Math.max(value,0))/(2*Math.PI));
-  return {{frequencies, drive, stage, rotorStage, modes, md, ms, km, kax, cax, zeta}};
+  return {{
+    frequencies, drive, stage, rotorStage, modes, md, ms, km, kdet, kdrive,
+    kax, cax, zeta, lead, teeth, r, jm, jc, screwLength, screwDiameter,
+    screwDensity, screwMass, screwInertia, jTotal, tmax, tdet, detentPhase,
+    couplingSeries, couplingHalf:2*couplingSeries, kappa:teeth/r,
+    fullStep:lead/(4*teeth), quarterStep:lead/(16*teeth),
+    commandStep:lead/(4*teeth*microstepDivisor), interpolatedStep:lead/(4*teeth*256),
+    microstepDivisor, fmax:tmax/r, cm
+  }};
+}}
+function formatDerivedValue(key, value) {{
+  const scientific = new Set([
+    'transmission_ratio','magnetic_stiffness','detent_stiffness','screw_inertia',
+    'screw_segment_inertia','full_step_pitch','quarter_step_bound',
+    'command_step','interpolated_step'
+  ]);
+  if (scientific.has(key)) return value.toExponential(5);
+  if (key==='reduced_drive_mass') return value.toFixed(3);
+  if (key==='screw_mass' || key==='screw_segment_mass') return value.toFixed(6);
+  if (key==='k_c_half') return value.toFixed(3);
+  if (key.endsWith('_hz')) return value.toFixed(2);
+  return Number(value).toPrecision(6);
+}}
+function refreshDerivedOutputs(data) {{
+  const values = {{
+    transmission_ratio:data.r,
+    reduced_drive_mass:data.md,
+    magnetic_stiffness:data.km,
+    detent_stiffness:data.kdet,
+    full_step_pitch:data.fullStep,
+    quarter_step_bound:data.quarterStep,
+    command_step:data.commandStep,
+    interpolated_step:data.interpolatedStep,
+    screw_inertia:data.screwInertia,
+    screw_segment_inertia:data.screwInertia/3,
+    screw_mass:data.screwMass,
+    screw_segment_mass:data.screwMass/3,
+    k_c_half:data.couplingHalf,
+    mode_1_hz:data.modes[0],
+    mode_2_hz:data.modes[1],
+    drive_stiffness:data.kdrive,
+    force_limit:data.fmax,
+    spatial_wavenumber:data.kappa
+  }};
+  document.querySelectorAll('[data-derived]').forEach(output => {{
+    const key=output.dataset.derived;
+    if (Object.prototype.hasOwnProperty.call(values,key)) output.textContent=formatDerivedValue(key,values[key]);
+  }});
 }}
 function unwrapPhases(values) {{
   const phases=[]; let previous=null, offset=0;
@@ -1714,16 +2409,20 @@ function drawLiveBode(svgId, data, phasePlot=false) {{
   svg.appendChild(svgNode('text',{{x:15,y:top+plotHeight/2,transform:'rotate(-90 15 '+(top+plotHeight/2)+')','text-anchor':'middle','font-size':12,fill:'currentColor'}},phasePlot?'Phase (deg)':'Magnitude (dB)'));
 }}
 function refreshInteractivePlots() {{
+  let data;
+  try {{ data=liveTransferData(); refreshDerivedOutputs(data); }}
+  catch (error) {{
+    const summary=document.getElementById('live-model-summary');
+    if (summary) summary.textContent='Live calculation error: '+error.message;
+    return;
+  }}
   const panel=document.querySelector('[data-live-transfer-plots]'); if (!panel) return;
   if (!panel.dataset.initialized) {{
     panel.innerHTML='<div id="live-model-summary" class="live-summary"></div><div class="live-plot-grid"><div class="live-plot-card"><h4>Live magnitude</h4><svg id="live-bode-magnitude" viewBox="0 0 760 360" role="img" aria-label="Live transfer-function magnitude"></svg></div><div class="live-plot-card"><h4>Live phase</h4><svg id="live-bode-phase" viewBox="0 0 760 360" role="img" aria-label="Live transfer-function phase"></svg></div></div>';
     panel.dataset.initialized='true';
   }}
-  try {{
-    const data=liveTransferData();
-    document.getElementById('live-model-summary').textContent='Live values: md='+data.md.toPrecision(5)+' kg, ms='+data.ms.toPrecision(5)+' kg, Km='+data.km.toPrecision(5)+' N/m, kax='+data.kax.toPrecision(5)+' N/m, zeta_m='+data.zeta.toPrecision(4)+' · modes '+data.modes.map(value=>value.toFixed(2)+' Hz').join(', ');
-    drawLiveBode('live-bode-magnitude',data,false); drawLiveBode('live-bode-phase',data,true);
-  }} catch (error) {{ document.getElementById('live-model-summary').textContent='Live plot error: '+error.message; }}
+  document.getElementById('live-model-summary').textContent='Live derived values: r='+data.r.toExponential(5)+' m/rad, md='+data.md.toFixed(3)+' kg, Km='+data.km.toExponential(5)+' N/m, Kdet='+data.kdet.toExponential(5)+' N/m · modes '+data.modes.map(value=>value.toFixed(2)+' Hz').join(', ');
+  drawLiveBode('live-bode-magnitude',data,false); drawLiveBode('live-bode-phase',data,true);
 }}
 document.addEventListener('DOMContentLoaded', () => {{
   let saved = {{}};
@@ -1759,18 +2458,17 @@ def main() -> None:
         raise FileNotFoundError("Both Markdown source documents must exist before building")
     ASSET_DIR.mkdir(exist_ok=True)
     gms_audit = validate_gms_partition()
+    validate_case_topology()
     constants = physical_constants()
     frequencies, bode, linear_metrics = frequency_responses()
     times, command, time_data, time_metrics = time_responses(constants)
     convergence = gms_step_halving_convergence(constants, times, time_data)
     presliding = presliding_responses(constants)
     verification = full_reduced_verification(frequencies, constants)
-    case_paths = plot_case_responses(
-        frequencies, bode, times, command, time_data, constants, time_metrics)
-    comparison_path = plot_pairwise_comparison(
-        frequencies, bode, times, command, time_data, time_metrics)
+    comparison_path = plot_case_response_overlay(frequencies, bode)
     presliding_path = plot_presliding_memory(presliding)
     diagram_path = plot_kinematic_diagram()
+    bond_graph_path = plot_reduced_bond_graph()
     verification_path = plot_full_reduced_verification(frequencies, verification)
     position_path = plot_position_dependence()
     resonance_path = plot_stepper_resonance_visibility()
@@ -1780,16 +2478,16 @@ def main() -> None:
         if obsolete_path.exists():
             obsolete_path.unlink()
     if not args.skip_summary_update:
+        update_generated_bode_comparison(generated_bode_comparison(frequencies, bode))
         update_generated_summary(generated_summary(linear_metrics, time_metrics, verification))
         update_generated_presliding_summary(generated_presliding_summary(presliding))
         update_generated_convergence_summary(generated_convergence_summary(convergence))
     description_html = render_document(DESCRIPTION_MD)
     derivation_html = render_document(DERIVATION_MD)
-    for case_path in case_paths:
-        print(f"Built {case_path.relative_to(ROOT)}")
     print(f"Built {comparison_path.relative_to(ROOT)}")
     print(f"Built {presliding_path.relative_to(ROOT)}")
     print(f"Built {diagram_path.relative_to(ROOT)}")
+    print(f"Built {bond_graph_path.relative_to(ROOT)}")
     print(f"Built {verification_path.relative_to(ROOT)}")
     print(f"Built {position_path.relative_to(ROOT)}")
     print(f"Built {resonance_path.relative_to(ROOT)}")
@@ -1804,7 +2502,7 @@ def main() -> None:
     for key in CASES:
         modes = linear_metrics[key]["modes"]
         print(f"Case {key}: modes={modes[0]:.2f}, {modes[1]:.2f} Hz; "
-              f"DC gain={linear_metrics[key]['dc_gain']:.6f}; "
+              f"presliding tangent gain={linear_metrics[key]['tangent_dc_gain']:.6f}; "
               f"overshoot={time_metrics[key]['first_overshoot_pct']:.2f}%; "
               f"sequence RMS deviation={time_metrics[key]['rms_sequence_deviation_nm']:.2f} nm; "
               f"peak deviation={time_metrics[key]['max_abs_deviation_nm']:.2f} nm; "
