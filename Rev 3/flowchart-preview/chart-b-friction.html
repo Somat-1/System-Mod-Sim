@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chart B — Friction insertion and result provenance</title>
+  <link rel="stylesheet" href="flowcharts.css">
+</head>
+<body>
+  <main class="page">
+    <header class="masthead">
+      <div>
+        <p class="kicker">Revision 3 · standalone flowchart preview</p>
+        <h1>Friction insertion and result provenance</h1>
+        <p class="subtitle">Six numbered steps separate physical force locations, constitutive entry paths, response mechanisms, and valid outputs.</p>
+      </div>
+      <nav class="chart-switch" aria-label="Flowchart navigation">
+        <a href="chart-a-provenance.html">A · Provenance</a>
+        <a href="chart-b-friction.html" aria-current="page">B · Friction → results</a>
+      </nav>
+    </header>
+
+    <section class="legend" aria-label="Provenance colors">
+      <span class="legend-item"><i class="swatch assumed"></i>Assumed / provisional</span>
+      <span class="legend-item"><i class="swatch derived"></i>Derived</span>
+      <span class="legend-item"><i class="swatch decision"></i>Entry path</span>
+      <span class="legend-item"><i class="swatch output"></i>Output</span>
+      <span class="legend-note">Follow 1 → 6. Open details only when needed.</span>
+    </section>
+
+    <section class="flow-spine" aria-label="Friction insertion sequence">
+      <article class="flow-step derived">
+        <span class="step-index" aria-hidden="true">1</span>
+        <div class="flow-card">
+          <div class="card-head">
+            <div><p class="eyebrow">Carried from Chart A</p><h2>Start with the retained two-DOF plant</h2></div>
+            <a class="section-link" href="../Analytical_derivation_and_responses_v3.html#6-reduction-from-ten-dofs-to-two">Open Section 6 ↗</a>
+          </div>
+          <p class="summary formula">q<sub>r</sub> = [x<sub>d</sub>, x<sub>s</sub>]<sup>T</sup>; friction enters through generalized force Q<sub>f</sub>.</p>
+          <p class="summary">Both the drive-side and stage coordinates remain, so grounded and internal friction ports are representable.</p>
+        </div>
+      </article>
+
+      <article class="flow-step assumed">
+        <span class="step-index" aria-hidden="true">2</span>
+        <div class="flow-card">
+          <div class="card-head">
+            <div><p class="eyebrow">Assumed · provisional</p><h2>Assign constitutive parameter sets</h2></div>
+            <a class="section-link" href="../Analytical_derivation_and_responses_v3.html#8-1-executed-provisional-friction-values">Open Section 8.1 ↗</a>
+          </div>
+          <p class="summary">Guideway, nut, rolling, and drive allocations use provisional LuGre or GMS values; they support mechanism studies, not identification claims.</p>
+          <div class="facts"><span class="fact">g · guideway</span><span class="fact">n · nut</span><span class="fact">r · rolling</span><span class="fact">d · drive</span></div>
+          <details>
+            <summary>Show parameter families</summary>
+            <div class="detail-grid">
+              <div class="detail-row"><strong>LuGre</strong>F<sub>c</sub>, F<sub>s</sub>, v<sub>s</sub>, σ₀, σ₁, and σ₂.</div>
+              <div class="detail-row"><strong>GMS</strong>Element stiffnesses k<sub>i</sub>, weights ν<sub>i</sub>, and transition parameter C.</div>
+              <div class="detail-row"><strong>Nut correlation</strong>σ<sub>0,n</sub> and k<sub>ax</sub> both enter the differential tangent stiffness.</div>
+              <div class="detail-row"><strong>Provenance warning</strong>Amber means the numerical set has not been independently identified.</div>
+            </div>
+          </details>
+        </div>
+      </article>
+
+      <article class="flow-step derived">
+        <span class="step-index" aria-hidden="true">3</span>
+        <div class="flow-card">
+          <div class="card-head">
+            <div><p class="eyebrow">Derived · force topology</p><h2>Place friction at four physical ports</h2></div>
+            <a class="section-link" href="../Analytical_derivation_and_responses_v3.html#8-2-force-locations">Open Section 8.2 ↗</a>
+          </div>
+          <div class="port-list" aria-label="Friction ports">
+            <div class="port"><strong>g · grounded</strong><span>v<sub>g</sub> = ẋ<sub>s</sub></span><span>A/A2, C/C2</span></div>
+            <div class="port"><strong>n · internal pair</strong><span>v<sub>n</sub> = ẋ<sub>d</sub> − ẋ<sub>s</sub></span><span>B/B2, C/C2</span></div>
+            <div class="port duplicate"><strong>r · grounded</strong><span>v<sub>r</sub> = ẋ<sub>d</sub>; H = [1,0]</span><span class="duplicate-note">same incidence as d</span></div>
+            <div class="port duplicate"><strong>d · grounded</strong><span>v<sub>d</sub> = ẋ<sub>d</sub>; H = [1,0]</span><span class="duplicate-note">same incidence as r</span></div>
+          </div>
+          <p class="summary"><strong>Identifiability result:</strong> r and d have identical incidence and downstream action, so experiments reveal one lumped drive-side drag.</p>
+          <details>
+            <summary>Why topology matters</summary>
+            <div class="detail-grid">
+              <div class="detail-row"><strong>Grounded ports</strong>g, r, and d act between one retained mass and ground.</div>
+              <div class="detail-row"><strong>Internal port</strong>n acts as an equal-and-opposite pair between x<sub>d</sub> and x<sub>s</sub>.</div>
+            </div>
+          </details>
+        </div>
+      </article>
+
+      <article class="flow-step decision">
+        <span class="step-index" aria-hidden="true">4</span>
+        <div class="flow-card">
+          <div class="card-head">
+            <div><p class="eyebrow">Decision · two model roles</p><h2>Choose the analysis path</h2></div>
+            <a class="section-link" href="../Analytical_derivation_and_responses_v3.html#8-friction-constitutive-laws">Open Section 8 ↗</a>
+          </div>
+          <div class="branch-pair">
+            <div class="mini-panel"><strong>Linear tangent</strong><span class="formula">ΔK = σ₀H<sup>T</sup>H</span><span>Local modes and infinitesimal presliding gain.</span></div>
+            <div class="mini-panel"><strong>Nonlinear states</strong><span class="formula">LuGre z or GMS F<sub>i</sub></span><span>Finite travel, yield, reversal, memory, and sliding.</span></div>
+          </div>
+          <p class="summary">The same physical parameters enter through two different mathematical roles; tangent analysis is not a substitute for state integration.</p>
+        </div>
+      </article>
+
+      <article class="flow-step derived">
+        <span class="step-index" aria-hidden="true">5</span>
+        <div class="flow-card">
+          <div class="card-head">
+            <div><p class="eyebrow">Derived · mechanism layer</p><h2>Interpret what friction changes</h2></div>
+            <a class="section-link" href="../Analytical_derivation_and_responses_v3.html#9-force-instrumented-partial-slip-memory-experiment">Open Section 9 ↗</a>
+          </div>
+          <div class="facts"><span class="fact">tangent stiffening</span><span class="fact">presliding compliance</span><span class="fact">yield + memory</span><span class="fact">gross drive drag</span></div>
+          <p class="summary">Every reported response change is routed through a named mechanism rather than attributed generically to “friction.”</p>
+          <details>
+            <summary>Show mechanism-to-effect mapping</summary>
+            <div class="detail-grid">
+              <div class="detail-row"><strong>Differential stiffening</strong>k<sub>ax</sub> + σ<sub>0,n</sub>H<sub>n</sub><sup>T</sup>H<sub>n</sub> shifts the local mode.</div>
+              <div class="detail-row"><strong>Presliding compliance</strong>Grounded port tangents alter the infinitesimal command-to-stage gain.</div>
+              <div class="detail-row"><strong>Yield and memory</strong>LuGre/GMS states determine return-point and final-origin behavior.</div>
+              <div class="detail-row"><strong>Gross drive drag</strong>Ports at ẋ<sub>d</sub> create finite-travel position deviation.</div>
+            </div>
+          </details>
+        </div>
+      </article>
+
+      <article class="flow-step output">
+        <span class="step-index" aria-hidden="true">6</span>
+        <div class="flow-card">
+          <div class="card-head">
+            <div><p class="eyebrow">Output · condition attached</p><h2>Report only valid response quantities</h2></div>
+            <a class="section-link" href="../Analytical_derivation_and_responses_v3.html#13-verification-checks-and-limitations">Open Section 13 ↗</a>
+          </div>
+          <div class="result-pair">
+            <div class="mini-panel"><strong>Modes + tangent gain</strong><span>Valid at the stated tangent operating point and below first yield.</span></div>
+            <div class="mini-panel"><strong>Time metrics + residual</strong><span>Require settled dwell, numerical convergence, normalization, and retained bandwidth.</span></div>
+          </div>
+          <p class="summary">These are simulated deviations between constitutive assumptions—not measured closed-loop tracking error.</p>
+          <details>
+            <summary>Show the four validity checks</summary>
+            <div class="detail-grid">
+              <div class="detail-row"><strong>Mode table</strong>Local presliding tangent at the stated detent operating point.</div>
+              <div class="detail-row"><strong>Tangent gain</strong>Valid only below the first-yield travel.</div>
+              <div class="detail-row"><strong>Time-domain metrics</strong>Plateau exceeds settling time and the integrator passes convergence checks.</div>
+              <div class="detail-row"><strong>Reduction residual</strong>Normalized by command amplitude and restricted to retained bandwidth.</div>
+            </div>
+          </details>
+        </div>
+      </article>
+    </section>
+
+    <section class="compact-notes">
+      <details>
+        <summary>Chart scope and exclusions</summary>
+        <p>Included: four physical ports, two model-entry roles, four response mechanisms, r/d identifiability, and output validity. Excluded: GMS element state machine, RK4 ordering, k<sub>i</sub>/ν<sub>i</sub> distribution, Stribeck curves, and detailed derivation.</p>
+      </details>
+    </section>
+
+    <footer class="page-footer">
+      <a href="chart-a-provenance.html">← Return to Chart A: provenance and reduction</a>
+      <span>Standalone preview · not integrated into Revision 3</span>
+    </footer>
+  </main>
+</body>
+</html>

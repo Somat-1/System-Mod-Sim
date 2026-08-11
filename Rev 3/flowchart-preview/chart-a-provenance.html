@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chart A — Parameter provenance and model structure</title>
+  <link rel="stylesheet" href="flowcharts.css">
+</head>
+<body>
+  <main class="page">
+    <header class="masthead">
+      <div>
+        <p class="kicker">Revision 3 · standalone flowchart preview</p>
+        <h1>Parameter provenance and model structure</h1>
+        <p class="subtitle">Six numbered steps show where the model comes from, what is collapsed, and why two mechanical coordinates are retained.</p>
+      </div>
+      <nav class="chart-switch" aria-label="Flowchart navigation">
+        <a href="chart-a-provenance.html" aria-current="page">A · Provenance</a>
+        <a href="chart-b-friction.html">B · Friction → results</a>
+      </nav>
+    </header>
+
+    <section class="legend" aria-label="Provenance colors">
+      <span class="legend-item"><i class="swatch input"></i>Input</span>
+      <span class="legend-item"><i class="swatch assumed"></i>Assumed / closure-derived</span>
+      <span class="legend-item"><i class="swatch derived"></i>Derived</span>
+      <span class="legend-item"><i class="swatch decision"></i>Decision</span>
+      <span class="legend-item"><i class="swatch output"></i>Output</span>
+      <span class="legend-note">Follow 1 → 6. Open details only when needed.</span>
+    </section>
+
+    <section class="flow-spine" aria-label="Model provenance sequence">
+      <article class="flow-step input">
+        <span class="step-index" aria-hidden="true">1</span>
+        <div class="flow-card">
+          <div class="card-head">
+            <div><p class="eyebrow">Input · evidence</p><h2>Collect physical sources</h2></div>
+            <a class="section-link" href="../Analytical_derivation_and_responses_v3.html#2-entry-parameters">Open Section 2 ↗</a>
+          </div>
+          <p class="summary">Datasheets and geometry provide the physical inputs; modal tests provide two measured frequency bands.</p>
+          <div class="facts"><span class="fact">motor + coupling</span><span class="fact">screw geometry</span><span class="fact">driver setup</span><span class="fact">155–190 Hz, ≈690 Hz</span></div>
+          <details>
+            <summary>Show source quantities</summary>
+            <div class="detail-grid">
+              <div class="detail-row"><strong>Motor + coupling</strong>T<sub>max</sub>, J<sub>m</sub>, m<sub>c</sub>, k<sub>c</sub></div>
+              <div class="detail-row"><strong>Screw</strong>L, L<sub>s</sub>, d<sub>s</sub>, ρ<sub>s</sub></div>
+              <div class="detail-row"><strong>Driver</strong>Current, operating mode, microstep divisor</div>
+              <div class="detail-row"><strong>Measurement</strong>Low drive band and ≈690 Hz structural mode</div>
+            </div>
+          </details>
+        </div>
+      </article>
+
+      <article class="flow-step derived">
+        <span class="step-index" aria-hidden="true">2</span>
+        <div class="flow-card">
+          <div class="card-head">
+            <div><p class="eyebrow">Derived · scalar closure</p><h2>Reflect mass, drive stiffness, and axial compliance</h2></div>
+            <a class="section-link" href="../Analytical_derivation_and_responses_v3.html#5-stepper-input-nonlinear-law-linearization-and-bound">Open Section 5 ↗</a>
+          </div>
+          <p class="summary formula">r = L/(2π), &nbsp; m<sub>d</sub> = J<sub>Σ</sub>/r², &nbsp; K<sub>m</sub> = N<sub>r</sub>T<sub>max</sub>/r², &nbsp; k<sub>ax</sub><sup>−1</sup> = Σ(1/k<sub>i</sub>)</p>
+          <div class="facts"><span class="fact">four inertias → J<sub>Σ</sub></span><span class="fact">four springs → k<sub>ax</sub></span><span class="fact">local detent tangent only</span></div>
+          <details>
+            <summary>Show the two information-loss convergences</summary>
+            <div class="detail-grid">
+              <div class="detail-row"><strong>Inertia convergence</strong>J<sub>m</sub>, J<sub>c</sub>, J<sub>s,drive</sub>, and J<sub>s,tail</sub> become one J<sub>Σ</sub>, then one reflected mass m<sub>d</sub>.</div>
+              <div class="detail-row"><strong>Compliance convergence</strong>k<sub>brg</sub>, k<sub>sha</sub>, k<sub>ball</sub>, and k<sub>mnt</sub> become one series stiffness k<sub>ax</sub>.</div>
+              <div class="detail-row"><strong>Drive tangent</strong>Commutation contributes K<sub>m</sub>; detent contributes only the slope at the chosen operating point.</div>
+              <div class="detail-row"><strong>Provenance warning</strong>k<sub>ball</sub> is a closure remainder, not an independent ball-contact measurement.</div>
+            </div>
+          </details>
+        </div>
+      </article>
+
+      <article class="flow-step derived">
+        <span class="step-index" aria-hidden="true">3</span>
+        <div class="flow-card">
+          <div class="card-head">
+            <div><p class="eyebrow">Derived · audit artifact</p><h2>Assemble the ten-DOF reference plant</h2></div>
+            <a class="section-link" href="../Analytical_derivation_and_responses_v3.html#4-full-ten-dof-derivation">Open Section 4 ↗</a>
+          </div>
+          <p class="summary formula">M q̈ + C q̇ + K q = b x<sub>cmd</sub> + Q<sub>f</sub></p>
+          <p class="summary">All rotational and axial coordinates remain long enough to expose every elastic deflection and friction port.</p>
+          <details>
+            <summary>Why build the full plant first?</summary>
+            <div class="detail-grid">
+              <div class="detail-row"><strong>Topology audit</strong>A coordinate is removed only after its load path, inertia, and friction-port consequences are checked.</div>
+              <div class="detail-row"><strong>Reduction reference</strong>The full plant supplies the modal and response baseline used to judge the reduced model.</div>
+            </div>
+          </details>
+        </div>
+      </article>
+
+      <article class="flow-step decision">
+        <span class="step-index" aria-hidden="true">4</span>
+        <div class="flow-card">
+          <div class="card-head">
+            <div><p class="eyebrow">Decision · sequential tests</p><h2>Reduce only what the load path permits</h2></div>
+            <a class="section-link" href="../Analytical_derivation_and_responses_v3.html#6-reduction-from-ten-dofs-to-two">Open Section 6 ↗</a>
+          </div>
+          <p class="summary">Rigid-coordinate ratios collapse torsion; stub coordinates are dropped; the one-DOF endpoint is rejected because it forces v<sub>n</sub> = 0.</p>
+          <div class="facts"><span class="fact">1 · reflected stiffness</span><span class="fact">2 · load path</span><span class="fact">3 · port survival</span></div>
+          <details>
+            <summary>Show all three reduction tests</summary>
+            <div class="detail-grid">
+              <div class="detail-row"><strong>1 · Reflected stiffness</strong>173× and 731× indicate effectively rigid torsional coordinates.</div>
+              <div class="detail-row"><strong>2 · Load path</strong>u<sub>f</sub> and θ<sub>s3</sub> are terminal stubs and can be removed.</div>
+              <div class="detail-row"><strong>3 · Port survival</strong>One DOF eliminates ẋ<sub>d</sub> − ẋ<sub>s</sub>, so the relative nut mode and friction port disappear.</div>
+              <div class="detail-row"><strong>Rejected branch</strong>The one-DOF model is retained only as an explicit dead-end finding.</div>
+            </div>
+          </details>
+        </div>
+      </article>
+
+      <article class="flow-step derived">
+        <span class="step-index" aria-hidden="true">5</span>
+        <div class="flow-card">
+          <div class="card-head">
+            <div><p class="eyebrow">Derived · retained artifact</p><h2>Keep the two-DOF mechanical plant</h2></div>
+            <a class="section-link" href="../Analytical_derivation_and_responses_v3.html#6-reduction-from-ten-dofs-to-two">Open Section 6 ↗</a>
+          </div>
+          <p class="summary formula">q<sub>r</sub> = [x<sub>d</sub>, x<sub>s</sub>]<sup>T</sup>; &nbsp; v<sub>n</sub> = ẋ<sub>d</sub> − ẋ<sub>s</sub></p>
+          <div class="facts"><span class="fact">masses → m<sub>d</sub>, m<sub>s</sub></span><span class="fact">springs → k<sub>ax</sub></span><span class="fact">relative port survives</span></div>
+          <details>
+            <summary>What migrates into the reduced plant?</summary>
+            <div class="detail-grid">
+              <div class="detail-row"><strong>Mass path</strong>Collapsed rotational inertia migrates into the reflected drive mass m<sub>d</sub>; stage mass remains m<sub>s</sub>.</div>
+              <div class="detail-row"><strong>Spring path</strong>Collapsing coordinates does not delete their series compliance; it survives as k<sub>ax</sub>.</div>
+            </div>
+          </details>
+        </div>
+      </article>
+
+      <article class="flow-step output">
+        <span class="step-index" aria-hidden="true">6</span>
+        <div class="flow-card">
+          <div class="card-head">
+            <div><p class="eyebrow">Output · closure-aware check</p><h2>Verify the retained bandwidth</h2></div>
+            <a class="section-link" href="../Analytical_derivation_and_responses_v3.html#7-full-versus-reduced-verification">Open Section 7 ↗</a>
+          </div>
+          <p class="summary">The model reproduces the ≈690 Hz feature near 696 Hz, and the full/reduced residual is reported relative to command amplitude.</p>
+          <div class="facts"><span class="fact">modal consistency</span><span class="fact">normalized residual</span><span class="fact">not independent validation</span></div>
+          <details>
+            <summary>Show interpretation limits</summary>
+            <div class="detail-grid">
+              <div class="detail-row"><strong>Modal result</strong>The agreement is a calibration closure because the measured mode participates in setting k<sub>ax</sub>.</div>
+              <div class="detail-row"><strong>Residual result</strong>Normalization prevents a smaller command amplitude from creating a false reduction improvement.</div>
+            </div>
+          </details>
+        </div>
+      </article>
+    </section>
+
+    <aside class="closure-section" aria-label="Calibration closure relationships">
+      <h2>Two closure relationships</h2>
+      <div class="closure-grid">
+        <div class="closure-note"><strong>Closure 1 · k<sub>ax</sub> ↔ k<sub>ball</sub></strong>Measured k<sub>ax</sub> sets the k<sub>ball</sub> remainder, which then re-enters the same series sum. Closure, not independent validation.</div>
+        <div class="closure-note"><strong>Closure 2 · 690 Hz ↔ k<sub>ax</sub></strong>The measured mode helps set k<sub>ax</sub>, after which the model reproduces ≈696 Hz. Closure, not independent validation.</div>
+      </div>
+    </aside>
+
+    <section class="compact-notes">
+      <details>
+        <summary>Chart scope and exclusions</summary>
+        <p>Included: provenance, scalar convergence, three reduction tests, mass/spring migration, retained and rejected artifacts, and the two closure warnings. Friction states, time integration, case metrics, and response validity continue in Chart B.</p>
+      </details>
+    </section>
+
+    <footer class="page-footer">
+      <span>Standalone preview · not integrated into Revision 3</span>
+      <a href="chart-b-friction.html">Continue to Chart B: friction insertion and results →</a>
+    </footer>
+  </main>
+</body>
+</html>
