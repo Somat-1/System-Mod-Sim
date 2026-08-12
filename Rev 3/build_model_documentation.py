@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import argparse
 import html
+import json
 import re
 from collections import OrderedDict
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -41,15 +43,34 @@ MODEL = {
     # Measured upper axial mode used to calibrate the reduced axial chain.
     # Stage and nut masses live in FULL; m_s, k_ax, and k_ball are derived.
     "axial_mode_target_hz": 695.82,
-    # Provisional: retained structural damping, not identified in the source.
+    # Effective mass and relative-mode damping from the modal campaign.  The
+    # damping value remains provisional until the half-power extraction is
+    # repeated from the source FRF.
+    "m_eff_measured": 0.600,
+    "zeta_relative_measured": 0.0014,
+    # Existing provisional reduced-link damper.  It remains an explicit
+    # sensitivity input so it can be compared with interface propagation and
+    # measured-FRF identification rather than being mistaken for either one.
     "c_ax": 55.0,
     # Provisional open-loop drive damping ratio.  Driver mode and tuning are
     # not recorded.  The requested baseline is 10% of critical damping and a
     # sensitivity sweep is retained rather than presenting it as identified.
     "zeta_m": 0.10,
-    # Conservative external STEP/DIR resolution.  The TMC2209 accepts up to
-    # 64 microsteps per full step and may interpolate internally to 256.
-    "microstep_divisor": 64,
+    # Executable pre-distortion grid.  Hardware STEP/DIR configuration still
+    # needs verification, but 256 is required for the requested granularity.
+    "microstep_divisor": 256,
+    # Stribeck exponent.  It appears in every s(v) evaluation but was never
+    # exposed; 2.0 is the conventional Gaussian form.  Fixed, not identified.
+    "stribeck_delta": 2.0,
+    # Shared Stribeck relaxation time.  Each site's GMS attractor rate is
+    # C_alpha = (F_s - F_c)/tau_C, so one time constant replaces three
+    # unanchored N/s values.  Provisional: in the source GMS work C is
+    # identified from measured hysteresis loops, never assumed.
+    "tau_C": 2.0e-4,
+    # Provenance inputs for the drive-port breakaway estimate only.  They are
+    # never applied to the transformer; see the standing constraint in 8.0.
+    "eta_screw": 0.90,
+    "F_preload_nut": 100.0,
 }
 
 
@@ -80,7 +101,31 @@ FULL = {
     "k_sha": 67.0e6,
     "k_shb": 200.0e6,
     "k_mnt": 100.0e6,
-    "zeta_internal": 0.010,
+    # Interface damping ratios that realize the target loss factors below.
+    #
+    # The Revision 3 values were converted with the light-damping identity
+    # eta = 2*zeta.  That identity holds only at the element's OWN resonance:
+    # a frequency-independent dashpot gives eta_j(w) = 2*zeta_j*w/w_j, so at
+    # the retained 696 Hz mode every element delivered one to two orders less
+    # loss than intended.  These entries instead solve
+    #
+    #     zeta_j = eta_j * f_j / (2 * f_2)
+    #
+    # so the EXECUTED loss factor at the retained mode equals the target.
+    # validate_interface_loss_factors() fails the build if the two drift apart.
+    "zeta_steel": 0.004165392,
+    "zeta_bearing": 0.107950521,
+    "zeta_ball_nut": 0.104178265,
+    "zeta_nut_mount": 0.163886363,
+}
+
+# Target loss factors at the retained upper mode.  Joints are bolted,
+# preloaded, rolling-element interfaces; the screw segment is monolithic steel.
+INTERFACE_LOSS_FACTORS = {
+    "zeta_bearing": 0.03,
+    "zeta_steel": 0.0005,
+    "zeta_ball_nut": 0.03,
+    "zeta_nut_mount": 0.03,
 }
 
 FULL_DOF_LABELS = (
@@ -93,19 +138,33 @@ FULL_DOF_LABELS = (
 # sigma0_g is the estimate already quoted in the description; all other values
 # below need experimental identification before quantitative use.
 FRICTION = {
-    "g": {"sigma0": 7.60e5, "sigma1": 3.0, "sigma2": 0.40,
-          "F_s": 3.0, "F_c": 2.4, "v_s": 2.5e-4, "delta": 1.0, "C_gms": 5.0e3},
+    "g": {"sigma0": 7.60e5, "sigma1": 0.0, "sigma2": 0.40,
+          "F_s": 3.0, "F_c": 2.4, "v_s": 2.5e-4},
     # Differential nut-contact microslip.  Its first GMS element yields at
     # 0.25*F_s/sigma0 = 0.20 um, so this port can express actual partial slip.
-    "n": {"sigma0": 2.00e6, "sigma1": 5.0, "sigma2": 0.25,
-          "F_s": 1.6, "F_c": 1.2, "v_s": 2.0e-4, "delta": 1.0, "C_gms": 5.0e3},
+    "n": {"sigma0": 2.00e6, "sigma1": 0.0, "sigma2": 0.25,
+          "F_s": 1.6, "F_c": 1.2, "v_s": 2.0e-4},
     # Identifiable drive-side lump.  Motor/support-bearing drag and gross nut
     # rolling were formerly two laws on the same H=[1,0] port.  Their force,
     # tangent, and damping budgets are combined here; the aggregate still
     # requires identification from a drive-side measurement.
-    "d": {"sigma0": 3.00e6, "sigma1": 9.0, "sigma2": 0.45,
-          "F_s": 7.0, "F_c": 5.5, "v_s": 2.3e-4, "delta": 1.0, "C_gms": 5.0e3},
+    "d": {"sigma0": 3.00e6, "sigma1": 0.0, "sigma2": 0.45,
+          "F_s": 7.0, "F_c": 5.5, "v_s": 2.3e-4},
 }
+
+# sigma_1 is zero in the executed A/B/C comparison so that LuGre and GMS
+# contribute the identical tangent damping sigma_2*H^T H.  Without this the
+# closure claim in 8.3 is false for damping: LuGre adds sigma_1+sigma_2 while
+# GMS adds only sigma_2, a factor of 8.5 to 21 across the three sites, and any
+# plotted difference mixes memory structure with port damping.  The former
+# values are retained here and restored by the A1v micro-viscous variant.
+MICRO_VISCOUS_SIGMA1 = {"g": 3.0, "n": 5.0, "d": 9.0}
+
+for _site_key, _site_values in FRICTION.items():
+    _site_values["delta"] = MODEL["stribeck_delta"]
+    # One shared relaxation time replaces three independent N/s constants.
+    _site_values["C_gms"] = (
+        _site_values["F_s"] - _site_values["F_c"]) / MODEL["tau_C"]
 
 
 # Four GMS stop elements share each site's aggregate sigma0 and Stribeck
@@ -114,6 +173,9 @@ FRICTION = {
 GMS_WEIGHTS = np.array([0.10, 0.20, 0.30, 0.40])
 GMS_STIFFNESS_FRACTIONS = np.array([0.40, 0.30, 0.20, 0.10])
 GMS_N = GMS_WEIGHTS.size
+# Filled in by main() before rendering.  A document rendered without a rebuilt
+# census says so rather than printing stale counts.
+BRANCH_CENSUS_SENTENCE: str | None = None
 PRODUCTION_DT = 2.5e-5
 GMS_CONVERGENCE_DTS = (5.0e-5, 2.5e-5, 1.25e-5)
 # The full/reduced audit contains full-model modes above the 3 kHz plotting
@@ -123,6 +185,7 @@ GMS_CONVERGENCE_DTS = (5.0e-5, 2.5e-5, 1.25e-5)
 VERIFICATION_DT = 2.5e-6
 VERIFICATION_CONVERGENCE_DTS = (25.0e-6, 12.5e-6, 6.25e-6, VERIFICATION_DT)
 VERIFICATION_EDGES = (0.005, 0.025, 0.045, 0.065)
+SETTLING_2PCT_FACTOR = -np.log(0.02)
 # The IDS records are sampled at approximately 88 ms.  A dedicated 100 us
 # integration is sufficient for their settled plateau comparison: a 50 us
 # repeat changed the representative C2 settled response by 0.18 nm RMS.
@@ -132,27 +195,27 @@ IDS_COMPARISON_INTERVALS = 6
 IDS_MICROSTEP_SIZES = (1, 2, 4, 8, 16)
 BODE_FOCUS_MIN_HZ = 100.0
 BODE_FOCUS_MAX_HZ = 3000.0
-# The main response is quantized at 78.125 nm and deliberately spans the
+# The main response is quantized at 19.53125 nm and deliberately spans the
 # provisional first-yield distances.  Adjacent increments remain below one
 # quarter of a full step.  The final move is positive and returns to zero.
-MAIN_LEVELS = np.array([3, -3, 6, -6, 0, 13, 0, -13, -26, -13,
-                        0, 13, 26, 13, 0], dtype=float)
+MAIN_LEVELS = np.array([12, -12, 24, -24, 0, 52, 0, -52, -104, -52,
+                        0, 52, 104, 52, 0], dtype=float)
 MAIN_START = 0.010
 
 
 # Nested reversals for the dedicated memory experiment.  Counts use the
-# conservative 64-microstep STEP/DIR quantum.  The outer excursion is large
+# 256-substep pre-distortion quantum.  The outer excursion is large
 # enough to yield two guideway GMS elements, while the force signal remains the
 # primary discriminator.
 GUIDEWAY_PRESLIDING_LEVELS = np.array(
-    [0, 48, 12, 42, 12, 48, 0, -46, -12, -40, -12, -46, 0],
+    [0, 192, 48, 168, 48, 192, 0, -184, -48, -160, -48, -184, 0],
     dtype=float,
 )
 # With the stage blocked, the drive coordinate is the nut-port deflection.
 # The +/-10-count outer loop crosses the provisional 0.20 and 0.533 um stop
 # thresholds but remains below the third threshold at 1.20 um.
 NUT_PRESLIDING_LEVELS = np.array(
-    [0, 10, 3, 9, 3, 10, 0, -10, -3, -9, -3, -10, 0],
+    [0, 40, 12, 36, 12, 40, 0, -40, -12, -36, -12, -40, 0],
     dtype=float,
 )
 PRESLIDING_START = 0.005
@@ -167,6 +230,13 @@ CASES = OrderedDict([
     ("B2", {"label": "Case B2: lumped drive drag + nut microslip / GMS", "sites": ("d", "n"), "friction": "gms", "color": "#f5b35f", "ls": "--"}),
     ("C", {"label": "Case C: all identifiable ports / LuGre", "sites": ("d", "g", "n"), "friction": "lugre", "color": "#218c74", "ls": "-"}),
     ("C2", {"label": "Case C2: all identifiable ports / GMS", "sites": ("d", "g", "n"), "friction": "gms", "color": "#72c9ad", "ls": "--"}),
+    # Micro-viscous variant.  Same ports and same law as A, with sigma_1
+    # restored, so it isolates bristle damping instead of confounding it with
+    # the memory comparison.  B1v and C1v would differ only in which ports are
+    # active and are not executed; the effect is identical in kind.
+    ("A1v", {"label": "Case A1v: drive drag + guideway / LuGre, micro-viscous",
+             "sites": ("d", "g"), "friction": "lugre", "micro_viscous": True,
+             "color": "#8a5fbf", "ls": ":"}),
 ])
 
 PAIRS = (("A", "A2"), ("B", "B2"), ("C", "C2"))
@@ -192,6 +262,24 @@ PARAMETER_REGISTRY: dict[str, dict[str, object]] = {
         "section": "6-reduction-from-ten-dofs-to-two",
     },
     "axial_mode_target_hz": {"category": "input", "dependencies": (), "section": "6-reduction-from-ten-dofs-to-two"},
+    "m_eff_measured": {"category": "input", "dependencies": (), "section": "2-entry-parameters"},
+    "zeta_relative_measured": {"category": "assumed", "dependencies": (), "section": "2-entry-parameters"},
+    "axial_damping": {"category": "assumed", "dependencies": (), "section": "2-entry-parameters"},
+    "electromagnetic_zeta": {"category": "assumed", "dependencies": (), "section": "2-entry-parameters"},
+    "zeta_steel": {"category": "assumed", "dependencies": (), "section": "2-entry-parameters"},
+    "zeta_bearing": {"category": "assumed", "dependencies": (), "section": "2-entry-parameters"},
+    "zeta_ball_nut": {"category": "assumed", "dependencies": (), "section": "2-entry-parameters"},
+    "zeta_nut_mount": {"category": "assumed", "dependencies": (), "section": "2-entry-parameters"},
+    "interface_axial_damping": {
+        "category": "derived",
+        "dependencies": (
+            "reduced_axial_stiffness", "k_ball", "k_brg", "k_sha", "k_mnt",
+            "zeta_steel", "zeta_bearing", "zeta_ball_nut", "zeta_nut_mount",
+            "screw_length", "screw_diameter", "screw_density", "nut_mass",
+            "stage_mass", "axial_mode_target_hz",
+        ),
+        "section": "6-reduction-from-ten-dofs-to-two",
+    },
     "reduced_axial_stiffness": {
         "category": "derived",
         "dependencies": ("reduced_drive_mass", "reduced_stage_mass",
@@ -288,6 +376,155 @@ PARAMETER_REGISTRY: dict[str, dict[str, object]] = {
     },
 }
 
+# The route-comparison outputs are emitted into the analytical document and
+# mirrored by the browser equations.  Keeping their dependencies explicit
+# makes changes to component values, modal inputs, or damping assumptions
+# auditable through the existing provenance machinery.
+_ROUTE_COMMON_DEPS = (
+    "reduced_drive_mass", "reduced_stage_mass", "magnetic_stiffness",
+    "reduced_axial_stiffness", "k_ball", "k_brg", "k_sha", "k_mnt",
+)
+for _route in ("p", "s", "b"):
+    for _suffix in ("md", "ms", "kax", "cax", "zeta", "f1", "f2", "kball", "settling"):
+        PARAMETER_REGISTRY[f"route_{_route}_{_suffix}"] = {
+            "category": "derived", "dependencies": _ROUTE_COMMON_DEPS + ("axial_damping",),
+            "section": "6-3-reduction-evidence",
+        }
+for _suffix in ("md", "ms", "kax", "cax", "zeta", "f1", "f2", "kball", "settling"):
+    PARAMETER_REGISTRY[f"route_f_{_suffix}"] = {
+        "category": "derived",
+        "dependencies": _ROUTE_COMMON_DEPS + (
+            "zeta_steel", "zeta_bearing", "zeta_ball_nut", "zeta_nut_mount",
+            "screw_length", "screw_diameter", "screw_density",
+            "nut_mass", "stage_mass", "J_m", "J_c", "k_c_series", "k_theta_a",
+        ),
+        "section": "6-3-reduction-evidence",
+    }
+    PARAMETER_REGISTRY[f"route_c_{_suffix}"] = {
+        "category": "output",
+        "dependencies": _ROUTE_COMMON_DEPS + (
+            "zeta_steel", "zeta_bearing", "zeta_ball_nut", "zeta_nut_mount",
+            "screw_length", "screw_diameter", "screw_density",
+            "nut_mass", "stage_mass", "J_m", "J_c", "k_c_series", "k_theta_a",
+        ),
+        "section": "6-3-reduction-evidence",
+    }
+    PARAMETER_REGISTRY[f"route_m_{_suffix}"] = {
+        "category": "derived",
+        "dependencies": (
+            "reduced_drive_mass", "magnetic_stiffness", "axial_mode_target_hz",
+            "m_eff_measured", "zeta_relative_measured", "k_brg", "k_sha", "k_mnt",
+        ),
+        "section": "6-3-reduction-evidence",
+    }
+for _key, _dependencies in {
+    "route_s_kax_full": _ROUTE_COMMON_DEPS + ("k_c_series", "k_theta_a", "lead"),
+    "torsional_share": _ROUTE_COMMON_DEPS + ("k_c_series", "k_theta_a", "lead"),
+    "mass_ratio": ("reduced_drive_mass", "reduced_stage_mass"),
+    "reduced_mu": ("reduced_drive_mass", "reduced_stage_mass"),
+    "full_model_zeta": _ROUTE_COMMON_DEPS + (
+        "zeta_steel", "zeta_bearing", "zeta_ball_nut", "zeta_nut_mount"),
+    "full_model_settling": _ROUTE_COMMON_DEPS + (
+        "zeta_steel", "zeta_bearing", "zeta_ball_nut", "zeta_nut_mount"),
+    "cb_frequency_delta": _ROUTE_COMMON_DEPS + (
+        "zeta_steel", "zeta_bearing", "zeta_ball_nut", "zeta_nut_mount"),
+    "cb_damping_delta": _ROUTE_COMMON_DEPS + (
+        "zeta_steel", "zeta_bearing", "zeta_ball_nut", "zeta_nut_mount"),
+    "full_model_upper_hz": _ROUTE_COMMON_DEPS + (
+        "zeta_steel", "zeta_bearing", "zeta_ball_nut", "zeta_nut_mount"),
+    "full_model_bandwidth_hz": _ROUTE_COMMON_DEPS + (
+        "zeta_steel", "zeta_bearing", "zeta_ball_nut", "zeta_nut_mount"),
+    "route_p_bandwidth_hz": _ROUTE_COMMON_DEPS + ("axial_damping",),
+    "first_fixed_interface_hz": _ROUTE_COMMON_DEPS + (
+        "screw_length", "screw_diameter", "screw_density",
+        "nut_mass", "stage_mass", "J_m", "J_c", "k_c_series", "k_theta_a"),
+    "first_discarded_hz": _ROUTE_COMMON_DEPS + (
+        "screw_length", "screw_diameter", "screw_density",
+        "nut_mass", "stage_mass", "J_m", "J_c", "k_c_series", "k_theta_a"),
+    "fixed_interface_separation": _ROUTE_COMMON_DEPS + (
+        "screw_length", "screw_diameter", "screw_density",
+        "nut_mass", "stage_mass", "J_m", "J_c", "k_c_series", "k_theta_a"),
+    "discarded_pole_separation": _ROUTE_COMMON_DEPS + (
+        "screw_length", "screw_diameter", "screw_density",
+        "nut_mass", "stage_mass", "J_m", "J_c", "k_c_series", "k_theta_a"),
+    "mu_fraction": ("reduced_drive_mass", "reduced_stage_mass"),
+    "relative_mode_nearground_hz": ("reduced_axial_stiffness", "reduced_stage_mass"),
+    "drive_pole_hz": ("magnetic_stiffness", "reduced_drive_mass"),
+}.items():
+    PARAMETER_REGISTRY[_key] = {
+        "category": "output" if _key.startswith((
+            "full_model", "cb_", "first_", "fixed_interface", "discarded_",
+        )) else "derived",
+        "dependencies": _dependencies,
+        "section": "6-3-reduction-evidence",
+    }
+
+for _index in range(1, GMS_N + 1):
+    PARAMETER_REGISTRY[f"gms_nu{_index}"] = {
+        "category": "assumed", "dependencies": (),
+        "section": "8-1-executed-provisional-friction-values",
+    }
+for _key in ("stribeck_delta", "tau_C", "eta_screw", "F_preload_nut"):
+    PARAMETER_REGISTRY[_key] = {
+        "category": "assumed", "dependencies": (),
+        "section": "8-2-executed-provisional-friction-values",
+    }
+for _key, _dependencies in {
+    "d_Fs_efficiency_estimate": ("eta_screw", "F_preload_nut"),
+    "d_Fs_torque_equivalent": ("d_Fs", "lead"),
+    "detent_velocity_drive": ("magnetic_stiffness", "reduced_drive_mass", "lead", "rotor_teeth"),
+    "detent_velocity_axial": ("reduced_axial_stiffness", "reduced_stage_mass", "lead", "rotor_teeth"),
+    "detent_velocity_discarded": ("lead", "rotor_teeth"),
+    "retained_mode_period": ("reduced_axial_stiffness", "reduced_stage_mass"),
+    "tau_C_mode_ratio": ("tau_C", "reduced_axial_stiffness", "reduced_stage_mass"),
+}.items():
+    PARAMETER_REGISTRY[_key] = {
+        "category": "derived", "dependencies": _dependencies,
+        "section": "8-2-executed-provisional-friction-values",
+    }
+for _site in ("g", "n", "d"):
+    for _suffix in ("sigma0", "sigma1", "sigma2", "Fs", "Fc", "vs", "C"):
+        PARAMETER_REGISTRY[f"{_site}_{_suffix}"] = {
+            "category": "input" if (_site, _suffix) == ("g", "sigma0") else "assumed",
+            "dependencies": (),
+            "section": "8-1-executed-provisional-friction-values",
+        }
+    for _index in range(1, GMS_N + 1):
+        PARAMETER_REGISTRY[f"{_site}_k{_index}"] = {
+            "category": "assumed", "dependencies": (),
+            "section": "8-1-executed-provisional-friction-values",
+        }
+    _site_deps = tuple(f"{_site}_k{_index}" for _index in range(1, GMS_N + 1))
+    _fraction_deps = tuple(f"gms_nu{_index}" for _index in range(1, GMS_N + 1))
+    for _index in range(1, GMS_N + 1):
+        for _level in ("fs", "fc"):
+            PARAMETER_REGISTRY[f"yield_{_site}_{_index}_{_level}"] = {
+                "category": "derived",
+                "dependencies": (f"{_site}_k{_index}", f"gms_nu{_index}",
+                                 f"{_site}_Fs" if _level == "fs" else f"{_site}_Fc"),
+                "section": "8-3-implementation-choices",
+            }
+    PARAMETER_REGISTRY[f"gms_rate_{_site}"] = {
+        "category": "derived",
+        "dependencies": (f"{_site}_Fs", f"{_site}_Fc", "tau_C"),
+        "section": "8-2-executed-provisional-friction-values",
+    }
+    PARAMETER_REGISTRY[f"tau_C_{_site}"] = {
+        "category": "derived",
+        "dependencies": (f"{_site}_Fs", f"{_site}_Fc", "tau_C"),
+        "section": "8-2-executed-provisional-friction-values",
+    }
+    PARAMETER_REGISTRY[f"yield_span_{_site}"] = {
+        "category": "derived",
+        "dependencies": _site_deps + _fraction_deps,
+        "section": "8-3-implementation-choices",
+    }
+    PARAMETER_REGISTRY[f"static_deflection_{_site}"] = {
+        "category": "derived",
+        "dependencies": (f"{_site}_Fs", f"{_site}_sigma0"),
+        "section": "8-3-implementation-choices",
+    }
+
 PARAMETER_CATEGORY_STYLE = {
     "input": {"face": "#dceef6", "edge": "#52778b"},
     "assumed": {"face": "#fff0b8", "edge": "#c28a00"},
@@ -349,6 +586,58 @@ def validate_parameter_registry() -> None:
     if empty:
         raise ValueError("Derived Markdown tokens need non-empty dependency lists: "
                          + ", ".join(empty))
+def interface_loss_factors() -> dict[str, dict[str, float]]:
+    """Return the executed loss factor of every axial interface at f_2.
+
+    A frequency-independent dashpot has eta_j(w) = w*c_j/k_j = 2*zeta_j*w/w_j,
+    so the executed loss factor depends on the element's own frequency and is
+    not 2*zeta_j anywhere except at that frequency.
+    """
+    constants = physical_constants()
+    component = component_parameters()
+    r = constants["r"]
+    f_2 = constants["axial_mode_target_hz"]
+    segment_mass = component["screw_mass"] / 3.0
+    segment_inertia = component["screw_inertia"] / 3.0
+    pair = lambda a, b: a * b / (a + b)  # noqa: E731
+    elements = {
+        "zeta_bearing": (component["k_brg"], segment_mass),
+        "zeta_steel": (component["k_sha"], pair(segment_mass, segment_mass)),
+        "zeta_ball_nut": (constants["k_ball"], 1.0 / (
+            r**2 / segment_inertia + 1.0 / segment_mass + 1.0 / component["m_n"])),
+        "zeta_nut_mount": (component["k_mnt"], pair(component["m_n"], component["m_stage"])),
+    }
+    report: dict[str, dict[str, float]] = {}
+    total_compliance = sum(1.0 / stiffness for stiffness, _mass in elements.values())
+    for key, (stiffness, relative_mass) in elements.items():
+        zeta = component[key]
+        f_j = np.sqrt(stiffness / relative_mass) / (2.0 * np.pi)
+        report[key] = {
+            "stiffness": stiffness,
+            "relative_mass": relative_mass,
+            "f_j": f_j,
+            "zeta": zeta,
+            "damping": 2.0 * zeta * np.sqrt(stiffness * relative_mass),
+            "eta": 2.0 * zeta * f_2 / f_j,
+            "weight": (1.0 / stiffness) / total_compliance,
+        }
+    return report
+
+
+def validate_interface_loss_factors() -> dict[str, dict[str, float]]:
+    """Fail the build if an executed damper drifts from its target loss factor."""
+    report = interface_loss_factors()
+    for key, target in INTERFACE_LOSS_FACTORS.items():
+        executed = report[key]["eta"]
+        if not np.isclose(executed, target, rtol=1.0e-4, atol=0.0):
+            raise ValueError(
+                f"Interface {key} executes eta={executed:.6g} at the retained mode "
+                f"but targets {target:.6g}; update FULL['{key}'] to "
+                f"{target * report[key]['f_j'] / (2.0 * physical_constants()['axial_mode_target_hz']):.9f}"
+            )
+    return report
+
+
 def validate_gms_partition() -> dict[str, object]:
     """Fail the build unless every executed GMS partition closes exactly."""
     if GMS_WEIGHTS.size != GMS_STIFFNESS_FRACTIONS.size:
@@ -380,11 +669,27 @@ def validate_case_topology() -> None:
         "A": {"d", "g"}, "A2": {"d", "g"},
         "B": {"d", "n"}, "B2": {"d", "n"},
         "C": {"d", "g", "n"}, "C2": {"d", "g", "n"},
+        "A1v": {"d", "g"},
     }
     for key, expected in expected_sites.items():
         actual = set(CASES[key]["sites"])
         if actual != expected:
             raise ValueError(f"Case {key} friction sites are {sorted(actual)}, expected {sorted(expected)}")
+    # The controlled comparison requires equal tangent damping, so every case
+    # except the declared micro-viscous variant must execute sigma_1 = 0.
+    for key, case in CASES.items():
+        if case.get("micro_viscous"):
+            continue
+        for site in case["sites"]:
+            if FRICTION[site]["sigma1"] != 0.0:
+                raise ValueError(
+                    f"Case {key} site {site} carries sigma_1={FRICTION[site]['sigma1']}; "
+                    "the controlled A/B/C comparison requires zero")
+    for site, values in FRICTION.items():
+        executed = (values["F_s"] - values["F_c"]) / MODEL["tau_C"]
+        if not np.isclose(values["C_gms"], executed, rtol=1.0e-9, atol=0.0):
+            raise ValueError(
+                f"Site {site} executes C={values['C_gms']:.6g} N/s but tau_C implies {executed:.6g}")
     nut_first_yield = float(np.min(
         GMS_WEIGHTS * FRICTION["n"]["F_s"] /
         (GMS_STIFFNESS_FRACTIONS * FRICTION["n"]["sigma0"])
@@ -422,6 +727,34 @@ def closure_ball_stiffness(k_ax: float, k_brg: float,
     return float(1.0 / remaining_compliance)
 
 
+def axial_complex_link(component: dict[str, float], r: float,
+                       k_ball: float, omega: float) -> tuple[float, float]:
+    """Condense the damped axial chain at one declared angular frequency.
+
+    Each Kelvin-Voigt element uses the damping ratio appropriate to its
+    physical interface.  Taking the reciprocal of the summed complex
+    compliances preserves those dependencies in the executable 2-DOF link.
+    """
+    m_b, m_e = component["m_b"], component["m_e"]
+    m_n, m_stage = component["m_n"], component["m_stage"]
+    ball_relative_mass = 1.0 / (
+        r**2 / component["J_s2"] + 1.0 / m_e + 1.0 / m_n)
+    elements = (
+        (component["k_brg"], 2.0 * component["zeta_bearing"]
+         * np.sqrt(component["k_brg"] * m_b)),
+        (component["k_sha"], 2.0 * component["zeta_steel"]
+         * np.sqrt(component["k_sha"] * m_b * m_e / (m_b + m_e))),
+        (k_ball, 2.0 * component["zeta_ball_nut"]
+         * np.sqrt(k_ball * ball_relative_mass)),
+        (component["k_mnt"], 2.0 * component["zeta_nut_mount"]
+         * np.sqrt(component["k_mnt"] * m_n * m_stage / (m_n + m_stage))),
+    )
+    compliance = sum(1.0 / complex(k_value, omega * c_value)
+                     for k_value, c_value in elements)
+    stiffness = 1.0 / compliance
+    return float(stiffness.real), float(stiffness.imag / omega)
+
+
 def physical_constants() -> dict[str, float]:
     lead = MODEL["lead"]
     teeth = MODEL["rotor_teeth"]
@@ -444,12 +777,15 @@ def physical_constants() -> dict[str, float]:
         m_d, m_s, k_m, axial_mode_target_hz)
     k_ball = closure_ball_stiffness(
         k_ax, component["k_brg"], component["k_sha"], component["k_mnt"])
+    _k_ax_complex, c_ax_interface = axial_complex_link(
+        component, r, k_ball, 2.0 * np.pi * axial_mode_target_hz)
     c_m = 2.0 * MODEL["zeta_m"] * np.sqrt(k_m * m_d)
     minimum_local_tangent = k_m - k_det_amplitude
     if minimum_local_tangent <= 0.0:
         raise ValueError("Detent tangent can exceed the commutation tangent")
     minimum_local_omega = np.sqrt(minimum_local_tangent / m_d)
-    settling_time_2pct = 4.0 / (MODEL["zeta_m"] * minimum_local_omega)
+    settling_time_2pct = SETTLING_2PCT_FACTOR / (
+        MODEL["zeta_m"] * minimum_local_omega)
     plateau_dwell = max(0.100, settling_time_2pct)
     return {
         "r": r,
@@ -467,6 +803,8 @@ def physical_constants() -> dict[str, float]:
         "axial_mode_target_hz": axial_mode_target_hz,
         "k_ax": k_ax,
         "k_ball": k_ball,
+        "c_ax": MODEL["c_ax"],
+        "c_ax_interface": c_ax_interface,
         "c_m": c_m,
         "full_step": full_step,
         "quarter_step": full_step / 4.0,
@@ -531,7 +869,6 @@ def full_linear_matrices() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarr
     mass = np.diag(native_masses)
     damping = np.zeros((10, 10), dtype=float)
     stiffness = np.zeros((10, 10), dtype=float)
-    zeta = p["zeta_internal"]
 
     constants = physical_constants()
     k_m_rot = constants["K_m"] * r**2
@@ -552,13 +889,16 @@ def full_linear_matrices() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarr
     )
     for i, j, k_value in rotational_pairs:
         _add_pair(stiffness, i, j, k_value)
-        _add_pair(damping, i, j, _pair_damping(k_value, native_masses[i], native_masses[j], zeta))
+        _add_pair(damping, i, j, _pair_damping(
+            k_value, native_masses[i], native_masses[j], p["zeta_steel"]))
 
     stiffness[5, 5] += p["k_brg"]
-    damping[5, 5] += 2.0 * zeta * np.sqrt(p["k_brg"] * p["m_b"])
+    damping[5, 5] += 2.0 * p["zeta_bearing"] * np.sqrt(p["k_brg"] * p["m_b"])
     for i, j, k_value in ((5, 6, p["k_sha"]), (6, 7, p["k_shb"]), (8, 9, p["k_mnt"])):
         _add_pair(stiffness, i, j, k_value)
-        _add_pair(damping, i, j, _pair_damping(k_value, native_masses[i], native_masses[j], zeta))
+        interface_zeta = p["zeta_nut_mount"] if (i, j) == (8, 9) else p["zeta_steel"]
+        _add_pair(damping, i, j, _pair_damping(
+            k_value, native_masses[i], native_masses[j], interface_zeta))
 
     # delta_n = u_n - u_e - r theta_s2; outer products are the virtual-work
     # contribution of one conservative ball-contact element to K and C.
@@ -566,7 +906,7 @@ def full_linear_matrices() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarr
     h_nut[3], h_nut[6], h_nut[8] = -r, -1.0, 1.0
     stiffness += p["k_ball"] * np.outer(h_nut, h_nut)
     relative_mass = 1.0 / (r**2 / p["J_s2"] + 1.0 / p["m_e"] + 1.0 / p["m_n"])
-    c_ball = 2.0 * zeta * np.sqrt(p["k_ball"] * relative_mass)
+    c_ball = 2.0 * p["zeta_ball_nut"] * np.sqrt(p["k_ball"] * relative_mass)
     damping += c_ball * np.outer(h_nut, h_nut)
     p["c_ball"] = c_ball
 
@@ -609,6 +949,169 @@ def _damped_modal_data(mass: np.ndarray, damping: np.ndarray,
     ]
 
 
+def craig_bampton_plant() -> dict[str, object]:
+    """Project the ten-DOF model onto [x_d, x_s] plus one fixed-interface mode.
+
+    The retained physical coordinates are exact, the eliminated partition keeps
+    its static constraint modes, and only the lowest fixed-interface mode is
+    restored.  The projected damping is inherited from the ten-DOF assembly, so
+    this plant is the one reduction that does not need an assumed link damper.
+    """
+    constants = physical_constants()
+    full_m, full_c, full_k, full_b, _p = full_linear_matrices()
+    order = [0, 9, *range(1, 9)]
+    coordinate_map = np.eye(10)[:, order]
+    coordinate_map[:, 0] /= constants["r"]
+    transformed_m = coordinate_map.T @ full_m @ coordinate_map
+    transformed_c = coordinate_map.T @ full_c @ coordinate_map
+    transformed_k = coordinate_map.T @ full_k @ coordinate_map
+    transformed_b = coordinate_map.T @ full_b
+    k_er = transformed_k[2:, :2]
+    k_ee = transformed_k[2:, 2:]
+    m_ee = transformed_m[2:, 2:]
+    constraint_modes = -np.linalg.solve(k_ee, k_er)
+    fixed_values, fixed_vectors = np.linalg.eig(np.linalg.solve(m_ee, k_ee))
+    fixed_interface_hz = np.sort(
+        np.sqrt(np.maximum(np.real(fixed_values), 0.0)) / (2.0 * np.pi))
+    first_index = int(np.argmin(np.real(fixed_values)))
+    fixed_mode = np.real(fixed_vectors[:, first_index])
+    fixed_mode /= np.sqrt(fixed_mode @ m_ee @ fixed_mode)
+    t_cb = np.block([
+        [np.eye(2), np.zeros((2, 1))],
+        [constraint_modes, fixed_mode[:, None]],
+    ])
+    return {
+        "mass": t_cb.T @ transformed_m @ t_cb,
+        "damping": t_cb.T @ transformed_c @ t_cb,
+        "stiffness": t_cb.T @ transformed_k @ t_cb,
+        "input_vector": t_cb.T @ transformed_b,
+        "transform": t_cb,
+        "fixed_interface_hz": fixed_interface_hz,
+    }
+
+
+def multi_route_reduction_metrics() -> dict[str, float]:
+    """Evaluate every Section 6 route from the authoritative model inputs.
+
+    The browser mirrors the algebraic routes.  The full-model and one-mode
+    Craig-Bampton values are intentionally generated here because they require
+    the assembled ten-DOF matrices.
+    """
+    constants = physical_constants()
+    component = component_parameters()
+    md, ms, km = constants["m_d"], constants["m_s"], constants["K_m"]
+    kax_p, kball_p = constants["k_ax"], constants["k_ball"]
+
+    def mode_pair(stage_mass: float, link_stiffness: float) -> np.ndarray:
+        mass = np.diag([md, stage_mass])
+        stiffness = np.array([
+            [km + link_stiffness, -link_stiffness],
+            [-link_stiffness, link_stiffness],
+        ])
+        return _linear_modes(mass, stiffness)
+
+    def route_row(stage_mass: float, link_stiffness: float,
+                  link_damping: float, ball_stiffness: float) -> dict[str, float]:
+        modes = mode_pair(stage_mass, link_stiffness)
+        reduced_mass = md * stage_mass / (md + stage_mass)
+        relative_zeta = link_damping / (2.0 * np.sqrt(link_stiffness * reduced_mass))
+        settling = SETTLING_2PCT_FACTOR / (relative_zeta * 2.0 * np.pi * modes[1])
+        return {
+            "md": md, "ms": stage_mass, "kax": link_stiffness,
+            "cax": link_damping, "zeta": relative_zeta,
+            "f1": float(modes[0]), "f2": float(modes[1]),
+            "kball": ball_stiffness, "settling": settling,
+        }
+
+    axial_compliance = sum(1.0 / component[key]
+                           for key in ("k_brg", "k_sha", "k_mnt")) + 1.0 / kball_p
+    kax_series = 1.0 / axial_compliance
+    torsional_compliance = constants["r"]**2 * (
+        1.0 / component["k_c1"] + 1.0 / component["k_c2"]
+        + 1.0 / component["k_theta_a"])
+    kax_series_full = 1.0 / (axial_compliance + torsional_compliance)
+    torsional_share = torsional_compliance / (axial_compliance + torsional_compliance)
+
+    omega_target = 2.0 * np.pi * constants["axial_mode_target_hz"]
+    kax_f, cax_f = axial_complex_link(component, constants["r"], kball_p, omega_target)
+
+    # Route C: retain x_d and x_s physically, add the first fixed-interface
+    # mode of the eight-coordinate eliminated partition, then compare its
+    # retained upper mode with the full and 2-DOF models.
+    full_m, full_c, full_k, _full_b, _full_p = full_linear_matrices()
+    cb_plant = craig_bampton_plant()
+    cb_m = cb_plant["mass"]
+    cb_c = cb_plant["damping"]
+    cb_k = cb_plant["stiffness"]
+    cb_modes = _linear_modes(cb_m, cb_k)
+    cb_damped_modes = _damped_modal_data(cb_m, cb_c, cb_k)
+    cb_upper_damped = min(
+        cb_damped_modes, key=lambda item: abs(item[0] - constants["axial_mode_target_hz"]))
+    kax_c = modal_calibrated_axial_stiffness(md, ms, km, float(cb_modes[1]))
+    kball_c = closure_ball_stiffness(
+        kax_c, component["k_brg"], component["k_sha"], component["k_mnt"])
+    mu = md * ms / (md + ms)
+    cax_c = 2.0 * cb_upper_damped[1] * np.sqrt(kax_c * mu)
+
+    m_eff = MODEL["m_eff_measured"]
+    kax_m = omega_target**2 * m_eff
+    kball_m = closure_ball_stiffness(
+        kax_m, component["k_brg"], component["k_sha"], component["k_mnt"])
+    mu_m = md * m_eff / (md + m_eff)
+    cax_m = 2.0 * MODEL["zeta_relative_measured"] * np.sqrt(kax_m * mu_m)
+
+    rows = {
+        "p": route_row(ms, kax_p, MODEL["c_ax"], kball_p),
+        "s": route_row(ms, kax_series, MODEL["c_ax"], kball_p),
+        "b": route_row(ms, kax_series, MODEL["c_ax"], kball_p),
+        "f": route_row(ms, kax_f, cax_f, kball_p),
+        "c": route_row(ms, kax_c, cax_c, kball_c),
+        "m": route_row(m_eff, kax_m, cax_m, kball_m),
+    }
+    rows["c"].update(f1=float(cb_modes[0]), f2=float(cb_modes[1]),
+                     zeta=cb_upper_damped[1], settling=(
+                         SETTLING_2PCT_FACTOR / (
+                             cb_upper_damped[1] * 2.0 * np.pi * cb_upper_damped[0])))
+
+    full_damped_modes = _damped_modal_data(full_m, full_c, full_k)
+    full_upper = min(
+        full_damped_modes, key=lambda item: abs(item[0] - constants["axial_mode_target_hz"]))
+    metrics = {
+        f"route_{route}_{key}": value
+        for route, row in rows.items() for key, value in row.items()
+    }
+    first_discarded = next(item for item in full_damped_modes if item[0] > 900.0)
+    fixed_interface_hz = np.asarray(cb_plant["fixed_interface_hz"])
+    metrics.update({
+        "route_s_kax_full": kax_series_full,
+        "torsional_share": torsional_share,
+        "mass_ratio": md / ms,
+        "reduced_mu": mu,
+        "full_model_zeta": full_upper[1],
+        "full_model_upper_hz": full_upper[0],
+        "full_model_settling": SETTLING_2PCT_FACTOR / (
+            full_upper[1] * 2.0 * np.pi * full_upper[0]),
+        "cb_frequency_delta": 100.0 * abs(cb_modes[1] - full_upper[0]) / full_upper[0],
+        "cb_damping_delta": 100.0 * abs(cb_upper_damped[1] - full_upper[1]) / full_upper[1],
+        # Half-power bandwidths of the retained upper mode.  They are the
+        # resolution requirement the measured-FRF route has to meet.
+        "route_p_bandwidth_hz": 2.0 * rows["p"]["zeta"] * rows["p"]["f2"],
+        "full_model_bandwidth_hz": 2.0 * full_upper[1] * full_upper[0],
+        # Truncation separation.  The fixed-interface value is the formal
+        # condensation bound; the discarded system pole is what Section 7 sees.
+        "first_fixed_interface_hz": float(fixed_interface_hz[0]),
+        "first_discarded_hz": first_discarded[0],
+        "fixed_interface_separation": (
+            constants["axial_mode_target_hz"] / float(fixed_interface_hz[0]))**2,
+        "discarded_pole_separation": (
+            constants["axial_mode_target_hz"] / first_discarded[0])**2,
+        "mu_fraction": mu / ms,
+        "relative_mode_nearground_hz": np.sqrt(kax_p / ms) / (2.0 * np.pi),
+        "drive_pole_hz": np.sqrt(km / md) / (2.0 * np.pi),
+    })
+    return metrics
+
+
 def _rk4_linear_stability_radius(mass: np.ndarray, damping: np.ndarray,
                                  stiffness: np.ndarray, dt: float) -> float:
     """Largest RK4 amplification magnitude over the linear state eigenvalues."""
@@ -631,7 +1134,12 @@ def _rk4_linear(mass: np.ndarray, damping: np.ndarray, stiffness: np.ndarray,
                 command_function=None) -> tuple[np.ndarray, np.ndarray]:
     """Integrate an arbitrary second-order linear model with a true ZOH input."""
     count = mass.shape[0]
-    inverse_mass = np.diag(1.0 / np.diag(mass))
+    if np.count_nonzero(mass - np.diag(np.diag(mass))) == 0:
+        inverse_mass = np.diag(1.0 / np.diag(mass))
+    else:
+        # The Craig-Bampton plant couples its retained and modal coordinates,
+        # so the diagonal shortcut is only valid for the physical plants.
+        inverse_mass = np.linalg.inv(mass)
     times = np.arange(0.0, duration + 0.5 * dt, dt)
     states = np.zeros((times.size, 2 * count), dtype=float)
 
@@ -654,42 +1162,71 @@ def _rk4_linear(mass: np.ndarray, damping: np.ndarray, stiffness: np.ndarray,
     return times, states
 
 
-def _fft_band_envelope(signal: np.ndarray, dt: float,
-                       low_hz: float, high_hz: float,
-                       taper_hz: float = 20.0,
-                       smooth_seconds: float = 0.001) -> tuple[np.ndarray, np.ndarray]:
-    """Return a zero-phase FFT band component and its smoothed analytic envelope."""
-    count = signal.size
-    frequencies = np.fft.rfftfreq(count, dt)
-    spectrum = np.fft.rfft(signal)
-    window = np.zeros_like(frequencies)
-    core = (frequencies >= low_hz) & (frequencies <= high_hz)
-    window[core] = 1.0
-    lower_taper = ((frequencies >= low_hz - taper_hz)
-                   & (frequencies < low_hz))
-    upper_taper = ((frequencies > high_hz)
-                   & (frequencies <= high_hz + taper_hz))
-    window[lower_taper] = 0.5 * (
-        1.0 - np.cos(np.pi * (frequencies[lower_taper] - low_hz + taper_hz)
-                     / taper_hz))
-    window[upper_taper] = 0.5 * (
-        1.0 + np.cos(np.pi * (frequencies[upper_taper] - high_hz)
-                     / taper_hz))
-    band_signal = np.fft.irfft(spectrum * window, n=count)
+def verification_route_plants(constants: dict[str, float]) -> "OrderedDict[str, dict[str, object]]":
+    """Assemble every candidate reduced plant that Section 6 puts forward.
 
-    full_spectrum = np.fft.fft(band_signal)
-    analytic_multiplier = np.zeros(count)
-    analytic_multiplier[0] = 1.0
-    if count % 2 == 0:
-        analytic_multiplier[count // 2] = 1.0
-        analytic_multiplier[1:count // 2] = 2.0
-    else:
-        analytic_multiplier[1:(count + 1) // 2] = 2.0
-    envelope = np.abs(np.fft.ifft(full_spectrum * analytic_multiplier))
-    smoothing_count = max(3, int(round(smooth_seconds / dt)))
-    smoothed = np.convolve(
-        envelope, np.ones(smoothing_count) / smoothing_count, mode="same")
-    return band_signal, smoothed
+    Each entry carries the matrices needed by the residual audit so that the
+    Section 6.3 damping claim is measured against the ten-DOF model rather than
+    inferred from settling times alone.
+    """
+    component = component_parameters()
+    md, ms, km = constants["m_d"], constants["m_s"], constants["K_m"]
+    coupling = np.array([[1.0, -1.0], [-1.0, 1.0]])
+    drive_damping = constants["c_m"] * np.outer(H["d"], H["d"])
+
+    def two_dof(stage_mass: float, link_stiffness: float,
+                link_damping: float) -> dict[str, object]:
+        return {
+            "mass": np.diag([md, stage_mass]),
+            "damping": link_damping * coupling + drive_damping,
+            "stiffness": np.array([
+                [km + link_stiffness, -link_stiffness],
+                [-link_stiffness, link_stiffness],
+            ], dtype=float),
+            "input_vector": np.array([km, 0.0]),
+            "output_index": 1,
+        }
+
+    omega_target = 2.0 * np.pi * constants["axial_mode_target_hz"]
+    kax_f, cax_f = axial_complex_link(
+        component, constants["r"], constants["k_ball"], omega_target)
+    m_eff = MODEL["m_eff_measured"]
+    kax_m = omega_target**2 * m_eff
+    mu_m = md * m_eff / (md + m_eff)
+    cax_m = 2.0 * MODEL["zeta_relative_measured"] * np.sqrt(kax_m * mu_m)
+
+    cb_plant = craig_bampton_plant()
+    cb_modes = _linear_modes(cb_plant["mass"], cb_plant["stiffness"])
+    cb_upper_damped = min(
+        _damped_modal_data(cb_plant["mass"], cb_plant["damping"], cb_plant["stiffness"]),
+        key=lambda item: abs(item[0] - constants["axial_mode_target_hz"]))
+    mu = md * ms / (md + ms)
+    kax_c = modal_calibrated_axial_stiffness(md, ms, km, float(cb_modes[1]))
+    cax_c = 2.0 * cb_upper_damped[1] * np.sqrt(kax_c * mu)
+
+    plants: "OrderedDict[str, dict[str, object]]" = OrderedDict()
+    plants["P"] = two_dof(ms, constants["k_ax"], MODEL["c_ax"])
+    plants["P"]["label"] = "Formal static condensation"
+    plants["P"]["basis"] = "assumed 55 N·s/m link damper"
+    plants["F"] = two_dof(ms, kax_f, cax_f)
+    plants["F"]["label"] = "Frequency-domain complex stiffness"
+    plants["F"]["basis"] = "interface loss factors propagated to $c_{ax}$"
+    plants["M"] = two_dof(m_eff, kax_m, cax_m)
+    plants["M"]["label"] = "Measured-FRF identification"
+    plants["M"]["basis"] = "0.600 kg modal mass and measured $\\zeta$"
+    plants["C2"] = two_dof(ms, kax_c, cax_c)
+    plants["C2"]["label"] = "Craig–Bampton, condensed to two coordinates"
+    plants["C2"]["basis"] = "Craig–Bampton frequency and damping, two coordinates"
+    plants["CB"] = {
+        "mass": cb_plant["mass"],
+        "damping": cb_plant["damping"],
+        "stiffness": cb_plant["stiffness"],
+        "input_vector": cb_plant["input_vector"],
+        "output_index": 1,
+        "label": "Craig–Bampton, three coordinates",
+        "basis": "damping projected from the ten-DOF matrices",
+    }
+    return plants
 
 
 def full_reduced_verification(frequencies: np.ndarray, constants: dict[str, float]) -> dict[str, object]:
@@ -787,54 +1324,39 @@ def full_reduced_verification(frequencies: np.ndarray, constants: dict[str, floa
     full_upper_mode = min(full_damped_modes, key=lambda item: abs(item[0] - constants["axial_mode_target_hz"]))
     reduced_upper_mode = min(reduced_damped_modes, key=lambda item: abs(item[0] - constants["axial_mode_target_hz"]))
 
-    single_times, single_full_states = _rk4_linear(
-        full_m, full_c, full_k, full_b, command_step,
-        dt=VERIFICATION_DT, duration=0.300,
-        command_function=single_edge_command_position)
-    single_reduced_times, single_reduced_states = _rk4_linear(
-        reduced_m, reduced_c, reduced_k, reduced_b, command_step,
-        dt=VERIFICATION_DT, duration=0.300,
-        command_function=single_edge_command_position)
-    if not np.array_equal(single_times, single_reduced_times):
-        raise RuntimeError("Single-edge full and reduced time grids differ")
-    single_residual = single_full_states[:, 9] - single_reduced_states[:, 1]
-    band_residual, band_envelope = _fft_band_envelope(
-        single_residual, VERIFICATION_DT, 620.0, 760.0)
-    time_after_edge = single_times - VERIFICATION_EDGES[0]
-    peak_mask = (time_after_edge >= 0.003) & (time_after_edge <= 0.285)
-    peak_indices = np.flatnonzero(peak_mask)
-    envelope_peak_index = peak_indices[np.argmax(band_envelope[peak_mask])]
-    fit_mask = (time_after_edge >= 0.050) & (time_after_edge <= 0.250)
-    fit_slope, fit_intercept = np.polyfit(
-        time_after_edge[fit_mask],
-        np.log(np.maximum(band_envelope[fit_mask], np.finfo(float).tiny)), 1)
-    sample_delays = np.array([0.050, 0.100, 0.150, 0.200, 0.250])
-    sample_indices = np.rint(
-        (VERIFICATION_EDGES[0] + sample_delays) / VERIFICATION_DT).astype(int)
-    frequency_difference = abs(reduced_upper_mode[0] - full_upper_mode[0])
-    single_edge = {
-        "times": single_times,
-        "time_after_edge": time_after_edge,
-        "full_stage": single_full_states[:, 9],
-        "reduced_stage": single_reduced_states[:, 1],
-        "residual": single_residual,
-        "band_residual": band_residual,
-        "band_envelope": band_envelope,
-        "envelope_peak_time_after_edge": float(time_after_edge[envelope_peak_index]),
-        "envelope_peak_nm": float(band_envelope[envelope_peak_index] * 1e9),
-        "envelope_sample_delays": sample_delays,
-        "envelope_samples_nm": band_envelope[sample_indices] * 1e9,
-        "late_decay_time_constant": float(-1.0 / fit_slope),
-        "late_decay_fit_slope": float(fit_slope),
-        "late_decay_fit_intercept": float(fit_intercept),
-        "frequency_difference_hz": frequency_difference,
-        "predicted_first_beat_maximum": 0.5 / frequency_difference,
-        "predicted_first_beat_node": 1.0 / frequency_difference,
-        "full_modal_time_constant": 1.0 / (
-            full_upper_mode[1] * 2.0 * np.pi * full_upper_mode[0]),
-        "reduced_modal_time_constant": 1.0 / (
-            reduced_upper_mode[1] * 2.0 * np.pi * reduced_upper_mode[0]),
-    }
+    # Per-plant residual audit.  Every Section 6 candidate is driven with the
+    # same command and compared with the same ten-DOF stage output, so the
+    # damping-versus-truncation question is answered by measurement.
+    route_residuals: list[dict[str, object]] = []
+    for key, plant in verification_route_plants(constants).items():
+        output_index = int(plant["output_index"])
+        _route_times, route_states = _rk4_linear(
+            plant["mass"], plant["damping"], plant["stiffness"],
+            plant["input_vector"], command_step, dt=VERIFICATION_DT)
+        route_residual = full_stage - route_states[:, output_index]
+        route_modes = _damped_modal_data(plant["mass"], plant["damping"], plant["stiffness"])
+        route_upper = min(
+            route_modes, key=lambda item: abs(item[0] - constants["axial_mode_target_hz"]))
+        route_lower = min(route_modes, key=lambda item: item[0])
+        route_rms = float(np.sqrt(np.mean(route_residual**2)))
+        route_peak = float(np.max(np.abs(route_residual)))
+        route_residuals.append({
+            "key": key,
+            "label": plant["label"],
+            "basis": plant["basis"],
+            "coordinates": int(np.asarray(plant["mass"]).shape[0]),
+            "lower_hz": route_lower[0],
+            "lower_zeta": route_lower[1],
+            "upper_hz": route_upper[0],
+            "upper_zeta": route_upper[1],
+            "dc_gain": float(np.linalg.solve(
+                plant["stiffness"], plant["input_vector"])[output_index]),
+            "rms_residual_nm": route_rms * 1e9,
+            "peak_residual_nm": route_peak * 1e9,
+            "rms_residual_pct_command": 100.0 * route_rms / command_amplitude,
+            "peak_residual_pct_command": 100.0 * route_peak / command_amplitude,
+        })
+
     return {
         "parameters": p,
         "full_modes": _linear_modes(full_m, full_k),
@@ -847,18 +1369,19 @@ def full_reduced_verification(frequencies: np.ndarray, constants: dict[str, floa
         "reduced_stage": reduced_stage,
         "residual": residual,
         "convergence": convergence,
+        "route_residuals": route_residuals,
         "production_dt": VERIFICATION_DT,
         "edge_peaks_nm": np.asarray(production["edge_peaks"]) * 1e9,
         "dominant_residual_frequency_hz": dominant_frequency,
         "ripple_residual_frequency_hz": ripple_frequency,
         "full_upper_damped_mode": full_upper_mode,
+        "full_lower_damped_mode": min(full_damped_modes, key=lambda item: item[0]),
         "reduced_upper_damped_mode": reduced_upper_mode,
         "first_discarded_damped_mode": discarded_mode,
         "full_dc_gain": float(np.linalg.solve(full_k, full_b)[9]),
         "reduced_dc_gain": float(np.linalg.solve(reduced_k, reduced_b)[1]),
         "full_step_electrical_angle": constants["kappa"] * command_step,
         "linear_force_to_limit_ratio": constants["K_m"] * command_step / constants["F_max"],
-        "single_edge": single_edge,
         "rms_residual_nm": rms_residual * 1e9,
         "peak_residual_nm": peak_residual * 1e9,
         "command_amplitude_nm": command_amplitude * 1e9,
@@ -867,19 +1390,22 @@ def full_reduced_verification(frequencies: np.ndarray, constants: dict[str, floa
     }
 
 
-def linear_matrices(sites: tuple[str, ...], friction_model: str) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def linear_matrices(sites: tuple[str, ...], friction_model: str,
+                    micro_viscous: bool = False) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Return M, C, K, B for the presliding linearization of one case."""
     constants = physical_constants()
     m_d, m_s = constants["m_d"], constants["m_s"]
-    k_ax, k_m, c_ax = constants["k_ax"], constants["K_m"], MODEL["c_ax"]
+    k_ax, k_m, c_ax = constants["k_ax"], constants["K_m"], constants["c_ax"]
     coupling = np.array([[1.0, -1.0], [-1.0, 1.0]])
     mass = np.diag([m_d, m_s])
     damping = c_ax * coupling + constants["c_m"] * np.outer(H["d"], H["d"])
     stiffness = np.array([[k_m + k_ax, -k_ax], [-k_ax, k_ax]], dtype=float)
     for site in sites:
         outer = np.outer(H[site], H[site])
-        p = FRICTION[site]
+        p = site_parameters({"micro_viscous": micro_viscous}, site)
         stiffness += p["sigma0"] * outer
+        # With sigma_1 = 0 the two laws contribute the identical sigma_2 term,
+        # which is what makes the A/A2 comparison a pure memory comparison.
         site_damping = p["sigma2"] if friction_model == "gms" else p["sigma1"] + p["sigma2"]
         damping += site_damping * outer
     input_vector = np.array([k_m, 0.0])
@@ -902,7 +1428,8 @@ def frequency_responses() -> tuple[np.ndarray, dict[str, np.ndarray], dict[str, 
     responses: dict[str, np.ndarray] = {}
     metrics: dict[str, dict[str, float | np.ndarray]] = {}
     for key, case in CASES.items():
-        mass, damping, stiffness, input_vector = linear_matrices(case["sites"], case["friction"])
+        mass, damping, stiffness, input_vector = linear_matrices(
+            case["sites"], case["friction"], bool(case.get("micro_viscous")))
         z11 = mass[0, 0] * s**2 + damping[0, 0] * s + stiffness[0, 0]
         z12 = damping[0, 1] * s + stiffness[0, 1]
         z21 = damping[1, 0] * s + stiffness[1, 0]
@@ -940,11 +1467,6 @@ def verification_command_position(t: float, command_step: float) -> float:
     return 0.0
 
 
-def single_edge_command_position(t: float, command_step: float) -> float:
-    """Hold one positive full-step command after the 5 ms diagnostic edge."""
-    return 0.0 if t < VERIFICATION_EDGES[0] else command_step
-
-
 def command_position(t: float, command_step: float, plateau_dwell: float) -> float:
     """Finite-amplitude, yield-spanning, quarter-step-bounded main sequence."""
     if t < MAIN_START:
@@ -964,6 +1486,17 @@ def presliding_command_position(t: float, microstep: float,
     return float(levels[index] * microstep)
 
 
+def site_parameters(case: dict[str, object], site: str) -> dict[str, float]:
+    """Return a site's constitutive parameters as the given case executes them.
+
+    Only the micro-viscous variant differs: it restores the sigma_1 values that
+    the controlled A/B/C comparison sets to zero.
+    """
+    if case.get("micro_viscous"):
+        return {**FRICTION[site], "sigma1": MICRO_VISCOUS_SIGMA1[site]}
+    return FRICTION[site]
+
+
 def stribeck(velocity: float, p: dict[str, float]) -> float:
     ratio = abs(velocity) / p["v_s"]
     return p["F_c"] + (p["F_s"] - p["F_c"]) * np.exp(-(ratio ** p["delta"]))
@@ -977,13 +1510,20 @@ def lugre_site(velocity: float, z: float, p: dict[str, float]) -> tuple[float, f
 
 
 def gms_site(velocity: float, element_forces: np.ndarray,
-             p: dict[str, float]) -> tuple[np.ndarray, float]:
+             p: dict[str, float],
+             branch_state: np.ndarray | None = None) -> tuple[np.ndarray, float]:
     """Return GMS derivatives after branch tests on the current RK trial state.
 
     Ordering is intentional: zero velocity holds the state; otherwise the
     reversal/re-stick test is evaluated first, then the yield test, and only
     then is either the stuck or slip derivative assigned.  No derivative is
     used to choose its own branch within the same RHS evaluation.
+
+    ``branch_state`` is the counterfactual only.  When it is ``None`` the
+    executed stateless test runs unchanged.  When a boolean array is supplied
+    it carries a persistent per-element slip flag, so an element that has
+    yielded keeps slipping until a reversal instead of being reclassified by a
+    rising threshold.  Section 13.2 uses it to price that departure.
     """
     threshold = np.maximum(GMS_WEIGHTS * stribeck(velocity, p), 1e-12)
     stiffness = GMS_STIFFNESS_FRACTIONS * p["sigma0"]
@@ -993,9 +1533,17 @@ def gms_site(velocity: float, element_forces: np.ndarray,
         for i in range(GMS_N):
             re_stick = velocity * element_forces[i] <= 0.0
             below_yield = abs(element_forces[i]) < threshold[i]
-            if re_stick:
-                derivatives[i] = stiffness[i] * velocity
-            elif below_yield:
+            if branch_state is None:
+                stuck = re_stick or below_yield
+            elif re_stick:
+                stuck = True
+                branch_state[i] = False
+            elif branch_state[i]:
+                stuck = False
+            else:
+                stuck = below_yield
+                branch_state[i] = not below_yield
+            if stuck:
                 derivatives[i] = stiffness[i] * velocity
             else:
                 # Stable slip attraction to F_i = sign(v) nu_i s(v).
@@ -1004,9 +1552,54 @@ def gms_site(velocity: float, element_forces: np.ndarray,
     return derivatives, total_force
 
 
+class GmsBranchCensus:
+    """Count where the stateless branch test and a persistent flag disagree.
+
+    The shadow flag is observation only: it is advanced alongside the executed
+    trajectory and never feeds a derivative, so attaching a census cannot
+    change any reported result.
+    """
+
+    def __init__(self, sites: tuple[str, ...]) -> None:
+        self.sites = tuple(sites)
+        self.slipping = {site: np.zeros(GMS_N, dtype=bool) for site in self.sites}
+        self.reversal_flips = {site: 0 for site in self.sites}
+        self.threshold_flips = {site: 0 for site in self.sites}
+        self.evaluations = {site: 0 for site in self.sites}
+
+    def observe(self, site: str, velocity: float, element_forces: np.ndarray,
+                p: dict[str, float]) -> None:
+        if abs(velocity) <= 1e-14:
+            return
+        threshold = np.maximum(GMS_WEIGHTS * stribeck(velocity, p), 1e-12)
+        slipping = self.slipping[site]
+        for i in range(GMS_N):
+            self.evaluations[site] += 1
+            re_stick = velocity * element_forces[i] <= 0.0
+            below_yield = abs(element_forces[i]) < threshold[i]
+            if re_stick:
+                # Both models send the element back to stick.
+                if slipping[i]:
+                    self.reversal_flips[site] += 1
+                slipping[i] = False
+            elif slipping[i]:
+                # The persistent model would keep slipping here.  The executed
+                # stateless test sticks the element whenever the rising
+                # Stribeck threshold has overtaken its force.
+                if below_yield:
+                    self.threshold_flips[site] += 1
+            elif not below_yield:
+                slipping[i] = True
+
+    def total(self, key: str) -> int:
+        return int(sum(getattr(self, key).values()))
+
+
 def nonlinear_rhs(t: float, state: np.ndarray, case: dict[str, object], constants: dict[str, float],
                   held_command: float | None = None,
-                  blocked_stage: bool = False) -> np.ndarray:
+                  blocked_stage: bool = False,
+                  census: "GmsBranchCensus | None" = None,
+                  branch_states: dict[str, np.ndarray] | None = None) -> np.ndarray:
     x_d, x_s, v_d, v_s = state[:4]
     if blocked_stage:
         x_s, v_s = 0.0, 0.0
@@ -1019,7 +1612,7 @@ def nonlinear_rhs(t: float, state: np.ndarray, case: dict[str, object], constant
         4.0 * constants["kappa"] * x_d + MODEL["detent_phase"]
     )
     electromagnetic_damping = constants["c_m"] * v_d
-    axial_force = constants["k_ax"] * (x_d - x_s) + MODEL["c_ax"] * (v_d - v_s)
+    axial_force = constants["k_ax"] * (x_d - x_s) + constants["c_ax"] * (v_d - v_s)
 
     velocities = {site: float(H[site] @ np.array([v_d, v_s])) for site in SITE_KEYS}
     forces = {site: 0.0 for site in SITE_KEYS}
@@ -1028,13 +1621,17 @@ def nonlinear_rhs(t: float, state: np.ndarray, case: dict[str, object], constant
         for site in case["sites"]:
             index = LUGRE_INDEX[site]
             derivative[index], forces[site] = lugre_site(
-                velocities[site], state[index], FRICTION[site])
+                velocities[site], state[index], site_parameters(case, site))
     elif case["friction"] == "gms":
         for site in case["sites"]:
             start = GMS_START[site]
             stop = start + GMS_N
+            site_p = site_parameters(case, site)
             derivative[start:stop], forces[site] = gms_site(
-                velocities[site], state[start:stop], FRICTION[site])
+                velocities[site], state[start:stop], site_p,
+                None if branch_states is None else branch_states[site])
+            if census is not None:
+                census.observe(site, velocities[site], state[start:stop], site_p)
 
     friction_generalized = sum(H[site] * forces[site] for site in SITE_KEYS)
     a_d = (magnetic_force + detent_force - electromagnetic_damping - axial_force
@@ -1048,7 +1645,10 @@ def nonlinear_rhs(t: float, state: np.ndarray, case: dict[str, object], constant
 def rk4_case_with_command(case: dict[str, object], constants: dict[str, float],
                           command_function, duration: float,
                           dt: float = PRODUCTION_DT,
-                          blocked_stage: bool = False) -> tuple[np.ndarray, np.ndarray]:
+                          blocked_stage: bool = False,
+                          census: "GmsBranchCensus | None" = None,
+                          branch_states: dict[str, np.ndarray] | None = None
+                          ) -> tuple[np.ndarray, np.ndarray]:
     """Integrate a case with an arbitrary zero-order-held position command."""
     times = np.arange(0.0, duration + 0.5 * dt, dt)
     states = np.zeros((times.size, STATE_SIZE), dtype=float)
@@ -1059,25 +1659,29 @@ def rk4_case_with_command(case: dict[str, object], constants: dict[str, float],
         # sample is fixed across all RK4 stages, so an endpoint discontinuity
         # cannot leak backward into the preceding integration interval.
         held_command = float(command_function(t + 0.5 * dt))
-        k1 = nonlinear_rhs(t, y, case, constants, held_command, blocked_stage)
+        k1 = nonlinear_rhs(t, y, case, constants, held_command, blocked_stage,
+                           census, branch_states)
         k2 = nonlinear_rhs(t + 0.5 * dt, y + 0.5 * dt * k1, case, constants,
-                           held_command, blocked_stage)
+                           held_command, blocked_stage, census, branch_states)
         k3 = nonlinear_rhs(t + 0.5 * dt, y + 0.5 * dt * k2, case, constants,
-                           held_command, blocked_stage)
+                           held_command, blocked_stage, census, branch_states)
         k4 = nonlinear_rhs(t + dt, y + dt * k3, case, constants,
-                           held_command, blocked_stage)
+                           held_command, blocked_stage, census, branch_states)
         states[i + 1] = y + dt * (k1 + 2.0 * k2 + 2.0 * k3 + k4) / 6.0
     return times, states
 
 
 def rk4_case(case: dict[str, object], constants: dict[str, float], dt: float = PRODUCTION_DT,
-             duration: float | None = None) -> tuple[np.ndarray, np.ndarray]:
+             duration: float | None = None,
+             census: "GmsBranchCensus | None" = None,
+             branch_states: dict[str, np.ndarray] | None = None
+             ) -> tuple[np.ndarray, np.ndarray]:
     if duration is None:
         duration = main_duration(constants)
     return rk4_case_with_command(
         case, constants,
         lambda t: command_position(t, constants["command_step"], constants["plateau_dwell"]),
-        duration=duration, dt=dt,
+        duration=duration, dt=dt, census=census, branch_states=branch_states,
     )
 
 
@@ -1087,7 +1691,7 @@ def friction_force_history(case: dict[str, object], states: np.ndarray,
     if site not in case["sites"]:
         return np.zeros(states.shape[0])
     velocity = H[site][0] * states[:, 2] + H[site][1] * states[:, 3]
-    p = FRICTION[site]
+    p = site_parameters(case, site)
     if case["friction"] == "lugre":
         state = states[:, LUGRE_INDEX[site]]
         return np.array([
@@ -1099,7 +1703,8 @@ def friction_force_history(case: dict[str, object], states: np.ndarray,
 
 
 def presliding_responses(constants: dict[str, float], keys: tuple[str, str],
-                         site: str) -> dict[str, object]:
+                         site: str,
+                         persistent_branch_keys: tuple[str, ...] = ()) -> dict[str, object]:
     """Run one matched LuGre/GMS pair through a settled reversal sequence.
 
     The guideway experiment uses the normal free-stage plant.  The nut
@@ -1121,9 +1726,16 @@ def presliding_responses(constants: dict[str, float], keys: tuple[str, str],
     times: np.ndarray | None = None
 
     for key in keys:
+        branch_states = None
+        if key in persistent_branch_keys:
+            branch_states = {
+                active_site: np.zeros(GMS_N, dtype=bool)
+                for active_site in CASES[key]["sites"]
+            }
         times, states = rk4_case_with_command(
             CASES[key], constants, command_function, duration=duration,
-            dt=PRODUCTION_DT, blocked_stage=blocked_stage)
+            dt=PRODUCTION_DT, blocked_stage=blocked_stage,
+            branch_states=branch_states)
         results[key] = states
         forces[key] = friction_force_history(CASES[key], states, site)
 
@@ -1157,7 +1769,25 @@ def presliding_responses(constants: dict[str, float], keys: tuple[str, str],
             abs(endpoint_force_array[first] - endpoint_force_array[second])
             for first, second in PRESLIDING_RETURN_PAIRS
         ])
+        # Dissipated energy of the closed memory sequence, A_loop = |contour
+        # integral of F_f dx_o|.  The command starts and ends at the origin, so
+        # the path closes and the integral is the summed hysteresis-loop area.
+        # It is the only metric evaluated on the dynamic trace, which is where
+        # the deceleration phases the branch census counts actually live.
+        loop_increments = []
+        for level_index in range(levels.size):
+            plateau_end = PRESLIDING_START + (level_index + 1) * plateau_dwell
+            segment = ((times >= plateau_end - plateau_dwell)
+                       & (times <= plateau_end))
+            loop_increments.append(float(np.trapezoid(
+                forces[key][segment], site_coordinate[segment])))
+        loop_increment_array = np.asarray(loop_increments)
+        loop_area = float(abs(np.trapezoid(
+            forces[key][active], site_coordinate[active])))
         metrics[key] = {
+            "loop_area_J": loop_area,
+            "loop_increments_J": loop_increment_array,
+            "loop_increment_min_J": float(np.min(loop_increment_array)),
             "whole_rms_nm": float(np.sqrt(np.mean(error[active] ** 2)) * 1e9),
             "max_abs_deviation_nm": float(np.max(np.abs(error[active])) * 1e9),
             "final_mean_nm": float(endpoint_error_array[-1] * 1e9),
@@ -1198,27 +1828,41 @@ def final_window_rms_error_nm(times: np.ndarray, states: np.ndarray,
     return float(np.sqrt(np.mean(error[final_window] ** 2)) * 1e9)
 
 
-def time_responses(constants: dict[str, float]) -> tuple[np.ndarray, np.ndarray, dict[str, np.ndarray], dict[str, dict[str, float]]]:
-    results: dict[str, np.ndarray] = {}
-    metrics: dict[str, dict[str, float]] = {}
-    times: np.ndarray | None = None
-    for key, case in CASES.items():
-        times, states = rk4_case(case, constants, dt=PRODUCTION_DT)
-        results[key] = states
-    assert times is not None
-    command = np.array([
-        command_position(t, constants["command_step"], constants["plateau_dwell"])
-        for t in times
-    ])
+def settled_window_masks(times: np.ndarray,
+                         constants: dict[str, float]) -> tuple[np.ndarray, np.ndarray]:
+    """Return the settled-plateau and final-window sample masks."""
     final_window = times >= (times[-1] - constants["metric_window"])
-    first_plateau = ((times >= MAIN_START)
-                     & (times < MAIN_START + constants["plateau_dwell"]))
     settled_mask = np.zeros(times.size, dtype=bool)
     for level_index in range(MAIN_LEVELS.size):
         plateau_end = MAIN_START + (level_index + 1) * constants["plateau_dwell"]
         settled_mask |= ((times >= plateau_end - constants["metric_window"])
                          & (times < plateau_end - 0.5e-9))
     settled_mask |= final_window
+    return settled_mask, final_window
+
+
+def time_responses(constants: dict[str, float],
+                   censuses: dict[str, "GmsBranchCensus"] | None = None
+                   ) -> tuple[np.ndarray, np.ndarray, dict[str, np.ndarray], dict[str, dict[str, float]]]:
+    results: dict[str, np.ndarray] = {}
+    metrics: dict[str, dict[str, float]] = {}
+    times: np.ndarray | None = None
+    for key, case in CASES.items():
+        census = None
+        if censuses is not None and case["friction"] == "gms":
+            # Observation only; the executed derivatives are unchanged.
+            census = GmsBranchCensus(tuple(case["sites"]))
+            censuses[key] = census
+        times, states = rk4_case(case, constants, dt=PRODUCTION_DT, census=census)
+        results[key] = states
+    assert times is not None
+    command = np.array([
+        command_position(t, constants["command_step"], constants["plateau_dwell"])
+        for t in times
+    ])
+    first_plateau = ((times >= MAIN_START)
+                     & (times < MAIN_START + constants["plateau_dwell"]))
+    settled_mask, final_window = settled_window_masks(times, constants)
     first_target = MAIN_LEVELS[0] * constants["command_step"]
     for key, states in results.items():
         error = command - states[:, 1]
@@ -1236,6 +1880,151 @@ def time_responses(constants: dict[str, float]) -> tuple[np.ndarray, np.ndarray,
                                         / abs(first_target) * 100.0),
         }
     return times, command, results, metrics
+
+
+def gms_branch_census_study(constants: dict[str, float], times: np.ndarray,
+                            command: np.ndarray,
+                            censuses: dict[str, GmsBranchCensus],
+                            metrics: dict[str, dict[str, float]]) -> dict[str, object]:
+    """Summarize the branch census and price the departure when it is active.
+
+    The counterfactual rerun is executed only for cases that actually recorded
+    a threshold-driven reclassification, so a zero census costs nothing.
+    """
+    settled_mask, _final_window = settled_window_masks(times, constants)
+    rows: list[dict[str, object]] = []
+    enforced: dict[str, dict[str, float]] = {}
+    for key, census in censuses.items():
+        for site in census.sites:
+            rows.append({
+                "case": key,
+                "site": site,
+                "flips_reversal": int(census.reversal_flips[site]),
+                "flips_threshold": int(census.threshold_flips[site]),
+                "evals_total": int(census.evaluations[site]),
+            })
+        if census.total("threshold_flips") == 0:
+            continue
+        branch_states = {site: np.zeros(GMS_N, dtype=bool) for site in census.sites}
+        _enforced_times, enforced_states = rk4_case(
+            CASES[key], constants, dt=PRODUCTION_DT, branch_states=branch_states)
+        error = command - enforced_states[:, 1]
+        enforced_rms = float(np.sqrt(np.mean(error[settled_mask] ** 2)) * 1e9)
+        baseline_rms = float(metrics[key]["rms_settled_deviation_nm"])
+        enforced[key] = {
+            "settled_rms_nm": enforced_rms,
+            "baseline_rms_nm": baseline_rms,
+            "delta_nm": enforced_rms - baseline_rms,
+            "delta_pct": 100.0 * (enforced_rms - baseline_rms) / baseline_rms,
+        }
+    return {
+        "rows": rows,
+        "enforced": enforced,
+        "threshold_total": sum(int(row["flips_threshold"]) for row in rows),
+        "reversal_total": sum(int(row["flips_reversal"]) for row in rows),
+        "evaluation_total": sum(int(row["evals_total"]) for row in rows),
+    }
+
+
+# Memory-sequence metrics that the branch departure can actually reach.  The
+# Section 11 settled window samples one plateau at rest; these compare repeated
+# returns to the same level, so they depend on every intervening deceleration.
+LOOP_METRIC_LABELS = (
+    ("return_error_mismatch_nm", "$E_{ret}$", "nm", 2),
+    ("return_force_mismatch_N", "$F_{ret}$", "N", 4),
+    ("final_mean_nm", "final-origin $|\\bar d_{13}|$", "nm", 2),
+    ("loop_area_J", "loop area $A_{loop}$", "J", 9),
+)
+
+
+def memory_branch_departure(constants: dict[str, float],
+                            experiments: dict[str, dict[str, object]]
+                            ) -> dict[str, object]:
+    """Price the stateless branch test against the Section 9.4 loop metrics.
+
+    The Section 11 settled window is sampled at rest on a single plateau; the
+    departure lives in deceleration.  Repeated-return and loop-area metrics
+    depend on the whole history, so they are the ones that can see it.
+    """
+    records: list[dict[str, object]] = []
+    for experiment in experiments.values():
+        gms_key = experiment["keys"][1]
+        lugre_key = experiment["keys"][0]
+        if CASES[gms_key]["friction"] != "gms":
+            continue
+        rerun = presliding_responses(
+            constants, experiment["keys"], str(experiment["site"]),
+            persistent_branch_keys=(gms_key,))
+        for metric_key, label, unit, digits in LOOP_METRIC_LABELS:
+            executed = abs(float(experiment["metrics"][gms_key][metric_key]))
+            persistent = abs(float(rerun["metrics"][gms_key][metric_key]))
+            law_gap = abs(float(experiment["metrics"][gms_key][metric_key])
+                          - float(experiment["metrics"][lugre_key][metric_key]))
+            records.append({
+                "case": gms_key,
+                "site": str(experiment["site"]),
+                "metric": label,
+                "unit": unit,
+                "digits": digits,
+                "executed": executed,
+                "persistent": persistent,
+                "delta": persistent - executed,
+                "law_gap": law_gap,
+                "exceeds_law_gap": abs(persistent - executed) > law_gap,
+            })
+    return {
+        "records": records,
+        "any_exceeds": any(bool(record["exceeds_law_gap"]) for record in records),
+    }
+
+
+def tau_c_sensitivity(constants: dict[str, float],
+                      keys: tuple[str, str], site: str,
+                      values: tuple[float, ...] = (1.0e-4, 2.0e-4, 4.0e-4)
+                      ) -> dict[str, object]:
+    """Rerun the memory sequence at several Stribeck relaxation times.
+
+    C is the least anchored parameter in Section 8.  This converts that from an
+    admitted weakness into a bounded one by measuring what it moves.
+    """
+    original = {site_key: values_dict["C_gms"]
+                for site_key, values_dict in FRICTION.items()}
+    rows: list[dict[str, float]] = []
+    try:
+        for tau in values:
+            for site_key, values_dict in FRICTION.items():
+                values_dict["C_gms"] = (
+                    values_dict["F_s"] - values_dict["F_c"]) / tau
+            experiment = presliding_responses(constants, keys, site)
+            gms_metrics = experiment["metrics"][keys[1]]
+            lugre_metrics = experiment["metrics"][keys[0]]
+            rows.append({
+                "tau_C": tau,
+                "C_site": FRICTION[site]["C_gms"],
+                "force_mismatch_N": float(gms_metrics["return_force_mismatch_N"]),
+                "loop_area_J": float(gms_metrics["loop_area_J"]),
+                "law_gap_force_N": abs(
+                    float(gms_metrics["return_force_mismatch_N"])
+                    - float(lugre_metrics["return_force_mismatch_N"])),
+                "law_gap_loop_J": abs(float(gms_metrics["loop_area_J"])
+                                      - float(lugre_metrics["loop_area_J"])),
+            })
+    finally:
+        for site_key, value in original.items():
+            FRICTION[site_key]["C_gms"] = value
+    forces = [row["force_mismatch_N"] for row in rows]
+    areas = [row["loop_area_J"] for row in rows]
+    baseline = min(rows, key=lambda row: abs(row["tau_C"] - MODEL["tau_C"]))
+    provenance = friction_provenance_metrics()
+    return {
+        "rows": rows,
+        "force_spread_N": max(forces) - min(forces),
+        "loop_spread_J": max(areas) - min(areas),
+        "law_gap_force_N": baseline["law_gap_force_N"],
+        "law_gap_loop_J": baseline["law_gap_loop_J"],
+        "mode_period_ms": provenance["retained_mode_period"] * 1e3,
+        "mode_ratio": provenance["tau_C_mode_ratio"],
+    }
 
 
 def _rolling_median(values: np.ndarray, width: int = 5) -> np.ndarray:
@@ -1553,7 +2342,11 @@ def plot_case_response_overlay(frequencies: np.ndarray,
         "B2": "B2: nut GMS",
         "C": "C: both LuGre",
         "C2": "C2: both GMS",
+        "A1v": "A1v: guideway LuGre, micro-viscous",
     }
+    missing_labels = sorted(set(CASES).difference(short_labels))
+    if missing_labels:
+        raise KeyError("Bode overlay has unlabelled cases: " + ", ".join(missing_labels))
     for key, case in CASES.items():
         for axis in (ax_full, ax_zoom):
             axis.semilogx(
@@ -3083,85 +3876,6 @@ def plot_full_reduced_verification(frequencies: np.ndarray, verification: dict[s
     return output
 
 
-def plot_full_reduced_single_edge_diagnostic(
-        verification: dict[str, object]) -> Path:
-    """Plot the 300 ms single-edge residual and the 691/696 Hz envelope test."""
-    diagnostic = verification["single_edge"]
-    time_ms = np.asarray(diagnostic["time_after_edge"]) * 1e3
-    residual_nm = np.asarray(diagnostic["residual"]) * 1e9
-    band_nm = np.asarray(diagnostic["band_residual"]) * 1e9
-    envelope_nm = np.asarray(diagnostic["band_envelope"]) * 1e9
-    stride = 10
-
-    fig, (ax_residual, ax_envelope) = plt.subplots(
-        2, 1, figsize=(11.2, 7.4), sharex=True)
-    ax_residual.plot(
-        time_ms[::stride], residual_nm[::stride], color="#9b2f3d",
-        linewidth=0.85, alpha=0.72, label="Complete residual")
-    ax_residual.plot(
-        time_ms[::stride], band_nm[::stride], color="#277da1",
-        linewidth=1.05, label="620–760 Hz component")
-    ax_residual.axvline(0.0, color="#202020", linestyle=":", linewidth=1.0,
-                       label="Single 5 µm edge")
-    ax_residual.set_ylabel("Full − reduced (nm)")
-    ax_residual.set_title("300 ms single-edge residual: one excitation, no later command edges")
-    ax_residual.legend(loc="upper right", fontsize=8.3, ncol=3)
-
-    positive_time = time_ms >= 0.0
-    ax_envelope.plot(
-        time_ms[positive_time][::stride], envelope_nm[positive_time][::stride],
-        color="#277da1", linewidth=1.65, label="691/696 Hz analytic envelope")
-    sample_times_ms = np.asarray(diagnostic["envelope_sample_delays"]) * 1e3
-    sample_values_nm = np.asarray(diagnostic["envelope_samples_nm"])
-    ax_envelope.scatter(
-        sample_times_ms, sample_values_nm, color="#277da1", s=24, zorder=4,
-        label="50 ms samples")
-    fit_time = np.linspace(50.0, 250.0, 500)
-    fit_envelope = np.exp(
-        float(diagnostic["late_decay_fit_intercept"])
-        + float(diagnostic["late_decay_fit_slope"]) * fit_time * 1e-3) * 1e9
-    ax_envelope.plot(
-        fit_time, fit_envelope, color="#d97800", linestyle="--", linewidth=1.45,
-        label=f"Late exponential fit: τ = {diagnostic['late_decay_time_constant'] * 1e3:.1f} ms")
-    observed_peak_ms = float(diagnostic["envelope_peak_time_after_edge"]) * 1e3
-    predicted_maximum_ms = float(diagnostic["predicted_first_beat_maximum"]) * 1e3
-    predicted_node_ms = float(diagnostic["predicted_first_beat_node"]) * 1e3
-    ax_envelope.axvline(
-        observed_peak_ms, color="#2a7f62", linewidth=1.0,
-        label=f"Observed single maximum: {observed_peak_ms:.1f} ms")
-    ax_envelope.axvline(
-        predicted_maximum_ms, color="#7655a6", linestyle=":", linewidth=1.2,
-        label=f"Frequency-only beat maximum: {predicted_maximum_ms:.1f} ms")
-    ax_envelope.axvline(
-        predicted_node_ms, color="#7655a6", linestyle="--", linewidth=1.2,
-        label=f"Frequency-only beat node: {predicted_node_ms:.1f} ms")
-    ax_envelope.set_xlabel("Time after the only command edge (ms)")
-    ax_envelope.set_ylabel("Band envelope (nm)")
-    ax_envelope.set_title(
-        f"No {diagnostic['frequency_difference_hz']:.2f} Hz beat: after its "
-        f"{observed_peak_ms:.1f} ms buildup, the envelope follows the full-mode decay")
-    ax_envelope.legend(loc="upper right", fontsize=8.0, ncol=2)
-    ax_envelope.set_xlim(-5.0, 295.0)
-    for axis in (ax_residual, ax_envelope):
-        axis.grid(True, which="major", color="#d1d1d1", linewidth=0.7)
-        axis.grid(True, which="minor", color="#eeeeee", linewidth=0.45)
-    fig.suptitle(
-        "Full-versus-reduced mechanism check — damping mismatch, not a sustained beat",
-        fontsize=14.5, fontweight="bold")
-    fig.text(
-        0.5, 0.012,
-        f"A frequency-only interpretation predicts a maximum near {predicted_maximum_ms:.1f} ms "
-        f"and a node near {predicted_node_ms:.1f} ms. The measured band envelope has neither; "
-        f"its fitted {diagnostic['late_decay_time_constant'] * 1e3:.1f} ms decay matches the "
-        f"full {verification['full_upper_damped_mode'][0]:.1f} Hz modal time constant.",
-        ha="center", fontsize=8.4, color="#555555")
-    fig.tight_layout(rect=(0.02, 0.045, 0.99, 0.95))
-    output = ASSET_DIR / "full_reduced_single_edge_diagnostic.svg"
-    save_svg(fig, output)
-    plt.close(fig)
-    return output
-
-
 def plot_position_dependence() -> Path:
     # A 150 mm stage stroke within about 170 mm usable screw travel implies a
     # 20 mm minimum support-to-nut free length in this illustrative datum.
@@ -3219,7 +3933,7 @@ def plot_stepper_resonance_visibility() -> Path:
     fig, (stage_ax, drive_ax) = plt.subplots(1, 2, figsize=(11.4, 4.7), sharex=True)
     for zeta, color in zip(damping_ratios, colors):
         c_m = 2.0 * zeta * np.sqrt(constants["K_m"] * constants["m_d"])
-        damping = MODEL["c_ax"] * coupling + c_m * np.outer(H["d"], H["d"])
+        damping = constants["c_ax"] * coupling + c_m * np.outer(H["d"], H["d"])
         stage_response = _matrix_frequency_response(
             frequencies, mass, damping, stiffness, input_vector, 1)
         drive_response = _matrix_frequency_response(
@@ -3476,12 +4190,20 @@ def generated_reduction_convergence(verification: dict[str, object]) -> str:
     discarded_frequency, discarded_zeta = verification["first_discarded_damped_mode"]
     full_upper_frequency, full_upper_zeta = verification["full_upper_damped_mode"]
     reduced_upper_frequency, reduced_upper_zeta = verification["reduced_upper_damped_mode"]
-    single_edge = verification["single_edge"]
     edge_spacing = VERIFICATION_EDGES[1] - VERIFICATION_EDGES[0]
     full_upper_carryover = np.exp(
         -full_upper_zeta * 2.0 * np.pi * full_upper_frequency * edge_spacing)
     discarded_carryover = np.exp(
         -discarded_zeta * 2.0 * np.pi * discarded_frequency * edge_spacing)
+    full_lower_frequency, full_lower_zeta_value = verification["full_lower_damped_mode"]
+    full_lower_carryover = np.exp(
+        -full_lower_zeta_value * 2.0 * np.pi * full_lower_frequency * edge_spacing)
+    edge_peak_values = np.asarray(verification["edge_peaks_nm"])
+    edge_growth = float(edge_peak_values[-1] / edge_peak_values[0])
+    # Damping ratio that would make a single drive-pole carryover reproduce the
+    # observed growth; reported only to show that it is not the executed value.
+    zeta_1_for_observed = -np.log(max(1.0 - 1.0 / edge_growth, 1e-12)) / (
+        2.0 * np.pi * full_lower_frequency * edge_spacing)
     lines = [
         "<!-- BEGIN GENERATED REDUCTION CONVERGENCE -->",
         "### Solver-convergence and residual audit",
@@ -3507,38 +4229,101 @@ def generated_reduction_convergence(verification: dict[str, object]) -> str:
         )
     edge_peaks = ", ".join(
         f"{value:.1f}" for value in np.asarray(verification["edge_peaks_nm"]))
-    envelope_samples = ", ".join(
-        f"{delay * 1e3:.0f} ms: {value:.1f} nm"
-        for delay, value in zip(
-            np.asarray(single_edge["envelope_sample_delays"]),
-            np.asarray(single_edge["envelope_samples_nm"])))
+    residual_rows = list(verification["route_residuals"])
+    by_key = {str(row["key"]): row for row in residual_rows}
+    executed, interface, measured = by_key["P"], by_key["F"], by_key["M"]
+    cb_two_dof, craig_bampton = by_key["C2"], by_key["CB"]
+    damping_only_change = 100.0 * abs(
+        float(interface["rms_residual_nm"]) - float(executed["rms_residual_nm"])
+    ) / float(executed["rms_residual_nm"])
+    truncation_factor = (float(executed["rms_residual_nm"])
+                         / float(craig_bampton["rms_residual_nm"]))
+    full_settling = SETTLING_2PCT_FACTOR / (
+        full_upper_zeta * 2.0 * np.pi * full_upper_frequency)
+    reduced_settling = SETTLING_2PCT_FACTOR / (
+        reduced_upper_zeta * 2.0 * np.pi * reduced_upper_frequency)
+    constants = physical_constants()
+    dwell = constants["plateau_dwell"]
+    separation_ratio = (constants["axial_mode_target_hz"] / discarded_frequency)**2
     lines.extend([
         "",
         "The 25 µs result is not a coarse but usable answer: it is mathematically unstable for this ten-DOF state matrix. "
         f"The unplotted full model reaches {max(verification['full_modes']) / 1e3:.2f} kHz, and the largest RK4 amplification magnitude is greater than one. "
-        "The 12.5, 6.25, and production 2.5 µs results converge to the same output residual, so the rising envelope is not integration drift.",
+        "The 12.5, 6.25, and production 2.5 µs results converge to the same output residual, so the inter-edge growth below is not integration drift.",
         "",
         f"Both static gains are unity to numerical precision ($G_{{full}}(0)={verification['full_dc_gain']:.12f}$ and $G_{{red}}(0)={verification['reduced_dc_gain']:.12f}$), and the residual is zero before the first edge. "
         f"The four successive inter-edge peak magnitudes are {edge_peaks} nm. "
         f"The strongest residual spectral energy is near {verification['dominant_residual_frequency_hz']:.1f} Hz; the visibly faster ripple is near {verification['ripple_residual_frequency_hz']:.1f} Hz.",
         "",
-        f"The growth is therefore not explained by the {discarded_frequency:.1f} Hz ripple alone. "
+        f"The residual is not explained by the {discarded_frequency:.1f} Hz ripple alone. "
         f"That full-model mode has $\\zeta={discarded_zeta:.5f}$ and retains only {100.0 * discarded_carryover:.1f}% of its amplitude over the 20 ms edge spacing. "
-        f"The more important accumulation mechanism is the upper retained-mode mismatch: the full model has {full_upper_frequency:.1f} Hz with $\\zeta={full_upper_zeta:.5f}$, whereas the reduced model has {reduced_upper_frequency:.1f} Hz with $\\zeta={reduced_upper_zeta:.5f}$. "
-        f"The full-model mode retains about {100.0 * full_upper_carryover:.1f}% over 20 ms, so successive edges arrive before it has decayed. "
-        "This exposes a damping-consistency limitation in the reduction, not a time-integration failure.",
+        f"It is also the pole that sets the timescale-separation ratio used in [Appendix E.8.2](#e-8-equivalence-proofs-and-error-bounds): "
+        f"$({constants['axial_mode_target_hz']:.2f}/{discarded_frequency:.1f})^2={separation_ratio:.3f}$. "
+        f"The retained upper mode carries some of the rest: the full model has {full_upper_frequency:.1f} Hz with $\\zeta_2={full_upper_zeta:.5f}$ against the reduced model's {reduced_upper_frequency:.1f} Hz with $\\zeta_2={reduced_upper_zeta:.5f}$, "
+        f"the two damping ratios differing by {100.0 * abs(reduced_upper_zeta - full_upper_zeta) / full_upper_zeta:.0f}%. "
+        "The two plants now agree about how fast that mode decays, so what remains is not a damping inconsistency.",
         "",
-        "### 300 ms single-edge mechanism check",
+        f"The peaks still climb, by a factor of {edge_growth:.2f} across the four edges, and no single-mode carryover argument reproduces that. "
+        f"The upper mode retains {100.0 * full_upper_carryover:.1f}% of its amplitude over the 20 ms edge spacing, which would cap the accumulation at "
+        f"{1.0 / (1.0 - full_upper_carryover):.2f}; the drive pole, which the per-plant audit below identifies as the dominant residual line, retains only "
+        f"{100.0 * full_lower_carryover:.1f}% at $\\zeta_1={full_lower_zeta_value:.4f}$ and would cap it at {1.0 / (1.0 - full_lower_carryover):.2f}. "
+        f"Matching the observed {edge_growth:.2f} from the drive pole alone would need $\\zeta_1\\approx{zeta_1_for_observed:.3f}$ against the executed {full_lower_zeta_value:.4f}. "
+        "The growth is therefore bounded and modest but is not attributed to one mode here: it is a difference signal between two plants whose poles differ in frequency as well as amplitude, "
+        "and a scalar carryover argument does not apply to it.",
         "",
-        "![Single-edge full/reduced residual and 691/696 Hz envelope test](rendered_assets/full_reduced_single_edge_diagnostic.svg)",
+        "### Per-plant residual audit",
         "",
-        f"After one 5 µm edge at 5 ms, the command is held unchanged through 300 ms. "
-        f"The {full_upper_frequency:.1f}/{reduced_upper_frequency:.1f} Hz frequency difference is {single_edge['frequency_difference_hz']:.3f} Hz, so a frequency-only beat would have its first envelope maximum at {single_edge['predicted_first_beat_maximum'] * 1e3:.1f} ms after the edge and its first node at {single_edge['predicted_first_beat_node'] * 1e3:.1f} ms. "
-        f"The observed band envelope instead reaches one early maximum at {single_edge['envelope_peak_time_after_edge'] * 1e3:.1f} ms and then decreases: {envelope_samples}.",
+        f"Every Section 6 candidate is driven with the same command and differenced against the same ten-DOF stage output at the production {VERIFICATION_DT * 1e6:.1f} µs step. "
+        "The damping question and the truncation question are then separated by measurement instead of inference.",
         "",
-        f"An exponential fit from 50 to 250 ms gives a decay time constant of {single_edge['late_decay_time_constant'] * 1e3:.1f} ms. "
-        f"That matches the full model's {single_edge['full_modal_time_constant'] * 1e3:.1f} ms modal time constant, while the reduced mode decays in only {single_edge['reduced_modal_time_constant'] * 1e3:.1f} ms. "
-        "There is no maximum near the predicted beat time, no node near 201 ms, and no subsequent envelope regrowth. **The test therefore rejects a sustained beat as the cause of the multi-edge growth.** The mechanism is the damping mismatch: each edge re-excites the slowly decaying full-model 691 Hz motion after the corresponding reduced-model motion has largely disappeared.",
+        "| Reduced plant | Coordinates | Damping basis | $f_1$ (Hz) | $\\zeta_1$ | $f_2$ (Hz) | $\\zeta_2$ | RMS residual | Peak residual |",
+        "|---|---:|---|---:|---:|---:|---:|---:|---:|",
+    ])
+    full_lower, full_lower_zeta = verification["full_lower_damped_mode"]
+    for row in residual_rows:
+        lines.append(
+            f"| {row['label']} | {row['coordinates']} | {row['basis']} | "
+            f"{row['lower_hz']:.2f} | {row['lower_zeta']:.4f} | "
+            f"{row['upper_hz']:.2f} | {row['upper_zeta']:.3e} | "
+            f"{row['rms_residual_nm']:.3f} nm ({row['rms_residual_pct_command']:.3f}%) | "
+            f"{row['peak_residual_nm']:.3f} nm ({row['peak_residual_pct_command']:.3f}%) |"
+        )
+    lines.extend([
+        f"| **Ten-DOF reference** | 10 | element-wise $\\eta_j$ | **{full_lower:.2f}** | **{full_lower_zeta:.4f}** | "
+        f"**{full_upper_frequency:.2f}** | **{full_upper_zeta:.3e}** | - | - |",
+        "",
+        "Every plant in the table has unity static gain, so none of the residual is a compliance error.",
+        "",
+        f"Damping assignment is now nearly irrelevant to the residual. The executed plant and the interface-propagated plant differ in $\\zeta_2$ by only a factor of {executed['upper_zeta'] / interface['upper_zeta']:.2f}, "
+        f"and their RMS residuals differ by {damping_only_change:.1f}%. The measured-mass plant is the exception at {100.0 * (measured['rms_residual_nm'] / executed['rms_residual_nm'] - 1.0):.0f}% worse, "
+        f"and it is worse precisely because its $\\zeta_2$ is set by the separately assumed measured relative damping rather than by the interface loss factors, leaving it an order of magnitude underdamped against the ten-DOF plant. "
+        f"Coordinate content does the rest: the 2-DOF plant rebuilt at the Craig-Bampton frequency of {cb_two_dof['upper_hz']:.2f} Hz drops the RMS residual to {cb_two_dof['rms_residual_nm']:.1f} nm, "
+        f"and restoring one eliminated coordinate drops it to {craig_bampton['rms_residual_nm']:.1f} nm, a factor of {truncation_factor:.1f} below the executed plant.",
+        "",
+        f"**With the damping question removed, coordinate truncation is what is left.** "
+        f"Every two-coordinate plant that carries a defensible damping value lands within {100.0 * abs(interface['rms_residual_nm'] - executed['rms_residual_nm']) / executed['rms_residual_nm']:.1f}% of the same residual, "
+        f"and only adding a coordinate moves it, by a factor of {truncation_factor:.1f}. "
+        "This is the measurement behind the [Section 6.3](#6-3-reduction-evidence) row, and it is now a clean one-variable result rather than an inference drawn across two confounded variables.",
+        "",
+        f"**The $f_1$ column locates the error, and it is not where the section previously looked.** "
+        f"The strongest residual line has moved to {verification['dominant_residual_frequency_hz']:.1f} Hz, near the drive pole rather than near the axial mode. "
+        f"Every two-coordinate plant places that pole at {executed['lower_hz']:.2f} Hz against the ten-DOF value of {full_lower:.2f} Hz, "
+        f"a {100.0 * abs(executed['lower_hz'] - full_lower) / full_lower:.2f}% error that static condensation cannot remove because it is a dynamic-participation effect, not a static-stiffness one. "
+        f"Restoring one fixed-interface coordinate corrects it to {craig_bampton['lower_hz']:.2f} Hz, within {100.0 * abs(craig_bampton['lower_hz'] - full_lower) / full_lower:.3f}%. "
+        f"The decomposition is therefore explicit: damping assignment is worth {100.0 * abs(interface['rms_residual_nm'] - executed['rms_residual_nm']) / executed['rms_residual_nm']:.1f}%, "
+        f"aligning the upper mode is worth {100.0 * (executed['rms_residual_nm'] - cb_two_dof['rms_residual_nm']) / executed['rms_residual_nm']:.0f}%, "
+        f"and correcting the drive pole is worth a further {100.0 * (cb_two_dof['rms_residual_nm'] - craig_bampton['rms_residual_nm']) / executed['rms_residual_nm']:.0f}%; "
+        f"the last {100.0 * craig_bampton['rms_residual_nm'] / executed['rms_residual_nm']:.0f}% is removed by none of the three and is the residual the three-coordinate plant still carries. "
+        "This also prices the one assumption that [E.3](#e-3-direct-series-compliance-reduction) could previously only bound: dropping the eliminated axial inertia costs half a percent on the drive pole, and that half percent is now the largest single term in the reduction residual.",
+        "",
+        "### Consequence for the Section 11 dwell",
+        "",
+        f"The ten-DOF upper mode now implies a 2% settling time of {full_settling * 1e3:.1f} ms, against {reduced_settling * 1e3:.1f} ms for the reduced plant. "
+        f"[Section 11](#11-generated-numerical-summary) runs its nonlinear campaign on a {dwell * 1e3:.0f} ms plateau dwell, set from the {constants['settling_time_2pct'] * 1e3:.1f} ms commutation-mode estimate and a {dwell * 1e3:.0f} ms floor. "
+        + (f"That floor is adequate: it exceeds the axial-mode settling time by a factor of {dwell / full_settling:.1f}, so the settled-window statistics are collected after the 691 Hz mode has decayed. "
+           "The earlier finding that the dwell was short by a factor of six was a consequence of the understated interface loss factors and does not survive their correction."
+           if full_settling < dwell else
+           f"That floor is still short of the axial-mode settling time by a factor of {full_settling / dwell:.1f}, so the settled-window statistics are collected while the 691 Hz mode is still ringing."),
         "",
         "### How to interpret the top-right trajectory",
         "",
@@ -3694,6 +4479,225 @@ def update_generated_bode_comparison(summary: str) -> None:
     DERIVATION_MD.write_text(pattern.sub(lambda _match: summary, source), encoding="utf-8")
 
 
+SITE_TITLES = {"g": "Guideway $g$", "n": "Nut microslip $n$", "d": "Drive side $d$"}
+
+
+def generated_tau_c_sensitivity(study: dict[str, object]) -> str:
+    """Build the Section 13.3 Stribeck-relaxation-time sensitivity block."""
+    rows = list(study["rows"])
+    force_spread = float(study["force_spread_N"])
+    loop_spread = float(study["loop_spread_J"])
+    force_gap = float(study["law_gap_force_N"])
+    loop_gap = float(study["law_gap_loop_J"])
+    bounded = force_spread < force_gap and loop_spread < loop_gap
+    lines = [
+        "<!-- BEGIN GENERATED TAU C SENSITIVITY -->",
+        "$C$ is the least anchored parameter in Section 8: it is identified from measured hysteresis loops in the source GMS work and is assumed here. "
+        "The A/A2 guideway memory sequence is rerun at three relaxation times spanning a factor of four, and the two metrics that can see the attractor dynamics are reported.",
+        "",
+        "| $\\tau_C$ | Guideway $C$ | $F_{ret}$ (A2) | $A_{loop}$ (A2) |",
+        "|---:|---:|---:|---:|",
+    ]
+    for row in rows:
+        lines.append(
+            f"| {row['tau_C'] * 1e3:.1f} ms | {row['C_site']:.0f} N/s | "
+            f"{row['force_mismatch_N']:.5f} N | {row['loop_area_J']:.4e} J |"
+        )
+    verdict = (
+        "**$C$ is not a dominant uncertainty over this range.** "
+        if bounded else
+        "**$C$ must be identified before the law comparison means anything.** "
+    )
+    lines.extend([
+        "",
+        f"Across a four-fold change in $\\tau_C$ the return-force mismatch spreads by {force_spread:.5f} N and the loop area by {loop_spread:.3e} J, "
+        f"against GMS-minus-LuGre gaps of {force_gap:.5f} N and {loop_gap:.3e} J on the same metrics. "
+        + verdict
+        + (f"The spread is {100.0 * force_spread / force_gap:.1f}% of the force gap and {100.0 * loop_spread / loop_gap:.1f}% of the loop-area gap, "
+           "so the law comparison in Section 9 survives the assumption. This bounds a weakness rather than removing it: "
+           "the reported insensitivity holds over the tested range and does not license an arbitrary value."
+           if bounded else
+           "The assumed value changes the comparison by more than the effect the comparison is designed to detect."),
+        "",
+        f"The upper bound on $\\tau_C$ is dynamic, not statistical. The retained mode has a period of {float(study['mode_period_ms']):.3f} ms, "
+        f"and the executed $\\tau_C$ is {float(study['mode_ratio']):.1f} times faster. At 0.4 ms that margin falls to "
+        f"{float(study['mode_period_ms']) / 0.4:.1f}, which is inside the range where the attractor dynamics begin to alias into the structural response; "
+        "below roughly 0.05 ms it stiffens the ODE without adding physics.",
+        "<!-- END GENERATED TAU C SENSITIVITY -->",
+    ])
+    return "\n".join(lines)
+
+
+def update_generated_tau_c_sensitivity(summary: str) -> None:
+    source = DERIVATION_MD.read_text(encoding="utf-8")
+    pattern = re.compile(
+        r"<!-- BEGIN GENERATED TAU C SENSITIVITY -->.*?<!-- END GENERATED TAU C SENSITIVITY -->",
+        flags=re.DOTALL,
+    )
+    if not pattern.search(source):
+        raise RuntimeError("Generated tau_C markers are missing from the derivation document")
+    DERIVATION_MD.write_text(pattern.sub(lambda _match: summary, source), encoding="utf-8")
+
+
+def generated_branch_census(study: dict[str, object],
+                            departure: dict[str, object]) -> str:
+    """Build the Section 13.2 branch-selection census and its verdict."""
+    rows = list(study["rows"])
+    threshold_total = int(study["threshold_total"])
+    reversal_total = int(study["reversal_total"])
+    evaluation_total = int(study["evaluation_total"])
+    lines = [
+        "<!-- BEGIN GENERATED BRANCH CENSUS -->",
+        "The executed GMS branch test is stateless: it reconstructs stick or slip from "
+        "$(v,F_i)$ at every Runge-Kutta evaluation instead of carrying a persistent per-element flag. "
+        "This census advances a shadow persistent flag alongside the executed trajectory and counts where the two disagree. "
+        "The shadow flag never feeds a derivative, so collecting it cannot change any reported result. "
+        "Counts are element-evaluations: four elements per site per RK stage, over the full main sequence.",
+        "",
+        "| Case | Site | `flips_reversal` | `flips_threshold` | `evals_total` | Threshold share |",
+        "|---|---|---:|---:|---:|---:|",
+    ]
+    for row in rows:
+        evaluations = max(int(row["evals_total"]), 1)
+        lines.append(
+            f"| {row['case']} | {SITE_TITLES[str(row['site'])]} | {row['flips_reversal']:,} | "
+            f"{row['flips_threshold']:,} | {row['evals_total']:,} | "
+            f"{100.0 * int(row['flips_threshold']) / evaluations:.3f}% |"
+        )
+    lines.extend([
+        "",
+        "`flips_reversal` counts transitions to stick caused by $vF_i\\le0$, which both models make. "
+        "`flips_threshold` counts transitions to stick caused by $|F_i|<\\nu_is(v)$ with no velocity reversal, "
+        "which the persistent-state model would not make. Only the second column is a departure.",
+        "",
+    ])
+    if threshold_total == 0:
+        lines.extend([
+            "**`flips_threshold` is zero across A2, B2, and C2.** For these trajectories the stateless test is "
+            "equivalent to the persistent-state model and the departure is inert. No counterfactual rerun is required.",
+            "",
+        ])
+    else:
+        lines.extend([
+            f"**`flips_threshold` is not zero: {threshold_total:,} element-evaluations across A2, B2, and C2**, "
+            f"against {reversal_total:,} genuine reversals and {evaluation_total:,} evaluations. "
+            "The departure is therefore active, and it is the dominant re-stick mechanism rather than a rare corner: "
+            f"threshold-driven reclassification outnumbers reversal-driven re-stick by {threshold_total / max(reversal_total, 1):.0f} to 1. "
+            "Its cost is priced by rerunning each affected case with the shadow flag enforced, so that a yielded element keeps "
+            "slipping and chases the rising threshold at rate $C$ until an actual reversal.",
+            "",
+            "| Case | Executed settled-window RMS | Persistent-flag rerun | Change |",
+            "|---|---:|---:|---:|",
+        ])
+        enforced = dict(study["enforced"])
+        for key, record in enforced.items():
+            lines.append(
+                f"| {key} | {record['baseline_rms_nm']:.3f} nm | {record['settled_rms_nm']:.3f} nm | "
+                f"{record['delta_nm']:+.3f} nm ({record['delta_pct']:+.2f}%) |"
+            )
+        worst = max(abs(float(record["delta_pct"])) for record in enforced.values())
+        lines.extend([
+            "",
+            f"The largest settled-window change is {worst:.2f}%. **That number understates the departure, and the reason is structural.** "
+            "The settled window is the final 20 ms of a single plateau, sampled after motion has stopped, whereas the departure occurs "
+            "during deceleration while $s(v)$ is rising. A metric evaluated at rest on one plateau has no mechanism for seeing it.",
+            "",
+            "The nut site records zero threshold flips in both B2 and C2. In steady motion the nut-port velocity $\\dot x_d-\\dot x_s$ "
+            "is identically zero because the elastic deformation is constant, so every nut element is stuck and no branch decision is "
+            "ever contested. See [8.0](#8-0-how-the-friction-laws-attach-to-the-plant).",
+            "",
+            "#### Re-priced against the Section 9.4 loop metrics",
+            "",
+            "The repeated-return metrics compare settled means at the *same* command level reached by different histories, so their value "
+            "depends on every intervening deceleration. The loop area is integrated along the dynamic trace itself. Both can see what the "
+            "settled window cannot. The threshold column is the GMS-minus-LuGre gap on the same metric: the effect the Section 9 experiment "
+            "exists to detect, and therefore the level the departure has to stay below to count as bookkeeping.",
+            "",
+            "| Case | Metric | Executed (stateless) | Persistent-flag rerun | Change | GMS − LuGre gap | Exceeds? |",
+            "|---|---|---:|---:|---:|---:|---|",
+        ])
+        for record in departure["records"]:
+            digits = int(record["digits"])
+            unit = str(record["unit"])
+            lines.append(
+                f"| {record['case']} | {record['metric']} | "
+                f"{float(record['executed']):.{digits}g} {unit} | "
+                f"{float(record['persistent']):.{digits}g} {unit} | "
+                f"{float(record['delta']):+.{digits}g} {unit} | "
+                f"{float(record['law_gap']):.{digits}g} {unit} | "
+                f"{'**yes**' if record['exceeds_law_gap'] else 'no'} |"
+            )
+        force_records = [r for r in departure["records"] if "F_{ret}" in str(r["metric"])]
+        worst_force = max(force_records,
+                          key=lambda r: abs(float(r["delta"])) / max(float(r["law_gap"]), 1e-30))
+        force_fraction = 100.0 * abs(float(worst_force["delta"])) / float(worst_force["law_gap"])
+        lines.extend([
+            "",
+            f"On the metric the experiment is built around, the departure moves $F_{{ret}}$ for {worst_force['case']} by "
+            f"{abs(float(worst_force['delta'])):.4f} N against a law gap of {float(worst_force['law_gap']):.4f} N, which is "
+            f"{force_fraction:.0f}% of the effect being measured.",
+            "",
+        ])
+        if bool(departure["any_exceeds"]):
+            exceeded = ", ".join(
+                f"{record['case']} {record['metric']}"
+                for record in departure["records"] if record["exceeds_law_gap"])
+            lines.append(
+                "**The departure is not a bookkeeping detail.** It changes at least one Section 9.4 metric by more than the "
+                f"GMS-minus-LuGre difference on that same metric ({exceeded}), which means it is comparable to the effect the "
+                "experiment is designed to detect. Persistent branch flags must be added before any GMS parameter is identified "
+                "from this model. The 1.08% settled-window figure above is retained because it is correct for what it measures, "
+                "but it does not govern: these metrics do.")
+        else:
+            lines.append(
+                "No Section 9.4 metric moves by more than the GMS-minus-LuGre difference on that metric, so the departure stays "
+                "below the effect the experiment is designed to detect. It remains a defect to close before identification, "
+                "because the margin is not large.")
+    lines.append("<!-- END GENERATED BRANCH CENSUS -->")
+    return "\n".join(lines)
+
+
+def update_generated_branch_census(summary: str) -> None:
+    source = DERIVATION_MD.read_text(encoding="utf-8")
+    pattern = re.compile(
+        r"<!-- BEGIN GENERATED BRANCH CENSUS -->.*?<!-- END GENERATED BRANCH CENSUS -->",
+        flags=re.DOTALL,
+    )
+    if not pattern.search(source):
+        raise RuntimeError("Generated branch-census markers are missing from the derivation document")
+    DERIVATION_MD.write_text(pattern.sub(lambda _match: summary, source), encoding="utf-8")
+
+
+def branch_census_sentence(study: dict[str, object]) -> str:
+    """One-line census summary baked into the Section 8.3 live equation."""
+    parts = [
+        f"{row['case']}/{row['site']}: reversal {row['flips_reversal']:,}, "
+        f"threshold {row['flips_threshold']:,}, evals {row['evals_total']:,}"
+        for row in study["rows"]
+    ]
+    verdict = ("departure inert for these trajectories"
+               if int(study["threshold_total"]) == 0
+               else f"{int(study['threshold_total']):,} threshold flips total; "
+                    "see Section 13.2 for the priced counterfactual")
+    return "GMS branch census - " + "; ".join(parts) + ". " + verdict + "."
+
+
+def friction_port_sentence() -> str:
+    """One-line port and integrated-state summary baked into Section 8.0."""
+    parts = []
+    for key, case in CASES.items():
+        sites = ",".join(case["sites"]) if case["sites"] else "none"
+        if case["friction"] == "lugre":
+            friction_states = len(case["sites"])
+        elif case["friction"] == "gms":
+            friction_states = GMS_N * len(case["sites"])
+        else:
+            friction_states = 0
+        parts.append(f"{key}: sites {sites}, {4 + friction_states} live states")
+    return ("Friction ports per case - " + "; ".join(parts)
+            + f". The allocated RK4 vector is a fixed {STATE_SIZE} entries; inactive site blocks hold zero derivatives.")
+
+
 def generated_presliding_summary(experiments: dict[str, dict[str, object]]) -> str:
     lines = [
         "<!-- BEGIN GENERATED PRESLIDING SUMMARY -->",
@@ -3704,6 +4708,7 @@ def generated_presliding_summary(experiments: dict[str, dict[str, object]]) -> s
         ("Mean repeated-return deviation mismatch", "return_error_mismatch_nm", "nm", False),
         ("Mean repeated-return friction-force mismatch", "return_force_mismatch_N", "N", False),
         ("Absolute mean error after final return to zero", "final_mean_nm", "nm", True),
+        ("Dissipated energy of the closed loop $A_{loop}$", "loop_area_J", "J", False),
     )
     for experiment_name, experiment in experiments.items():
         metrics = experiment["metrics"]
@@ -3728,7 +4733,7 @@ def generated_presliding_summary(experiments: dict[str, dict[str, object]]) -> s
             gms = float(metrics[gms_key][key])
             if use_absolute:
                 lugre, gms = abs(lugre), abs(gms)
-            precision = 4 if unit == "N" else 2
+            precision = 9 if unit == "J" else 4 if unit == "N" else 2
             lines.append(
                 f"| {label} | {lugre:.{precision}f} {unit} | {gms:.{precision}f} {unit} | "
                 f"{gms - lugre:+.{precision}f} {unit} |"
@@ -3846,6 +4851,47 @@ def _format_default_like(value: object, template: str) -> str:
     return f"{numeric:.12g}"
 
 
+def _format_derived_value(key: str, value: object, template: str) -> str:
+    """Mirror the browser's display-unit formatting for initial HTML output."""
+    numeric = float(value)
+    if re.fullmatch(r"route_[psbfcm]_(kax|kball)", key) or key == "route_s_kax_full":
+        return f"{numeric / 1.0e6:.3f}"
+    if re.fullmatch(r"route_[psbfcm]_settling", key) or key == "full_model_settling":
+        return f"{numeric * 1.0e3:.1f}"
+    if key == "torsional_share":
+        return f"{100.0 * numeric:.3f}"
+    if re.fullmatch(r"route_[psbfcm]_(md|ms)", key):
+        return f"{numeric:.3f}"
+    if re.fullmatch(r"route_[psbfcm]_cax", key) or key == "interface_axial_damping":
+        return f"{numeric:.2f}"
+    if re.fullmatch(r"route_[psbfcm]_zeta", key) or key == "full_model_zeta":
+        return f"{numeric:.3e}"
+    if re.fullmatch(r"route_[psbfcm]_f[12]", key):
+        return f"{numeric:.2f}"
+    if key in {"mass_ratio", "reduced_mu", "mu_fraction", "cb_frequency_delta",
+               "cb_damping_delta"}:
+        digits = 4 if key in {"reduced_mu", "mu_fraction"} else 2
+        return f"{numeric:.{digits}f}"
+    if key in {"fixed_interface_separation", "discarded_pole_separation"}:
+        return f"{numeric:.3f}"
+    if (re.fullmatch(r"yield_[gnd]_[1-4]_(fs|fc)", key)
+            or re.fullmatch(r"static_deflection_[gnd]", key)):
+        return f"{numeric * 1.0e6:.2f}"
+    if re.fullmatch(r"yield_span_[gnd]", key):
+        return f"{numeric:.1f}"
+    if re.fullmatch(r"gms_rate_[gnd]", key):
+        return f"{numeric:.0f}"
+    if re.fullmatch(r"tau_C_[gnd]", key) or key == "retained_mode_period":
+        return f"{numeric * 1.0e3:.3f}"
+    if key.startswith("detent_velocity_"):
+        return f"{numeric * 1.0e3:.3f}"
+    if key in {"d_Fs_efficiency_estimate", "tau_C_mode_ratio"}:
+        return f"{numeric:.2f}"
+    if key == "d_Fs_torque_equivalent":
+        return f"{numeric * 1.0e3:.3f}"
+    return _format_default_like(numeric, template)
+
+
 def browser_parameter_defaults() -> dict[str, object]:
     """Single-source editable defaults emitted into both rendered documents."""
     p = component_parameters()
@@ -3856,15 +4902,22 @@ def browser_parameter_defaults() -> dict[str, object]:
         "detent_torque": MODEL["T_det"],
         "detent_phase": MODEL["detent_phase"],
         "axial_mode_target_hz": MODEL["axial_mode_target_hz"],
+        "m_eff_measured": MODEL["m_eff_measured"],
+        "zeta_relative_measured": MODEL["zeta_relative_measured"],
         "axial_damping": MODEL["c_ax"],
         "electromagnetic_zeta": MODEL["zeta_m"],
         "microstep_divisor": MODEL["microstep_divisor"],
+        "stribeck_delta": MODEL["stribeck_delta"],
+        "tau_C": MODEL["tau_C"],
+        "eta_screw": MODEL["eta_screw"],
+        "F_preload_nut": MODEL["F_preload_nut"],
         "J_m": p["J_m"],
         "J_c": p["J_c"],
         "screw_length": p["screw_length"],
         "usable_screw_travel": p["usable_screw_travel"],
         "stage_travel": p["stage_travel"],
-        "lead_accuracy_class": "IT1",
+        # BOM value for the installed screw.  The earlier IT1 entry was wrong.
+        "lead_accuracy_class": "IT3",
         "screw_diameter": p["screw_diameter"],
         "screw_density": p["screw_density"],
         "nut_mass": p["m_n"],
@@ -3876,7 +4929,10 @@ def browser_parameter_defaults() -> dict[str, object]:
         "k_sha": p["k_sha"],
         "k_shb": p["k_shb"],
         "k_mnt": p["k_mnt"],
-        "zeta_internal": p["zeta_internal"],
+        "zeta_steel": p["zeta_steel"],
+        "zeta_bearing": p["zeta_bearing"],
+        "zeta_ball_nut": p["zeta_ball_nut"],
+        "zeta_nut_mount": p["zeta_nut_mount"],
     }
     for site, values in FRICTION.items():
         defaults.update({
@@ -3895,13 +4951,14 @@ def browser_parameter_defaults() -> dict[str, object]:
     return defaults
 
 
+@lru_cache(maxsize=1)
 def browser_derived_defaults() -> dict[str, float]:
     """Derived defaults generated from the same equations as the simulations."""
     constants = physical_constants()
     component = component_parameters()
     mass, _damping, stiffness, _input = linear_matrices((), "none")
     modes = _linear_modes(mass, stiffness)
-    return {
+    defaults = {
         "transmission_ratio": constants["r"],
         "total_rotational_inertia": component["J_total"],
         "reduced_drive_mass": constants["m_d"],
@@ -3909,6 +4966,7 @@ def browser_derived_defaults() -> dict[str, float]:
         "magnetic_stiffness": constants["K_m"],
         "detent_stiffness": constants["K_det"],
         "reduced_axial_stiffness": constants["k_ax"],
+        "interface_axial_damping": constants["c_ax_interface"],
         "k_ball": constants["k_ball"],
         "full_step_pitch": constants["full_step"],
         "quarter_step_bound": constants["quarter_step"],
@@ -3922,6 +4980,52 @@ def browser_derived_defaults() -> dict[str, float]:
         "mode_1_hz": float(modes[0]),
         "mode_2_hz": float(modes[1]),
     }
+    defaults.update(multi_route_reduction_metrics())
+    defaults.update(friction_yield_metrics())
+    defaults.update(friction_provenance_metrics())
+    return defaults
+
+
+def friction_provenance_metrics() -> dict[str, float]:
+    """Derived cells that make the Section 8 parameter provenance visible."""
+    constants = physical_constants()
+    metrics: dict[str, float] = {}
+    for site, values in FRICTION.items():
+        metrics[f"gms_rate_{site}"] = float(values["C_gms"])
+        metrics[f"tau_C_{site}"] = float(
+            (values["F_s"] - values["F_c"]) / values["C_gms"])
+    # Drive-port breakaway estimated from screw efficiency.  This feeds the
+    # provenance cell only.  The transformer stays power conserving; see the
+    # standing constraint in Section 8.0.
+    metrics["d_Fs_efficiency_estimate"] = float(
+        MODEL["F_preload_nut"] * (1.0 / MODEL["eta_screw"] - 1.0))
+    metrics["d_Fs_torque_equivalent"] = float(FRICTION["d"]["F_s"] * constants["r"])
+    # Detent excites the structure at v / (one full-step pitch).  Sweep speeds
+    # for the constant-velocity identification must avoid these.
+    full_step = constants["full_step"]
+    mass, _damping, stiffness, _input = linear_matrices((), "none")
+    modes = _linear_modes(mass, stiffness)
+    metrics["detent_velocity_drive"] = float(modes[0] * full_step)
+    metrics["detent_velocity_axial"] = float(modes[1] * full_step)
+    metrics["detent_velocity_discarded"] = float(2001.95 * full_step)
+    metrics["retained_mode_period"] = float(1.0 / modes[1])
+    metrics["tau_C_mode_ratio"] = float(1.0 / (modes[1] * MODEL["tau_C"]))
+    return metrics
+
+
+def friction_yield_metrics() -> dict[str, float]:
+    """Per-element yield distances that make the GMS parameter table readable."""
+    metrics: dict[str, float] = {}
+    for site, values in FRICTION.items():
+        stiffness = GMS_STIFFNESS_FRACTIONS * values["sigma0"]
+        for level, force in (("fs", values["F_s"]), ("fc", values["F_c"])):
+            distances = GMS_WEIGHTS * force / stiffness
+            for index, distance in enumerate(distances, start=1):
+                metrics[f"yield_{site}_{index}_{level}"] = float(distance)
+        span = GMS_WEIGHTS * values["F_s"] / stiffness
+        metrics[f"yield_span_{site}"] = float(span[-1] / span[0])
+        metrics[f"static_deflection_{site}"] = float(values["F_s"] / values["sigma0"])
+    return metrics
 
 
 def render_inline(text: str) -> str:
@@ -3951,7 +5055,7 @@ def render_inline(text: str) -> str:
         key, value = match.group(1), match.group(2)
         escaped_key = html.escape(key, quote=True)
         authoritative = browser_derived_defaults().get(key, value.strip())
-        formatted = _format_default_like(authoritative, value)
+        formatted = _format_derived_value(key, authoritative, value)
         escaped_value = html.escape(formatted)
         return keep(
             f'<output class="derived-output" data-derived="{escaped_key}" '
@@ -4129,6 +5233,14 @@ def markdown_to_html(source: str) -> tuple[str, list[tuple[int, str, str]]]:
 
 def html_page(markdown_path: Path) -> str:
     source = markdown_path.read_text(encoding="utf-8")
+    # Keep Chapter 6 and its algebra together in the editable source, then
+    # place Appendix E after the numbered chapters in the rendered document.
+    if markdown_path == DERIVATION_MD:
+        appendix_start = source.find("\n## Appendix E. Order-reduction derivations")
+        chapter_7_start = source.find("\n## 7. Full-versus-reduced verification", appendix_start)
+        if appendix_start >= 0 and chapter_7_start > appendix_start:
+            appendix_e = source[appendix_start:chapter_7_start]
+            source = source[:appendix_start] + source[chapter_7_start:] + appendix_e + "\n"
     body, toc = markdown_to_html(source)
     title_match = re.search(r"^#\s+(.+)$", source, flags=re.MULTILINE)
     title = title_match.group(1) if title_match else markdown_path.stem
@@ -4136,6 +5248,7 @@ def html_page(markdown_path: Path) -> str:
     for level, label, section_id in toc:
         toc_html.append(f'<a class="toc-level-{level}" href="#{section_id}">{html.escape(label)}</a>')
     generated = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z")
+    derived_defaults = browser_derived_defaults()
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -4327,18 +5440,26 @@ function liveTransferData() {{
   const mNut = parameterNumber('nut_mass', 0.050);
   const ms = mStage + mNut;
   const axialModeTarget = parameterNumber('axial_mode_target_hz', 695.82);
+  const mEffMeasured = parameterNumber('m_eff_measured', 0.600);
+  const zetaRelativeMeasured = parameterNumber('zeta_relative_measured', 0.0014);
   const kbrg = parameterNumber('k_brg', 25.0e6);
   const ksha = parameterNumber('k_sha', 67.0e6);
   const kmnt = parameterNumber('k_mnt', 100.0e6);
   const cax = parameterNumber('axial_damping', 55.0);
   const zeta = parameterNumber('electromagnetic_zeta', 0.10);
-  const microstepDivisor = parameterNumber('microstep_divisor', 64);
+  const zetaSteel = parameterNumber('zeta_steel', 5.0e-4);
+  const zetaBearing = parameterNumber('zeta_bearing', 1.0e-2);
+  const zetaBallNut = parameterNumber('zeta_ball_nut', 1.15e-2);
+  const zetaNutMount = parameterNumber('zeta_nut_mount', 5.0e-3);
+  const microstepDivisor = parameterNumber('microstep_divisor', 256);
   if (!(lead>0 && teeth>0 && jm>0 && jc>=0 && screwLength>0 && usableScrewTravel>0 &&
         stageTravel>0 && stageTravel<=usableScrewTravel && usableScrewTravel<=screwLength && screwDiameter>0 &&
         screwDensity>0 && tmax>0 && tdet>=0 && couplingSeries>0 && kthetaA>0 &&
         mStage>0 && mNut>=0 &&
-        axialModeTarget>0 && kbrg>0 && ksha>0 && kmnt>0 &&
-        cax>=0 && zeta>=0 && microstepDivisor>=1))
+        axialModeTarget>0 && mEffMeasured>0 && zetaRelativeMeasured>0 &&
+        kbrg>0 && ksha>0 && kmnt>0 &&
+        cax>=0 && zeta>=0 && zetaSteel>=0 && zetaBearing>=0 && zetaBallNut>=0 &&
+        zetaNutMount>=0 && microstepDivisor>=1))
     throw new Error('Geometry, masses, torque, and stiffness must be positive; damping and detent torque cannot be negative.');
   const r = lead/(2*Math.PI);
   const screwRadius = screwDiameter/2;
@@ -4358,6 +5479,73 @@ function liveTransferData() {{
   if (!(remainingBallCompliance>0))
     throw new Error('The current axial inputs leave no positive compliance for k_ball.');
   const kBall = 1/remainingBallCompliance;
+  // Multi-route reduction comparison.  Route F deliberately uses the same
+  // adjacent/reduced masses as full_linear_matrices(), not one shared m_s.
+  const kc1 = 2*couplingSeries, kc2 = 2*couplingSeries;
+  const torsionalCompliance = r*r*(1/kc1 + 1/kc2 + 1/kthetaA);
+  const axialCompliance = 1/kbrg + 1/ksha + 1/kBall + 1/kmnt;
+  const kaxSeries = 1/axialCompliance;
+  const kaxSeriesFull = 1/(axialCompliance + torsionalCompliance);
+  const torsionalShare = torsionalCompliance/(axialCompliance + torsionalCompliance);
+  const w2 = 2*Math.PI*axialModeTarget;
+  const screwSegmentMass = screwMass/3;
+  const screwSegmentInertia = screwInertia/3;
+  const pairMass = (a,b) => a*b/(a+b);
+  const ballRelativeMass = 1/(r*r/screwSegmentInertia + 1/screwSegmentMass + 1/mNut);
+  const complexElements = [
+    {{k:kbrg, c:2*zetaBearing*Math.sqrt(kbrg*screwSegmentMass)}},
+    {{k:ksha, c:2*zetaSteel*Math.sqrt(ksha*pairMass(screwSegmentMass,screwSegmentMass))}},
+    {{k:kBall, c:2*zetaBallNut*Math.sqrt(kBall*ballRelativeMass)}},
+    {{k:kmnt, c:2*zetaNutMount*Math.sqrt(kmnt*pairMass(mNut,mStage))}}
+  ];
+  let compRe=0, compIm=0;
+  complexElements.forEach(el => {{
+    const den=el.k*el.k+w2*w2*el.c*el.c;
+    compRe+=el.k/den; compIm+=-w2*el.c/den;
+  }});
+  const complianceMagnitudeSquared=compRe*compRe+compIm*compIm;
+  const kaxCplx=compRe/complianceMagnitudeSquared;
+  const caxCplx=-compIm/complianceMagnitudeSquared/w2;
+  const kaxMeasured=w2*w2*mEffMeasured;
+  const measuredBallCompliance=1/kaxMeasured-1/kbrg-1/ksha-1/kmnt;
+  if (!(measuredBallCompliance>0))
+    throw new Error('The measured-mass route leaves no positive compliance for k_ball.');
+  const kBallMeasured=1/measuredBallCompliance;
+  const muRel=md*ms/(md+ms), muMeasured=md*mEffMeasured/(md+mEffMeasured);
+  const caxMeasured=2*zetaRelativeMeasured*Math.sqrt(kaxMeasured*muMeasured);
+  // --- friction site parameter diagnostics -----------------------------------
+  const nu = [1,2,3,4].map(i => parameterNumber('gms_nu'+i, 0));
+  const frictionSites = {{
+    g: {{k:[1,2,3,4].map(i => parameterNumber('g_k'+i,0)),
+        s0:parameterNumber('g_sigma0',0), Fs:parameterNumber('g_Fs',0),
+        Fc:parameterNumber('g_Fc',0)}},
+    n: {{k:[1,2,3,4].map(i => parameterNumber('n_k'+i,0)),
+        s0:parameterNumber('n_sigma0',0), Fs:parameterNumber('n_Fs',0),
+        Fc:parameterNumber('n_Fc',0)}},
+    d: {{k:[1,2,3,4].map(i => parameterNumber('d_k'+i,0)),
+        s0:parameterNumber('d_sigma0',0), Fs:parameterNumber('d_Fs',0),
+        Fc:parameterNumber('d_Fc',0)}}
+  }};
+  const tauC = parameterNumber('tau_C', 2.0e-4);
+  const etaScrew = parameterNumber('eta_screw', 0.90);
+  const preloadNut = parameterNumber('F_preload_nut', 100.0);
+  if (!(tauC>0)) throw new Error('The Stribeck relaxation time must be positive.');
+  if (!(etaScrew>0 && etaScrew<1)) throw new Error('Screw efficiency must lie between 0 and 1.');
+  Object.entries(frictionSites).forEach(([tag,site]) => {{
+    site.Cgms = (site.Fs-site.Fc)/tauC;
+    site.tauC = tauC;
+  }});
+  const nuSum = nu.reduce((a,b)=>a+b,0);
+  if (Math.abs(nuSum-1) > 1e-9) throw new Error('GMS force fractions must sum to one.');
+  Object.entries(frictionSites).forEach(([tag,site]) => {{
+    const kSum = site.k.reduce((a,b)=>a+b,0);
+    if (!(kSum>0) || Math.abs(kSum-site.s0) > 1e-6*Math.max(site.s0,1))
+      throw new Error('GMS element stiffnesses for site '+tag+' must sum to sigma_0.');
+    site.yieldFs = site.k.map((k,i) => nu[i]*site.Fs/k);
+    site.yieldFc = site.k.map((k,i) => nu[i]*site.Fc/k);
+    site.yieldSpan = site.yieldFs[3]/site.yieldFs[0];
+    site.staticDeflection = site.Fs/site.s0;
+  }});
   const kdetAmplitude = 4*teeth*tdet/(r*r);
   const kdet = kdetAmplitude*Math.cos(detentPhase);
   if (!(km>kdetAmplitude)) throw new Error('The detent tangent amplitude must remain below commutation stiffness.');
@@ -4375,8 +5563,10 @@ function liveTransferData() {{
     const gs = cDiv(cMul({{re:-km,im:0}},b), determinant);
     frequencies.push(frequency); drive.push(gd); stage.push(gs); rotorStage.push(cDiv(gs,gd));
   }}
-  function modePair(driveTangent) {{
-    const qa=md*ms, qb=md*kax+ms*(driveTangent+kax), qc=driveTangent*kax;
+  function modePair(driveTangent, linkStiffness=kax, stageMass=ms) {{
+    const qa=md*stageMass;
+    const qb=md*linkStiffness+stageMass*(driveTangent+linkStiffness);
+    const qc=driveTangent*linkStiffness;
     const discriminant=Math.max(qb*qb-4*qa*qc,0);
     const roots=[(qb-Math.sqrt(discriminant))/(2*qa),(qb+Math.sqrt(discriminant))/(2*qa)];
     return roots.map(value => Math.sqrt(Math.max(value,0))/(2*Math.PI));
@@ -4384,6 +5574,24 @@ function liveTransferData() {{
   const modes=modePair(km);
   const localSoftModes=modePair(km-kdetAmplitude), localHardModes=modePair(km+kdetAmplitude);
   const localLowBand=[Math.min(localSoftModes[0],localHardModes[0]),Math.max(localSoftModes[0],localHardModes[0])];
+  const routeModesS=modePair(km,kaxSeries,ms);
+  const routeModesF=modePair(km,kaxCplx,ms);
+  const routeModesM=modePair(km,kaxMeasured,mEffMeasured);
+  const relativeZeta=cax/(2*Math.sqrt(kax*muRel));
+  const zetaCplx=caxCplx/(2*Math.sqrt(kaxCplx*muRel));
+  const settlingFactor=-Math.log(0.02);
+  const settling=(ratio,frequency) => settlingFactor/(ratio*2*Math.PI*frequency);
+  const routeCF1={derived_defaults['route_c_f1']:.12g};
+  const routeCF2={derived_defaults['route_c_f2']:.12g};
+  const routeCKax={derived_defaults['route_c_kax']:.12g};
+  const routeCCax={derived_defaults['route_c_cax']:.12g};
+  const routeCZeta={derived_defaults['route_c_zeta']:.12g};
+  const routeCKBall={derived_defaults['route_c_kball']:.12g};
+  const fullModelZeta={derived_defaults['full_model_zeta']:.12g};
+  const fullModelSettling={derived_defaults['full_model_settling']:.12g};
+  const fullModelUpperHz={derived_defaults['full_model_upper_hz']:.12g};
+  const firstFixedInterfaceHz={derived_defaults['first_fixed_interface_hz']:.12g};
+  const firstDiscardedHz={derived_defaults['first_discarded_hz']:.12g};
   return {{
     frequencies, drive, stage, rotorStage, modes, localLowBand, md, ms, mStage, mNut,
     axialModeTarget, km, kdet, kdetAmplitude, kax, kBall, kbrg, ksha, kmnt,
@@ -4393,7 +5601,20 @@ function liveTransferData() {{
     couplingSeries, couplingHalf:2*couplingSeries, kthetaA, kappa:teeth/r,
     fullStep:lead/(4*teeth), quarterStep:lead/(16*teeth),
     commandStep:lead/(4*teeth*microstepDivisor), interpolatedStep:lead/(4*teeth*256),
-    microstepDivisor, fmax:tmax/r, cm, detentPeriod:lead/(4*teeth)
+    microstepDivisor, fmax:tmax/r, cm, detentPeriod:lead/(4*teeth),
+    mEffMeasured, zetaRelativeMeasured, zetaSteel, zetaBearing,
+    zetaBallNut, zetaNutMount, axialCompliance,
+    torsionalCompliance, torsionalShare, kaxSeries, kaxSeriesFull,
+    kaxCplx, caxCplx, zetaCplx, kaxMeasured, caxMeasured, kBallMeasured,
+    muRel, massRatio:md/ms, relativeZeta, routeModesS, routeModesF, routeModesM,
+    routeCF1, routeCF2, routeCKax, routeCCax, routeCZeta, routeCKBall,
+    fullModelZeta, fullModelSettling, fullModelUpperHz,
+    firstFixedInterfaceHz, firstDiscardedHz, nu, frictionSites,
+    tauC, etaScrew, preloadNut,
+    routePSettling:settling(relativeZeta,modes[1]),
+    routeFSettling:settling(zetaCplx,routeModesF[1]),
+    routeMSettling:settling(zetaRelativeMeasured,routeModesM[1]),
+    routeCSettling:settling(routeCZeta,routeCF2)
   }};
 }}
 function formatDerivedValue(key, value) {{
@@ -4408,6 +5629,30 @@ function formatDerivedValue(key, value) {{
   if (key==='reduced_stage_mass') return value.toFixed(3);
   if (key==='screw_mass' || key==='screw_segment_mass') return value.toFixed(6);
   if (key==='k_c_half') return value.toFixed(3);
+  if (/^route_[psbfcm]_(md|ms)$/.test(key)) return value.toFixed(3);
+  if (/^route_[psbfcm]_(kax|kball)$/.test(key) || key==='route_s_kax_full')
+    return (value/1e6).toFixed(3);
+  if (/^route_[psbfcm]_cax$/.test(key)) return value.toFixed(2);
+  if (key==='interface_axial_damping') return value.toFixed(2);
+  if (/^route_[psbfcm]_zeta$/.test(key) || key==='full_model_zeta') return value.toExponential(3);
+  if (/^route_[psbfcm]_f[12]$/.test(key)) return value.toFixed(2);
+  if (/^route_[psbfcm]_settling$/.test(key) || key==='full_model_settling')
+    return (value*1e3).toFixed(1);
+  if (key==='torsional_share') return (100*value).toFixed(3);
+  if (key==='mass_ratio') return value.toFixed(2);
+  if (key==='reduced_mu') return value.toFixed(4);
+  if (key==='mu_fraction') return value.toFixed(4);
+  if (key==='cb_frequency_delta' || key==='cb_damping_delta') return value.toFixed(2);
+  if (key==='fixed_interface_separation' || key==='discarded_pole_separation')
+    return value.toFixed(3);
+  if (/^yield_[gnd]_[1-4]_(fs|fc)$/.test(key) || /^static_deflection_[gnd]$/.test(key))
+    return (value*1e6).toFixed(2);          // micrometres
+  if (/^yield_span_[gnd]$/.test(key)) return value.toFixed(1);
+  if (/^gms_rate_[gnd]$/.test(key)) return value.toFixed(0);
+  if (/^tau_C_[gnd]$/.test(key) || key==='retained_mode_period') return (value*1e3).toFixed(3);
+  if (key.startsWith('detent_velocity_')) return (value*1e3).toFixed(3);
+  if (key==='d_Fs_efficiency_estimate' || key==='tau_C_mode_ratio') return value.toFixed(2);
+  if (key==='d_Fs_torque_equivalent') return (value*1e3).toFixed(3);
   if (key.endsWith('_hz')) return value.toFixed(2);
   return Number(value).toPrecision(6);
 }}
@@ -4420,6 +5665,7 @@ function refreshDerivedOutputs(data) {{
     magnetic_stiffness:data.km,
     detent_stiffness:data.kdet,
     reduced_axial_stiffness:data.kax,
+    interface_axial_damping:data.caxCplx,
     k_ball:data.kBall,
     full_step_pitch:data.fullStep,
     quarter_step_bound:data.quarterStep,
@@ -4435,6 +5681,62 @@ function refreshDerivedOutputs(data) {{
     drive_stiffness:data.km,
     force_limit:data.fmax,
     spatial_wavenumber:data.kappa
+    ,route_p_md:data.md, route_p_ms:data.ms, route_p_kax:data.kax,
+    route_p_cax:data.cax, route_p_zeta:data.relativeZeta,
+    route_p_f1:data.modes[0], route_p_f2:data.modes[1], route_p_kball:data.kBall,
+    route_p_settling:data.routePSettling,
+    route_s_md:data.md, route_s_ms:data.ms, route_s_kax:data.kaxSeries,
+    route_s_cax:data.cax, route_s_zeta:data.relativeZeta,
+    route_s_f1:data.routeModesS[0], route_s_f2:data.routeModesS[1], route_s_kball:data.kBall,
+    route_s_settling:data.routePSettling,
+    route_b_md:data.md, route_b_ms:data.ms, route_b_kax:data.kaxSeries,
+    route_b_cax:data.cax, route_b_zeta:data.relativeZeta,
+    route_b_f1:data.routeModesS[0], route_b_f2:data.routeModesS[1], route_b_kball:data.kBall,
+    route_b_settling:data.routePSettling,
+    route_f_md:data.md, route_f_ms:data.ms, route_f_kax:data.kaxCplx,
+    route_f_cax:data.caxCplx, route_f_zeta:data.zetaCplx,
+    route_f_f1:data.routeModesF[0], route_f_f2:data.routeModesF[1], route_f_kball:data.kBall,
+    route_f_settling:data.routeFSettling,
+    route_c_md:data.md, route_c_ms:data.ms, route_c_kax:data.routeCKax,
+    route_c_cax:data.routeCCax, route_c_zeta:data.routeCZeta,
+    route_c_f1:data.routeCF1, route_c_f2:data.routeCF2, route_c_kball:data.routeCKBall,
+    route_c_settling:data.routeCSettling,
+    route_m_md:data.md, route_m_ms:data.mEffMeasured, route_m_kax:data.kaxMeasured,
+    route_m_cax:data.caxMeasured, route_m_zeta:data.zetaRelativeMeasured,
+    route_m_f1:data.routeModesM[0], route_m_f2:data.routeModesM[1], route_m_kball:data.kBallMeasured,
+    route_m_settling:data.routeMSettling,
+    route_s_kax_full:data.kaxSeriesFull, torsional_share:data.torsionalShare,
+    mass_ratio:data.massRatio, reduced_mu:data.muRel,
+    full_model_zeta:data.fullModelZeta, full_model_settling:data.fullModelSettling,
+    full_model_upper_hz:data.fullModelUpperHz,
+    cb_frequency_delta:100*Math.abs(data.routeCF2-data.fullModelUpperHz)/data.fullModelUpperHz,
+    cb_damping_delta:100*Math.abs(data.routeCZeta-data.fullModelZeta)/data.fullModelZeta,
+    route_p_bandwidth_hz:2*data.relativeZeta*data.modes[1],
+    full_model_bandwidth_hz:2*data.fullModelZeta*data.fullModelUpperHz,
+    first_fixed_interface_hz:data.firstFixedInterfaceHz,
+    first_discarded_hz:data.firstDiscardedHz,
+    fixed_interface_separation:Math.pow(data.axialModeTarget/data.firstFixedInterfaceHz,2),
+    discarded_pole_separation:Math.pow(data.axialModeTarget/data.firstDiscardedHz,2)
+    ,mu_fraction:data.muRel/data.ms,
+    relative_mode_nearground_hz:Math.sqrt(data.kax/data.ms)/(2*Math.PI),
+    drive_pole_hz:Math.sqrt(data.km/data.md)/(2*Math.PI),
+    ...Object.fromEntries(
+      Object.entries(data.frictionSites).flatMap(([tag,site]) => [
+        ...site.yieldFs.map((v,i) => ['yield_'+tag+'_'+(i+1)+'_fs', v]),
+        ...site.yieldFc.map((v,i) => ['yield_'+tag+'_'+(i+1)+'_fc', v]),
+        ['yield_span_'+tag, site.yieldSpan],
+        ['static_deflection_'+tag, site.staticDeflection],
+        ['gms_rate_'+tag, site.Cgms],
+        ['tau_C_'+tag, site.tauC]
+      ])
+    ),
+    d_Fs_efficiency_estimate:data.preloadNut*(1/data.etaScrew-1),
+    d_Fs_torque_equivalent:data.frictionSites.d.Fs*data.r,
+    detent_velocity_drive:data.modes[0]*data.fullStep,
+    detent_velocity_axial:data.modes[1]*data.fullStep,
+    detent_velocity_discarded:data.firstDiscardedHz*data.fullStep,
+    retained_mode_period:1/data.modes[1],
+    tau_C_mode_ratio:1/(data.modes[1]*data.tauC)
   }};
   document.querySelectorAll('[data-derived]').forEach(output => {{
     const key=output.dataset.derived;
@@ -4445,9 +5747,8 @@ function refreshLiveEquations(data) {{
   const mn = value => (value/1e6).toFixed(3);
   const reflectedKg = inertia => inertia/(data.r*data.r);
   const compliancePct = stiffness => 100*data.kax/stiffness;
-  const torsionalCompliance = data.r*data.r*
-    (2/data.couplingHalf + 1/data.kthetaA);
-  const fullStaticCompliance = 1/data.kax + torsionalCompliance;
+  const torsionalCompliance = data.torsionalCompliance;
+  const fullStaticCompliance = data.axialCompliance + torsionalCompliance;
   const fullStaticStiffness = 1/fullStaticCompliance;
   const torsionalCompliancePct = 100*torsionalCompliance/fullStaticCompliance;
   const equations = {{
@@ -4474,10 +5775,35 @@ function refreshLiveEquations(data) {{
     'modal-stiffness':
       'f₂,target = ' + data.axialModeTarget.toFixed(2) + ' Hz  →  k_ax = ' +
       mn(data.kax) + ' MN/m',
+    'route-comparison-summary':
+      'Formal condensation, direct compliance, and the bond graph agree on the axial link to ' +
+      (100*Math.abs(data.kaxSeries-data.kax)/data.kax).toExponential(2) +
+      '%. Including the reflected torsional chain lowers the static link by ' +
+      (100*(data.kaxSeries-data.kaxSeriesFull)/data.kaxSeries).toFixed(3) +
+      '%. Frequency-domain condensation changes stiffness by ' +
+      (100*(data.kaxCplx-data.kax)/data.kax).toFixed(3) +
+      '% at f2 while replacing the damping propagation.',
+    'damping-defect':
+      'Current 2-DOF: zeta_rel=' + data.relativeZeta.toExponential(3) +
+      ', t_2%=' + (data.routePSettling*1e3).toFixed(1) +
+      ' ms; full 10-DOF audit: zeta_rel=' + data.fullModelZeta.toExponential(3) +
+      ', t_2%=' + (data.fullModelSettling*1e3).toFixed(1) +
+      ' ms; frequency-domain reduction: zeta_rel=' + data.zetaCplx.toExponential(3) +
+      ', t_2%=' + (data.routeFSettling*1e3).toFixed(1) + ' ms.',
+    'mass-conflict':
+      'BOM mass ' + data.ms.toFixed(3) + ' kg gives k_ax=' + mn(data.kax) +
+      ' MN/m and k_ball=' + mn(data.kBall) + ' MN/m; measured m_eff ' +
+      data.mEffMeasured.toFixed(3) + ' kg gives k_ax=' + mn(data.kaxMeasured) +
+      ' MN/m and k_ball=' + mn(data.kBallMeasured) + ' MN/m, a ' +
+      (data.kBallMeasured/data.kBall).toFixed(2) + 'x change.',
     'axial-compliance':
       '1/' + mn(data.kbrg) + ' + 1/' + mn(data.ksha) + ' + 1/' +
       mn(data.kBall) + ' + 1/' + mn(data.kmnt) + ' = 1/' +
-      mn(data.kax) + '  (MN/m)⁻¹'
+      mn(data.kax) + '  (MN/m)⁻¹',
+    'friction-port-summary': {json.dumps(friction_port_sentence())},
+    'gms-branch-census': {json.dumps(
+        BRANCH_CENSUS_SENTENCE
+        or "GMS branch census - not rebuilt in this render; rerun the Python builder to refresh the counts.")}
   }};
   document.querySelectorAll('[data-live-equation]').forEach(element => {{
     const equation = equations[element.dataset.liveEquation];
@@ -4587,16 +5913,24 @@ def main() -> None:
         raise FileNotFoundError("Both Markdown source documents must exist before building")
     ASSET_DIR.mkdir(exist_ok=True)
     gms_audit = validate_gms_partition()
+    loss_audit = validate_interface_loss_factors()
     validate_parameter_registry()
     validate_case_topology()
     constants = physical_constants()
     frequencies, bode, linear_metrics = frequency_responses()
-    times, command, time_data, time_metrics = time_responses(constants)
+    branch_censuses: dict[str, GmsBranchCensus] = {}
+    times, command, time_data, time_metrics = time_responses(constants, branch_censuses)
+    branch_census = gms_branch_census_study(
+        constants, times, command, branch_censuses, time_metrics)
+    global BRANCH_CENSUS_SENTENCE
+    BRANCH_CENSUS_SENTENCE = branch_census_sentence(branch_census)
     convergence = gms_step_halving_convergence(constants, times, time_data)
     memory_experiments = {
         "guideway": presliding_responses(constants, ("A", "A2"), "g"),
         "nut": presliding_responses(constants, ("B", "B2"), "n"),
     }
+    branch_departure = memory_branch_departure(constants, memory_experiments)
+    tau_c_study = tau_c_sensitivity(constants, ("A", "A2"), "g")
     verification = full_reduced_verification(frequencies, constants)
     ids_records = load_ids_microstepping_records()
     ids_comparison = ids_microstepping_simulations(ids_records, constants)
@@ -4612,14 +5946,14 @@ def main() -> None:
     flowchart_b_path = plot_flowchart_friction_results()
     bond_graph_path = plot_reduced_bond_graph()
     verification_path = plot_full_reduced_verification(frequencies, verification)
-    single_edge_path = plot_full_reduced_single_edge_diagnostic(verification)
     position_path = plot_position_dependence()
     resonance_path = plot_stepper_resonance_visibility()
     rotor_stage_path = plot_rotor_stage_transfer_functions(frequencies)
     ids_overview_path = plot_ids_microstepping_overview(ids_records)
     ids_overlay_path = plot_ids_microstepping_model_overlay(
         ids_records, ids_comparison)
-    for obsolete_name in ("bode_all_cases.svg", "step_tracking_all_cases.svg"):
+    for obsolete_name in ("bode_all_cases.svg", "step_tracking_all_cases.svg",
+                          "full_reduced_single_edge_diagnostic.svg"):
         obsolete_path = ASSET_DIR / obsolete_name
         if obsolete_path.exists():
             obsolete_path.unlink()
@@ -4630,6 +5964,9 @@ def main() -> None:
         update_generated_summary(generated_summary(linear_metrics, time_metrics, verification))
         update_generated_presliding_summary(generated_presliding_summary(memory_experiments))
         update_generated_convergence_summary(generated_convergence_summary(convergence))
+        update_generated_branch_census(
+            generated_branch_census(branch_census, branch_departure))
+        update_generated_tau_c_sensitivity(generated_tau_c_sensitivity(tau_c_study))
     description_html = render_document(DESCRIPTION_MD)
     derivation_html = render_document(DERIVATION_MD)
     print(f"Built {comparison_path.relative_to(ROOT)}")
@@ -4642,7 +5979,6 @@ def main() -> None:
     print(f"Built {flowchart_b_path.relative_to(ROOT)}")
     print(f"Built {bond_graph_path.relative_to(ROOT)}")
     print(f"Built {verification_path.relative_to(ROOT)}")
-    print(f"Built {single_edge_path.relative_to(ROOT)}")
     print(f"Built {position_path.relative_to(ROOT)}")
     print(f"Built {resonance_path.relative_to(ROOT)}")
     print(f"Built {rotor_stage_path.relative_to(ROOT)}")
@@ -4663,6 +5999,25 @@ def main() -> None:
               f"sequence RMS deviation={time_metrics[key]['rms_sequence_deviation_nm']:.2f} nm; "
               f"peak deviation={time_metrics[key]['max_abs_deviation_nm']:.2f} nm; "
               f"final-window RMS deviation={time_metrics[key]['rms_final_error_nm']:.2f} nm")
+    print("Interface loss factors at f_2: " + "; ".join(
+        f"{key.replace('zeta_', '')}: eta={record['eta']:.5f}, zeta={record['zeta']:.6f}, "
+        f"c={record['damping']:.2f} N s/m"
+        for key, record in loss_audit.items()))
+    print("tau_C sensitivity: F_ret spread="
+          f"{tau_c_study['force_spread_N']:.6f} N vs law gap {tau_c_study['law_gap_force_N']:.6f} N; "
+          f"A_loop spread={tau_c_study['loop_spread_J']:.4e} J vs law gap {tau_c_study['law_gap_loop_J']:.4e} J")
+    print("Branch departure vs loop metrics: " + "; ".join(
+        f"{record['case']} {record['metric']}: {float(record['delta']):+.4g} "
+        f"(gap {float(record['law_gap']):.4g}){'  EXCEEDS' if record['exceeds_law_gap'] else ''}"
+        for record in branch_departure["records"]))
+    print("GMS branch census: "
+          f"threshold flips={branch_census['threshold_total']}, "
+          f"reversal flips={branch_census['reversal_total']}, "
+          f"evaluations={branch_census['evaluation_total']}"
+          + "".join(
+              f"; {key} settled RMS {record['baseline_rms_nm']:.3f}->"
+              f"{record['settled_rms_nm']:.3f} nm ({record['delta_pct']:+.2f}%)"
+              for key, record in branch_census["enforced"].items()))
     print(f"Full/reduced residual: RMS={verification['rms_residual_nm']:.3f} nm; "
           f"peak={verification['peak_residual_nm']:.3f} nm; "
           f"normalized={verification['rms_residual_pct_command']:.3f}%/"

@@ -144,7 +144,7 @@ ground -- k_brg --&gt; u_b -- k_sha(x_s) --&gt; u_e ---------------------- k_bal
 <h2 id="4-common-footing-parameter-table">4. Common-Footing Parameter Table</h2>
 <h3 id="4-0-executable-defaults">4.0 Executable defaults</h3>
 <p>The following cells show the executable component values. Reflected mass and magnetic stiffness are derived outputs.</p>
-<div class="table-wrap"><table><thead><tr><th style="text-align:left">Parameter</th><th style="text-align:right">Executed value</th><th style="text-align:left">Unit</th></tr></thead><tbody><tr><td style="text-align:left">lead \(L\)</td><td style="text-align:right"><input class="parameter-input" data-param="lead" data-default="1.000e-03" value="1.000e-03" aria-label="Editable parameter lead" spellcheck="false"></td><td style="text-align:left">m/rev</td></tr><tr><td style="text-align:left">rotor teeth \(N_r\)</td><td style="text-align:right"><input class="parameter-input" data-param="rotor_teeth" data-default="50" value="50" aria-label="Editable parameter rotor_teeth" spellcheck="false"></td><td style="text-align:left">–</td></tr><tr><td style="text-align:left">derived \(r=L/(2\pi)\)</td><td style="text-align:right"><output class="derived-output" data-derived="transmission_ratio" aria-label="Derived value transmission_ratio">1.59155e-04</output></td><td style="text-align:left">m/rad</td></tr><tr><td style="text-align:left">derived reduced \(m_d\)</td><td style="text-align:right"><output class="derived-output" data-derived="reduced_drive_mass" aria-label="Derived value reduced_drive_mass">106.042</output></td><td style="text-align:left">kg</td></tr><tr><td style="text-align:left">measured stage body \(m_{stage}\)</td><td style="text-align:right"><input class="parameter-input" data-param="stage_mass" data-default="0.355" value="0.355" aria-label="Editable parameter stage_mass" spellcheck="false"></td><td style="text-align:left">kg</td></tr><tr><td style="text-align:left">nut body \(m_n\)</td><td style="text-align:right"><input class="parameter-input assumed-input" data-param="nut_mass" data-default="0.050" value="0.050" aria-label="Editable parameter nut_mass" spellcheck="false"></td><td style="text-align:left">kg</td></tr><tr><td style="text-align:left">derived retained \(m_s=m_{stage}+m_n\)</td><td style="text-align:right"><output class="derived-output" data-derived="reduced_stage_mass" aria-label="Derived value reduced_stage_mass">0.405</output></td><td style="text-align:left">kg</td></tr><tr><td style="text-align:left">rated-current \(T_{max}\)</td><td style="text-align:right"><input class="parameter-input" data-param="holding_torque" data-default="0.060" value="0.060" aria-label="Editable parameter holding_torque" spellcheck="false"></td><td style="text-align:left">N·m</td></tr><tr><td style="text-align:left">enabled \(\hat T_{det}\)</td><td style="text-align:right"><input class="parameter-input" data-param="detent_torque" data-default="0.005" value="0.005" aria-label="Editable parameter detent_torque" spellcheck="false"></td><td style="text-align:left">N·m</td></tr><tr><td style="text-align:left">detent phase \(\phi_{det}\)</td><td style="text-align:right"><input class="parameter-input assumed-input" data-param="detent_phase" data-default="0.0" value="0.0" aria-label="Editable parameter detent_phase" spellcheck="false"></td><td style="text-align:left">rad</td></tr><tr><td style="text-align:left">derived \(K_m\)</td><td style="text-align:right"><output class="derived-output" data-derived="magnetic_stiffness" aria-label="Derived value magnetic_stiffness">1.18435e+08</output></td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">local \(K_{det}(x_0)\) at the report origin; not in global \(\mathbf K\)</td><td style="text-align:right"><output class="derived-output" data-derived="detent_stiffness" aria-label="Derived value detent_stiffness">3.94784e+07</output></td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">measured upper-mode target \(f_{2,target}\)</td><td style="text-align:right"><input class="parameter-input" data-param="axial_mode_target_hz" data-default="695.82" value="695.82" aria-label="Editable parameter axial_mode_target_hz" spellcheck="false"></td><td style="text-align:left">Hz</td></tr><tr><td style="text-align:left">modal-calibrated \(k_{ax}\)</td><td style="text-align:right"><output class="derived-output" data-derived="reduced_axial_stiffness" aria-label="Derived value reduced_axial_stiffness">7.70993e+06</output></td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">closure-derived \(k_{ball}\)</td><td style="text-align:right"><output class="derived-output" data-derived="k_ball" aria-label="Derived value k_ball">1.54375e+07</output></td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">motor \(J_m\)</td><td style="text-align:right"><input class="parameter-input" data-param="J_m" data-default="9.000e-07" value="9.000e-07" aria-label="Editable parameter J_m" spellcheck="false"></td><td style="text-align:left">kg·m²</td></tr><tr><td style="text-align:left">coupling \(J_c\)</td><td style="text-align:right"><input class="parameter-input assumed-input" data-param="J_c" data-default="1.180e-06" value="1.180e-06" aria-label="Editable parameter J_c" spellcheck="false"></td><td style="text-align:left">kg·m²</td></tr><tr><td style="text-align:left">complete screw length</td><td style="text-align:right"><input class="parameter-input" data-param="screw_length" data-default="0.192" value="0.192" aria-label="Editable parameter screw_length" spellcheck="false"></td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">approximate usable screw distance</td><td style="text-align:right"><input class="parameter-input" data-param="usable_screw_travel" data-default="0.170" value="0.170" aria-label="Editable parameter usable_screw_travel" spellcheck="false"></td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">full stage travel</td><td style="text-align:right"><input class="parameter-input" data-param="stage_travel" data-default="0.150" value="0.150" aria-label="Editable parameter stage_travel" spellcheck="false"></td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">installed lead accuracy class</td><td style="text-align:right"><input class="parameter-input" data-param="lead_accuracy_class" data-default="IT1" value="IT1" aria-label="Editable parameter lead_accuracy_class" spellcheck="false"></td><td style="text-align:left">–</td></tr><tr><td style="text-align:left">screw diameter</td><td style="text-align:right"><input class="parameter-input" data-param="screw_diameter" data-default="8.000e-03" value="8.000e-03" aria-label="Editable parameter screw_diameter" spellcheck="false"></td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">screw density</td><td style="text-align:right"><input class="parameter-input assumed-input" data-param="screw_density" data-default="7850" value="7850" aria-label="Editable parameter screw_density" spellcheck="false"></td><td style="text-align:left">kg/m³</td></tr><tr><td style="text-align:left">derived screw \(J_s\)</td><td style="text-align:right"><output class="derived-output" data-derived="screw_inertia" aria-label="Derived value screw_inertia">6.06081e-07</output></td><td style="text-align:left">kg·m²</td></tr><tr><td style="text-align:left">derived screw mass</td><td style="text-align:right"><output class="derived-output" data-derived="screw_mass" aria-label="Derived value screw_mass">0.075760</output></td><td style="text-align:left">kg</td></tr><tr><td style="text-align:left">axial play, grade O</td><td style="text-align:right">0.0</td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">support bearing \(k_{brg}\)</td><td style="text-align:right"><input class="parameter-input assumed-input" data-param="k_brg" data-default="2.500e+07" value="2.500e+07" aria-label="Editable parameter k_brg" spellcheck="false"></td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">open-loop drive damping ratio \(\zeta_m\)</td><td style="text-align:right"><input class="parameter-input assumed-input" data-param="electromagnetic_zeta" data-default="0.10" value="0.10" aria-label="Editable parameter electromagnetic_zeta" spellcheck="false"></td><td style="text-align:left">–</td></tr><tr><td style="text-align:left">STEP/DIR microstep divisor</td><td style="text-align:right"><input class="parameter-input assumed-input" data-param="microstep_divisor" data-default="64" value="64" aria-label="Editable parameter microstep_divisor" spellcheck="false"></td><td style="text-align:left">–</td></tr><tr><td style="text-align:left">derived STEP/DIR quantum</td><td style="text-align:right"><output class="derived-output" data-derived="command_step" aria-label="Derived value command_step">7.81250e-08</output></td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">derived 256-interpolated quantum</td><td style="text-align:right"><output class="derived-output" data-derived="interpolated_step" aria-label="Derived value interpolated_step">1.95313e-08</output></td><td style="text-align:left">m</td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th style="text-align:left">Parameter</th><th style="text-align:right">Executed value</th><th style="text-align:left">Unit</th></tr></thead><tbody><tr><td style="text-align:left">lead \(L\)</td><td style="text-align:right"><input class="parameter-input" data-param="lead" data-default="1.000e-03" value="1.000e-03" aria-label="Editable parameter lead" spellcheck="false"></td><td style="text-align:left">m/rev</td></tr><tr><td style="text-align:left">rotor teeth \(N_r\)</td><td style="text-align:right"><input class="parameter-input" data-param="rotor_teeth" data-default="50" value="50" aria-label="Editable parameter rotor_teeth" spellcheck="false"></td><td style="text-align:left">–</td></tr><tr><td style="text-align:left">derived \(r=L/(2\pi)\)</td><td style="text-align:right"><output class="derived-output" data-derived="transmission_ratio" aria-label="Derived value transmission_ratio">1.59155e-04</output></td><td style="text-align:left">m/rad</td></tr><tr><td style="text-align:left">derived reduced \(m_d\)</td><td style="text-align:right"><output class="derived-output" data-derived="reduced_drive_mass" aria-label="Derived value reduced_drive_mass">106.042</output></td><td style="text-align:left">kg</td></tr><tr><td style="text-align:left">measured stage body \(m_{stage}\)</td><td style="text-align:right"><input class="parameter-input" data-param="stage_mass" data-default="0.355" value="0.355" aria-label="Editable parameter stage_mass" spellcheck="false"></td><td style="text-align:left">kg</td></tr><tr><td style="text-align:left">nut body \(m_n\)</td><td style="text-align:right"><input class="parameter-input assumed-input" data-param="nut_mass" data-default="0.050" value="0.050" aria-label="Editable parameter nut_mass" spellcheck="false"></td><td style="text-align:left">kg</td></tr><tr><td style="text-align:left">derived retained \(m_s=m_{stage}+m_n\)</td><td style="text-align:right"><output class="derived-output" data-derived="reduced_stage_mass" aria-label="Derived value reduced_stage_mass">0.405</output></td><td style="text-align:left">kg</td></tr><tr><td style="text-align:left">rated-current \(T_{max}\)</td><td style="text-align:right"><input class="parameter-input" data-param="holding_torque" data-default="0.060" value="0.060" aria-label="Editable parameter holding_torque" spellcheck="false"></td><td style="text-align:left">N·m</td></tr><tr><td style="text-align:left">enabled \(\hat T_{det}\)</td><td style="text-align:right"><input class="parameter-input" data-param="detent_torque" data-default="0.005" value="0.005" aria-label="Editable parameter detent_torque" spellcheck="false"></td><td style="text-align:left">N·m</td></tr><tr><td style="text-align:left">detent phase \(\phi_{det}\)</td><td style="text-align:right"><input class="parameter-input assumed-input" data-param="detent_phase" data-default="0.0" value="0.0" aria-label="Editable parameter detent_phase" spellcheck="false"></td><td style="text-align:left">rad</td></tr><tr><td style="text-align:left">derived \(K_m\)</td><td style="text-align:right"><output class="derived-output" data-derived="magnetic_stiffness" aria-label="Derived value magnetic_stiffness">1.18435e+08</output></td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">local \(K_{det}(x_0)\) at the report origin; not in global \(\mathbf K\)</td><td style="text-align:right"><output class="derived-output" data-derived="detent_stiffness" aria-label="Derived value detent_stiffness">3.94784e+07</output></td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">measured upper-mode target \(f_{2,target}\)</td><td style="text-align:right"><input class="parameter-input" data-param="axial_mode_target_hz" data-default="695.82" value="695.82" aria-label="Editable parameter axial_mode_target_hz" spellcheck="false"></td><td style="text-align:left">Hz</td></tr><tr><td style="text-align:left">modal-calibrated \(k_{ax}\)</td><td style="text-align:right"><output class="derived-output" data-derived="reduced_axial_stiffness" aria-label="Derived value reduced_axial_stiffness">7.70993e+06</output></td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">closure-derived \(k_{ball}\)</td><td style="text-align:right"><output class="derived-output" data-derived="k_ball" aria-label="Derived value k_ball">1.54375e+07</output></td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">motor \(J_m\)</td><td style="text-align:right"><input class="parameter-input" data-param="J_m" data-default="9.000e-07" value="9.000e-07" aria-label="Editable parameter J_m" spellcheck="false"></td><td style="text-align:left">kg·m²</td></tr><tr><td style="text-align:left">coupling \(J_c\)</td><td style="text-align:right"><input class="parameter-input assumed-input" data-param="J_c" data-default="1.180e-06" value="1.180e-06" aria-label="Editable parameter J_c" spellcheck="false"></td><td style="text-align:left">kg·m²</td></tr><tr><td style="text-align:left">complete screw length</td><td style="text-align:right"><input class="parameter-input" data-param="screw_length" data-default="0.192" value="0.192" aria-label="Editable parameter screw_length" spellcheck="false"></td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">approximate usable screw distance</td><td style="text-align:right"><input class="parameter-input" data-param="usable_screw_travel" data-default="0.170" value="0.170" aria-label="Editable parameter usable_screw_travel" spellcheck="false"></td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">full stage travel</td><td style="text-align:right"><input class="parameter-input" data-param="stage_travel" data-default="0.150" value="0.150" aria-label="Editable parameter stage_travel" spellcheck="false"></td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">installed lead accuracy class</td><td style="text-align:right"><input class="parameter-input" data-param="lead_accuracy_class" data-default="IT3" value="IT3" aria-label="Editable parameter lead_accuracy_class" spellcheck="false"></td><td style="text-align:left">–</td></tr><tr><td style="text-align:left">screw diameter</td><td style="text-align:right"><input class="parameter-input" data-param="screw_diameter" data-default="8.000e-03" value="8.000e-03" aria-label="Editable parameter screw_diameter" spellcheck="false"></td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">screw density</td><td style="text-align:right"><input class="parameter-input assumed-input" data-param="screw_density" data-default="7850" value="7850" aria-label="Editable parameter screw_density" spellcheck="false"></td><td style="text-align:left">kg/m³</td></tr><tr><td style="text-align:left">derived screw \(J_s\)</td><td style="text-align:right"><output class="derived-output" data-derived="screw_inertia" aria-label="Derived value screw_inertia">6.06081e-07</output></td><td style="text-align:left">kg·m²</td></tr><tr><td style="text-align:left">derived screw mass</td><td style="text-align:right"><output class="derived-output" data-derived="screw_mass" aria-label="Derived value screw_mass">0.075760</output></td><td style="text-align:left">kg</td></tr><tr><td style="text-align:left">axial play, grade O</td><td style="text-align:right">0.0</td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">support bearing \(k_{brg}\)</td><td style="text-align:right"><input class="parameter-input assumed-input" data-param="k_brg" data-default="2.500e+07" value="2.500e+07" aria-label="Editable parameter k_brg" spellcheck="false"></td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">open-loop drive damping ratio \(\zeta_m\)</td><td style="text-align:right"><input class="parameter-input assumed-input" data-param="electromagnetic_zeta" data-default="0.10" value="0.10" aria-label="Editable parameter electromagnetic_zeta" spellcheck="false"></td><td style="text-align:left">–</td></tr><tr><td style="text-align:left">pre-distortion substep divisor</td><td style="text-align:right"><input class="parameter-input assumed-input" data-param="microstep_divisor" data-default="256" value="256" aria-label="Editable parameter microstep_divisor" spellcheck="false"></td><td style="text-align:left">–</td></tr><tr><td style="text-align:left">derived STEP/DIR quantum</td><td style="text-align:right"><output class="derived-output" data-derived="command_step" aria-label="Derived value command_step">1.95313e-08</output></td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">derived 256-interpolated quantum</td><td style="text-align:right"><output class="derived-output" data-derived="interpolated_step" aria-label="Derived value interpolated_step">1.95313e-08</output></td><td style="text-align:left">m</td></tr></tbody></table></div>
 <p>The coupling inertia remains an estimate because the component datasheet publishes its 23.8 g mass but not its polar inertia. The model does not force the component sum to a target \(m_d\).</p>
 <p>All compliances reflected to the linear domain via \(k_{lin}=k_{rot}/r^2\), with \(r^2 = 2.533\times10^{-8}\).</p>
 <div class="table-wrap"><table><thead><tr><th style="text-align:left">Element</th><th style="text-align:left">Native</th><th style="text-align:left">Linear equiv. [N/m]</th><th style="text-align:left">Compliance [m/N]</th><th style="text-align:left">Share</th><th style="text-align:left">Status</th></tr></thead><tbody><tr><td style="text-align:left">\(k_m\) magnetic</td><td style="text-align:left">3.0 N·m/rad</td><td style="text-align:left">1.184×10⁸</td><td style="text-align:left">8.44×10⁻⁹</td><td style="text-align:left">9.6%</td><td style="text-align:left">0.060 N·m at rated current</td></tr><tr><td style="text-align:left">local \(k_{det}\) at report origin</td><td style="text-align:left">1.0 N·m/rad</td><td style="text-align:left">3.948×10⁷</td><td style="text-align:left">local sensitivity only</td><td style="text-align:left">–</td><td style="text-align:left">periodic 0.005 N·m torque enabled nonlinearly</td></tr><tr><td style="text-align:left">coupling \(k_{c1},k_{c2}\)</td><td style="text-align:left">137.51 N·m/rad each</td><td style="text-align:left">5.43×10⁹ each</td><td style="text-align:left">3.68×10⁻¹⁰ series</td><td style="text-align:left">0.4%</td><td style="text-align:left">1.2 N·m/deg series</td></tr><tr><td style="text-align:left">\(k_{\theta a}\) screw torsion</td><td style="text-align:left">~211 N·m/rad</td><td style="text-align:left">8.3×10⁹</td><td style="text-align:left">1.2×10⁻¹⁰</td><td style="text-align:left">0.1%</td><td style="text-align:left">computed, \(GJ/L\)</td></tr><tr><td style="text-align:left">\(k_{sha}\) screw axial</td><td style="text-align:left">n/a</td><td style="text-align:left">6.7×10⁷</td><td style="text-align:left">1.49×10⁻⁸</td><td style="text-align:left">17%</td><td style="text-align:left">computed \(EA/L\), position dep.</td></tr><tr><td style="text-align:left">\(k_{brg}\) support bearings</td><td style="text-align:left">n/a</td><td style="text-align:left">3–15×10⁶</td><td style="text-align:left">6.7–33×10⁻⁸</td><td style="text-align:left"><strong>76–380%</strong></td><td style="text-align:left">spec range, ambiguous</td></tr><tr><td style="text-align:left">\(k_{ball}\) ball contact</td><td style="text-align:left">n/a</td><td style="text-align:left">unknown</td><td style="text-align:left">unknown</td><td style="text-align:left">?</td><td style="text-align:left">not estimated</td></tr><tr><td style="text-align:left">\(k_{mnt}\) nut mount</td><td style="text-align:left">n/a</td><td style="text-align:left">~1×10⁸</td><td style="text-align:left">1.0×10⁻⁸</td><td style="text-align:left">11%</td><td style="text-align:left">placeholder</td></tr><tr><td style="text-align:left"><strong>Measured total</strong></td><td style="text-align:left">n/a</td><td style="text-align:left"><strong>1.14×10⁷</strong></td><td style="text-align:left"><strong>8.77×10⁻⁸</strong></td><td style="text-align:left"><strong>100%</strong></td><td style="text-align:left">modal, 694 Hz</td></tr></tbody></table></div>
@@ -203,7 +203,7 @@ ground -- k_brg --&gt; u_b -- k_sha(x_s) --&gt; u_e ---------------------- k_bal
 <h2 id="6-verification-and-residuals">6. Verification and Residuals</h2>
 <h3 id="6-1-full-versus-reduced-protocol">6.1 Full-versus-reduced protocol</h3>
 <p>Simulate both models on identical input and report the discrepancy.</p>
-<ol><li>Single STEP/DIR microstep, 78.125 nm at \(\mu = 64\), from rest.</li><li>Bidirectional reversal at the target repeatability scale.</li><li>Trapezoidal move over full travel with deceleration shaping.</li><li>Frequency sweep 10 Hz to 3 kHz, drive-to-stage transfer function.</li></ol>
+<ol><li>Single pre-distortion substep, 19.53125 nm at \(\mu = 256\), from rest.</li><li>Bidirectional reversal at the target repeatability scale.</li><li>Trapezoidal move over full travel with deceleration shaping.</li><li>Frequency sweep 10 Hz to 3 kHz, drive-to-stage transfer function.</li></ol>
 <p>Report peak and RMS position discrepancy. Case 4 shows where the discarded modes live and tests the 3.2× separation claim empirically.</p>
 <h3 id="6-2-position-dependence-prediction">6.2 Position dependence prediction</h3>
 <p>\(k_{sha} = EA/L_{free}\) varies across travel. Holding all other budget items fixed:</p>
@@ -240,7 +240,7 @@ ground -- k_brg --&gt; u_b -- k_sha(x_s) --&gt; u_e ---------------------- k_bal
 <p><strong>Case C:</strong> \(\mathbf{f} = \begin{bmatrix} F_{mag}+F_{det} - F_{f,n}(\dot x_d-\dot x_s)-F_{f,d}(\dot x_d) \\ F_{f,n}(\dot x_d-\dot x_s) - F_{f,g}(\dot x_s) \end{bmatrix}\)</p>
 <p>\(F_{f,d}\) is the one identifiable \(v_d\) law and includes motor-bearing, coupling-hub, support-bearing, and gross nut-rolling losses. \(F_{f,n}\) is reserved for differential contact microslip.</p>
 <h3 id="8-1-executed-presliding-discriminator">8.1 Executed presliding discriminator</h3>
-<p>The companion derivation includes <a href="Analytical_derivation_and_responses_v3.html#9-force-instrumented-partial-slip-memory-experiment">force-instrumented nested-reversal experiments</a> for A/A2 and B/B2. A/A2 uses the normal free-stage plant. The dedicated B/B2 identification fixture imposes \(x_s=0\), commands \(x_d\), and measures the nut-path reaction, because the free stage otherwise follows the slow drive motion and provides too little relative deflection. Both use 64-microstep STEP/DIR quanta and 100 ms derived dwell. The blocked-stage B/B2 loop crosses nut yield and directly tests the \(k_{ax}\)/\(\sigma_{0,n}\) correlation; normal B/B2 plant responses remain free-stage.</p>
+<p>The companion derivation includes <a href="Analytical_derivation_and_responses_v3.html#9-force-instrumented-partial-slip-memory-experiment">force-instrumented nested-reversal experiments</a> for A/A2 and B/B2. A/A2 uses the normal free-stage plant. The dedicated B/B2 identification fixture imposes \(x_s=0\), commands \(x_d\), and measures the nut-path reaction, because the free stage otherwise follows the slow drive motion and provides too little relative deflection. Both use 256-substep pre-distortion quanta and 100 ms derived dwell. The blocked-stage B/B2 loop crosses nut yield and directly tests the \(k_{ax}\)/\(\sigma_{0,n}\) correlation; normal B/B2 plant responses remain free-stage.</p>
 <hr>
 <h2 id="9-identifiability">9. Identifiability</h2>
 <p><strong>Single-coordinate model.</strong> A rigid kinematic lock forces \(\dot x_d = \dot x_s\), so differential microslip has \(v_n \equiv 0\). Guideway and drive drag then share one velocity. Only their aggregate is identifiable.</p>
@@ -250,14 +250,14 @@ ground -- k_brg --&gt; u_b -- k_sha(x_s) --&gt; u_e ---------------------- k_bal
 <p>In the deployed open-loop configuration neither the drive coordinate nor the differential deflection is measurable, so only the aggregate is observable. Identification must be performed on the instrumented testbed and the split transferred. This is the formal statement of why the differential interferometer topology is necessary rather than merely convenient.</p>
 <hr>
 <h2 id="10-known-limitations">10. Known Limitations</h2>
-<ol><li>Motor and screw inertias are component-derived. Coupling polar inertia remains estimated because it is not published.</li><li><strong>The compliance budget does not close.</strong> See Section 4.1. Unresolved, and takes priority.</li><li>\(k_{ax}\) is carried as a scalar despite the position dependence quantified in Section 6.2.</li><li>Carriage skirt compliance and rail bending are absorbed into the rigid stage assumption.</li><li>Yaw, pitch and roll are not modeled. Drive axis only.</li><li>Thermal dependence of all friction parameters is omitted.</li><li>The installed screw accuracy class is IT1. A measured lead-error map is still missing.</li><li>Stepper electrical dynamics omitted. Defensible below 900 RPM, not above.</li><li>Nut friction load dependence, \(T_{f,n}\) as a function of \(|F_n|\), is written but not parameterized.</li></ol>
+<ol><li>Motor and screw inertias are component-derived. Coupling polar inertia remains estimated because it is not published.</li><li><strong>The compliance budget does not close.</strong> See Section 4.1. Unresolved, and takes priority.</li><li>\(k_{ax}\) is carried as a scalar despite the position dependence quantified in Section 6.2.</li><li>Carriage skirt compliance and rail bending are absorbed into the rigid stage assumption.</li><li>Yaw, pitch and roll are not modeled. Drive axis only.</li><li>Thermal dependence of all friction parameters is omitted.</li><li>The installed screw accuracy class is IT3. A measured lead-error map is still missing.</li><li>Stepper electrical dynamics omitted. Defensible below 900 RPM, not above.</li><li>Nut friction load dependence, \(T_{f,n}\) as a function of \(|F_n|\), is written but not parameterized.</li></ol>
 <hr>
 <h2 id="appendix-reduced-model-bond-graph" class="appendix-heading">Appendix. Reduced-model bond graph</h2>
 <p><img src="rendered_assets/reduced_bond_graph.svg" alt="Reduced-model bond graph and power-port audit"></p>
 <p>The graph is the power-domain form of the reduced friction incidence rows. The central 0-junction carries the internal axial force. Its paired bonds apply nut microslip with opposite signs to the drive and stage junctions. One identifiable drive-side drag, including gross rolling, connects to the drive junction. Thus \(\mathbf Q_f=-\mathbf H^TF_f\) and \(P_f=-v_fF_f\le0\) are visible from the connection pattern.</p>
 <hr>
 <h2 id="nomenclature">Nomenclature</h2>
-<div class="table-wrap"><table><thead><tr><th style="text-align:left">Symbol</th><th style="text-align:left">Description</th><th style="text-align:left">Units</th></tr></thead><tbody><tr><td style="text-align:left">\(r = L/2\pi\)</td><td style="text-align:left">Screw transmission ratio</td><td style="text-align:left">m/rad</td></tr><tr><td style="text-align:left">\(L\)</td><td style="text-align:left">Screw lead, 1 mm</td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">\(\theta_m,\theta_c,\theta_{s1..s3}\)</td><td style="text-align:left">Torsional coordinates</td><td style="text-align:left">rad</td></tr><tr><td style="text-align:left">\(u_b,u_e,u_f,u_n,x_s\)</td><td style="text-align:left">Axial coordinates</td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">\(u_t=u_e+r\theta_{s2}\)</td><td style="text-align:left">Full-model transformer output at the ball contact</td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">\(x_d=r\theta\)</td><td style="text-align:left">Reduced coordinate after drivetrain collapse and static condensation</td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">\(J_m,J_c,J_{s1..s3}\)</td><td style="text-align:left">Torsional inertias</td><td style="text-align:left">kg·m²</td></tr><tr><td style="text-align:left">\(m_b,m_e,m_f,m_n,m_s\)</td><td style="text-align:left">Axial masses</td><td style="text-align:left">kg</td></tr><tr><td style="text-align:left">\(m_d\)</td><td style="text-align:left">Reflected drivetrain mass</td><td style="text-align:left">kg</td></tr><tr><td style="text-align:left">\(k_m\), \(K_m = k_m/r^2\)</td><td style="text-align:left">Magnetic stiffness</td><td style="text-align:left">N·m/rad, N/m</td></tr><tr><td style="text-align:left">\(k_{c1},k_{c2}\)</td><td style="text-align:left">Coupling half-stiffnesses</td><td style="text-align:left">N·m/rad</td></tr><tr><td style="text-align:left">\(k_{\theta a},k_{\theta b}\)</td><td style="text-align:left">Screw torsional stiffnesses</td><td style="text-align:left">N·m/rad</td></tr><tr><td style="text-align:left">\(k_{brg}\)</td><td style="text-align:left">Support bearing axial stiffness</td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">\(k_{sha},k_{shb}\)</td><td style="text-align:left">Screw axial extension stiffnesses</td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">\(k_{ball}\)</td><td style="text-align:left">Ball contact normal axial stiffness</td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">\(k_{mnt}\)</td><td style="text-align:left">Nut mount stiffness</td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">\(k_{ax}\)</td><td style="text-align:left">Reduced series axial stiffness</td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">\(\delta_n\), \(F_n\)</td><td style="text-align:left">Nut interface deflection and force</td><td style="text-align:left">m, N</td></tr><tr><td style="text-align:left">\(T_{mb},T_{h1},T_{h2},T_{brg},T_{f,n}\)</td><td style="text-align:left">Friction torques</td><td style="text-align:left">N·m</td></tr><tr><td style="text-align:left">\(F_{f,g},F_{f,n},F_{f,d}\)</td><td style="text-align:left">Guideway, axial-equivalent nut, and reduced drivetrain friction forces</td><td style="text-align:left">N</td></tr><tr><td style="text-align:left">\(N_r\), \(T_{max}\), \(T_{det}\)</td><td style="text-align:left">Rotor teeth (50), peak torque, detent amplitude</td><td style="text-align:left">–, N·m, N·m</td></tr><tr><td style="text-align:left">\(\lambda_{mag},\lambda_{det}\)</td><td style="text-align:left">Model switches</td><td style="text-align:left">–</td></tr><tr><td style="text-align:left">\(F_s,F_c,v_s,\delta\)</td><td style="text-align:left">Stribeck parameters</td><td style="text-align:left">N, N, m/s, –</td></tr><tr><td style="text-align:left">\(N,\nu_i,k_i,F_i,C\)</td><td style="text-align:left">GMS element count, weight, stiffness, state, attraction</td><td style="text-align:left">–, –, N/m, N, N/s</td></tr><tr><td style="text-align:left">\(z,\sigma_0,\sigma_1,\sigma_2\)</td><td style="text-align:left">LuGre state and coefficients</td><td style="text-align:left">m, N/m, N·s/m, N·s/m</td></tr></tbody></table></div><div class="footer">Rendered from ball_screw_stage_dynamic_derivation_v3.md · 2026-08-11 14:07 W. Europe Daylight Time</div></article></div>
+<div class="table-wrap"><table><thead><tr><th style="text-align:left">Symbol</th><th style="text-align:left">Description</th><th style="text-align:left">Units</th></tr></thead><tbody><tr><td style="text-align:left">\(r = L/2\pi\)</td><td style="text-align:left">Screw transmission ratio</td><td style="text-align:left">m/rad</td></tr><tr><td style="text-align:left">\(L\)</td><td style="text-align:left">Screw lead, 1 mm</td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">\(\theta_m,\theta_c,\theta_{s1..s3}\)</td><td style="text-align:left">Torsional coordinates</td><td style="text-align:left">rad</td></tr><tr><td style="text-align:left">\(u_b,u_e,u_f,u_n,x_s\)</td><td style="text-align:left">Axial coordinates</td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">\(u_t=u_e+r\theta_{s2}\)</td><td style="text-align:left">Full-model transformer output at the ball contact</td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">\(x_d=r\theta\)</td><td style="text-align:left">Reduced coordinate after drivetrain collapse and static condensation</td><td style="text-align:left">m</td></tr><tr><td style="text-align:left">\(J_m,J_c,J_{s1..s3}\)</td><td style="text-align:left">Torsional inertias</td><td style="text-align:left">kg·m²</td></tr><tr><td style="text-align:left">\(m_b,m_e,m_f,m_n,m_s\)</td><td style="text-align:left">Axial masses</td><td style="text-align:left">kg</td></tr><tr><td style="text-align:left">\(m_d\)</td><td style="text-align:left">Reflected drivetrain mass</td><td style="text-align:left">kg</td></tr><tr><td style="text-align:left">\(k_m\), \(K_m = k_m/r^2\)</td><td style="text-align:left">Magnetic stiffness</td><td style="text-align:left">N·m/rad, N/m</td></tr><tr><td style="text-align:left">\(k_{c1},k_{c2}\)</td><td style="text-align:left">Coupling half-stiffnesses</td><td style="text-align:left">N·m/rad</td></tr><tr><td style="text-align:left">\(k_{\theta a},k_{\theta b}\)</td><td style="text-align:left">Screw torsional stiffnesses</td><td style="text-align:left">N·m/rad</td></tr><tr><td style="text-align:left">\(k_{brg}\)</td><td style="text-align:left">Support bearing axial stiffness</td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">\(k_{sha},k_{shb}\)</td><td style="text-align:left">Screw axial extension stiffnesses</td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">\(k_{ball}\)</td><td style="text-align:left">Ball contact normal axial stiffness</td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">\(k_{mnt}\)</td><td style="text-align:left">Nut mount stiffness</td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">\(k_{ax}\)</td><td style="text-align:left">Reduced series axial stiffness</td><td style="text-align:left">N/m</td></tr><tr><td style="text-align:left">\(\delta_n\), \(F_n\)</td><td style="text-align:left">Nut interface deflection and force</td><td style="text-align:left">m, N</td></tr><tr><td style="text-align:left">\(T_{mb},T_{h1},T_{h2},T_{brg},T_{f,n}\)</td><td style="text-align:left">Friction torques</td><td style="text-align:left">N·m</td></tr><tr><td style="text-align:left">\(F_{f,g},F_{f,n},F_{f,d}\)</td><td style="text-align:left">Guideway, axial-equivalent nut, and reduced drivetrain friction forces</td><td style="text-align:left">N</td></tr><tr><td style="text-align:left">\(N_r\), \(T_{max}\), \(T_{det}\)</td><td style="text-align:left">Rotor teeth (50), peak torque, detent amplitude</td><td style="text-align:left">–, N·m, N·m</td></tr><tr><td style="text-align:left">\(\lambda_{mag},\lambda_{det}\)</td><td style="text-align:left">Model switches</td><td style="text-align:left">–</td></tr><tr><td style="text-align:left">\(F_s,F_c,v_s,\delta\)</td><td style="text-align:left">Stribeck parameters</td><td style="text-align:left">N, N, m/s, –</td></tr><tr><td style="text-align:left">\(N,\nu_i,k_i,F_i,C\)</td><td style="text-align:left">GMS element count, weight, stiffness, state, attraction</td><td style="text-align:left">–, –, N/m, N, N/s</td></tr><tr><td style="text-align:left">\(z,\sigma_0,\sigma_1,\sigma_2\)</td><td style="text-align:left">LuGre state and coefficients</td><td style="text-align:left">m, N/m, N·s/m, N·s/m</td></tr></tbody></table></div><div class="footer">Rendered from ball_screw_stage_dynamic_derivation_v3.md · 2026-08-12 21:52 W. Europe Daylight Time</div></article></div>
 <script>
 function setDetails(open) { document.querySelectorAll('details').forEach(d => d.open=open); }
 function toggleTheme() { const root=document.documentElement; root.dataset.theme=root.dataset.theme==='dark'?'light':'dark'; }
@@ -386,21 +386,31 @@ function liveTransferData() {
   const tdet = parameterNumber('detent_torque', 0.005);
   const detentPhase = parameterNumber('detent_phase', 0.0);
   const couplingSeries = parameterNumber('k_c_series', 68.7549);
+  const kthetaA = parameterNumber('k_theta_a', 211.0);
   const mStage = parameterNumber('stage_mass', 0.355);
   const mNut = parameterNumber('nut_mass', 0.050);
   const ms = mStage + mNut;
   const axialModeTarget = parameterNumber('axial_mode_target_hz', 695.82);
+  const mEffMeasured = parameterNumber('m_eff_measured', 0.600);
+  const zetaRelativeMeasured = parameterNumber('zeta_relative_measured', 0.0014);
   const kbrg = parameterNumber('k_brg', 25.0e6);
   const ksha = parameterNumber('k_sha', 67.0e6);
   const kmnt = parameterNumber('k_mnt', 100.0e6);
   const cax = parameterNumber('axial_damping', 55.0);
   const zeta = parameterNumber('electromagnetic_zeta', 0.10);
-  const microstepDivisor = parameterNumber('microstep_divisor', 64);
+  const zetaSteel = parameterNumber('zeta_steel', 5.0e-4);
+  const zetaBearing = parameterNumber('zeta_bearing', 1.0e-2);
+  const zetaBallNut = parameterNumber('zeta_ball_nut', 1.15e-2);
+  const zetaNutMount = parameterNumber('zeta_nut_mount', 5.0e-3);
+  const microstepDivisor = parameterNumber('microstep_divisor', 256);
   if (!(lead>0 && teeth>0 && jm>0 && jc>=0 && screwLength>0 && usableScrewTravel>0 &&
         stageTravel>0 && stageTravel<=usableScrewTravel && usableScrewTravel<=screwLength && screwDiameter>0 &&
-        screwDensity>0 && tmax>0 && tdet>=0 && mStage>0 && mNut>=0 &&
-        axialModeTarget>0 && kbrg>0 && ksha>0 && kmnt>0 &&
-        cax>=0 && zeta>=0 && microstepDivisor>=1))
+        screwDensity>0 && tmax>0 && tdet>=0 && couplingSeries>0 && kthetaA>0 &&
+        mStage>0 && mNut>=0 &&
+        axialModeTarget>0 && mEffMeasured>0 && zetaRelativeMeasured>0 &&
+        kbrg>0 && ksha>0 && kmnt>0 &&
+        cax>=0 && zeta>=0 && zetaSteel>=0 && zetaBearing>=0 && zetaBallNut>=0 &&
+        zetaNutMount>=0 && microstepDivisor>=1))
     throw new Error('Geometry, masses, torque, and stiffness must be positive; damping and detent torque cannot be negative.');
   const r = lead/(2*Math.PI);
   const screwRadius = screwDiameter/2;
@@ -420,6 +430,73 @@ function liveTransferData() {
   if (!(remainingBallCompliance>0))
     throw new Error('The current axial inputs leave no positive compliance for k_ball.');
   const kBall = 1/remainingBallCompliance;
+  // Multi-route reduction comparison.  Route F deliberately uses the same
+  // adjacent/reduced masses as full_linear_matrices(), not one shared m_s.
+  const kc1 = 2*couplingSeries, kc2 = 2*couplingSeries;
+  const torsionalCompliance = r*r*(1/kc1 + 1/kc2 + 1/kthetaA);
+  const axialCompliance = 1/kbrg + 1/ksha + 1/kBall + 1/kmnt;
+  const kaxSeries = 1/axialCompliance;
+  const kaxSeriesFull = 1/(axialCompliance + torsionalCompliance);
+  const torsionalShare = torsionalCompliance/(axialCompliance + torsionalCompliance);
+  const w2 = 2*Math.PI*axialModeTarget;
+  const screwSegmentMass = screwMass/3;
+  const screwSegmentInertia = screwInertia/3;
+  const pairMass = (a,b) => a*b/(a+b);
+  const ballRelativeMass = 1/(r*r/screwSegmentInertia + 1/screwSegmentMass + 1/mNut);
+  const complexElements = [
+    {k:kbrg, c:2*zetaBearing*Math.sqrt(kbrg*screwSegmentMass)},
+    {k:ksha, c:2*zetaSteel*Math.sqrt(ksha*pairMass(screwSegmentMass,screwSegmentMass))},
+    {k:kBall, c:2*zetaBallNut*Math.sqrt(kBall*ballRelativeMass)},
+    {k:kmnt, c:2*zetaNutMount*Math.sqrt(kmnt*pairMass(mNut,mStage))}
+  ];
+  let compRe=0, compIm=0;
+  complexElements.forEach(el => {
+    const den=el.k*el.k+w2*w2*el.c*el.c;
+    compRe+=el.k/den; compIm+=-w2*el.c/den;
+  });
+  const complianceMagnitudeSquared=compRe*compRe+compIm*compIm;
+  const kaxCplx=compRe/complianceMagnitudeSquared;
+  const caxCplx=-compIm/complianceMagnitudeSquared/w2;
+  const kaxMeasured=w2*w2*mEffMeasured;
+  const measuredBallCompliance=1/kaxMeasured-1/kbrg-1/ksha-1/kmnt;
+  if (!(measuredBallCompliance>0))
+    throw new Error('The measured-mass route leaves no positive compliance for k_ball.');
+  const kBallMeasured=1/measuredBallCompliance;
+  const muRel=md*ms/(md+ms), muMeasured=md*mEffMeasured/(md+mEffMeasured);
+  const caxMeasured=2*zetaRelativeMeasured*Math.sqrt(kaxMeasured*muMeasured);
+  // --- friction site parameter diagnostics -----------------------------------
+  const nu = [1,2,3,4].map(i => parameterNumber('gms_nu'+i, 0));
+  const frictionSites = {
+    g: {k:[1,2,3,4].map(i => parameterNumber('g_k'+i,0)),
+        s0:parameterNumber('g_sigma0',0), Fs:parameterNumber('g_Fs',0),
+        Fc:parameterNumber('g_Fc',0)},
+    n: {k:[1,2,3,4].map(i => parameterNumber('n_k'+i,0)),
+        s0:parameterNumber('n_sigma0',0), Fs:parameterNumber('n_Fs',0),
+        Fc:parameterNumber('n_Fc',0)},
+    d: {k:[1,2,3,4].map(i => parameterNumber('d_k'+i,0)),
+        s0:parameterNumber('d_sigma0',0), Fs:parameterNumber('d_Fs',0),
+        Fc:parameterNumber('d_Fc',0)}
+  };
+  const tauC = parameterNumber('tau_C', 2.0e-4);
+  const etaScrew = parameterNumber('eta_screw', 0.90);
+  const preloadNut = parameterNumber('F_preload_nut', 100.0);
+  if (!(tauC>0)) throw new Error('The Stribeck relaxation time must be positive.');
+  if (!(etaScrew>0 && etaScrew<1)) throw new Error('Screw efficiency must lie between 0 and 1.');
+  Object.entries(frictionSites).forEach(([tag,site]) => {
+    site.Cgms = (site.Fs-site.Fc)/tauC;
+    site.tauC = tauC;
+  });
+  const nuSum = nu.reduce((a,b)=>a+b,0);
+  if (Math.abs(nuSum-1) > 1e-9) throw new Error('GMS force fractions must sum to one.');
+  Object.entries(frictionSites).forEach(([tag,site]) => {
+    const kSum = site.k.reduce((a,b)=>a+b,0);
+    if (!(kSum>0) || Math.abs(kSum-site.s0) > 1e-6*Math.max(site.s0,1))
+      throw new Error('GMS element stiffnesses for site '+tag+' must sum to sigma_0.');
+    site.yieldFs = site.k.map((k,i) => nu[i]*site.Fs/k);
+    site.yieldFc = site.k.map((k,i) => nu[i]*site.Fc/k);
+    site.yieldSpan = site.yieldFs[3]/site.yieldFs[0];
+    site.staticDeflection = site.Fs/site.s0;
+  });
   const kdetAmplitude = 4*teeth*tdet/(r*r);
   const kdet = kdetAmplitude*Math.cos(detentPhase);
   if (!(km>kdetAmplitude)) throw new Error('The detent tangent amplitude must remain below commutation stiffness.');
@@ -437,8 +514,10 @@ function liveTransferData() {
     const gs = cDiv(cMul({re:-km,im:0},b), determinant);
     frequencies.push(frequency); drive.push(gd); stage.push(gs); rotorStage.push(cDiv(gs,gd));
   }
-  function modePair(driveTangent) {
-    const qa=md*ms, qb=md*kax+ms*(driveTangent+kax), qc=driveTangent*kax;
+  function modePair(driveTangent, linkStiffness=kax, stageMass=ms) {
+    const qa=md*stageMass;
+    const qb=md*linkStiffness+stageMass*(driveTangent+linkStiffness);
+    const qc=driveTangent*linkStiffness;
     const discriminant=Math.max(qb*qb-4*qa*qc,0);
     const roots=[(qb-Math.sqrt(discriminant))/(2*qa),(qb+Math.sqrt(discriminant))/(2*qa)];
     return roots.map(value => Math.sqrt(Math.max(value,0))/(2*Math.PI));
@@ -446,16 +525,47 @@ function liveTransferData() {
   const modes=modePair(km);
   const localSoftModes=modePair(km-kdetAmplitude), localHardModes=modePair(km+kdetAmplitude);
   const localLowBand=[Math.min(localSoftModes[0],localHardModes[0]),Math.max(localSoftModes[0],localHardModes[0])];
+  const routeModesS=modePair(km,kaxSeries,ms);
+  const routeModesF=modePair(km,kaxCplx,ms);
+  const routeModesM=modePair(km,kaxMeasured,mEffMeasured);
+  const relativeZeta=cax/(2*Math.sqrt(kax*muRel));
+  const zetaCplx=caxCplx/(2*Math.sqrt(kaxCplx*muRel));
+  const settlingFactor=-Math.log(0.02);
+  const settling=(ratio,frequency) => settlingFactor/(ratio*2*Math.PI*frequency);
+  const routeCF1=166.929746272;
+  const routeCF2=691.747013358;
+  const routeCKax=7619913.05831;
+  const routeCCax=46.7908808905;
+  const routeCZeta=0.0133430914398;
+  const routeCKBall=15080745.3231;
+  const fullModelZeta=0.0132098866835;
+  const fullModelSettling=0.0682217676309;
+  const fullModelUpperHz=690.87499066;
+  const firstFixedInterfaceHz=1269.12482272;
+  const firstDiscardedHz=2002.01892292;
   return {
     frequencies, drive, stage, rotorStage, modes, localLowBand, md, ms, mStage, mNut,
     axialModeTarget, km, kdet, kdetAmplitude, kax, kBall, kbrg, ksha, kmnt,
     cax, zeta, lead, teeth, r, jm, jc, screwLength, screwDiameter,
     screwDensity, screwMass, screwInertia, jTotal, tmax, tdet, detentPhase,
     usableScrewTravel, stageTravel,
-    couplingSeries, couplingHalf:2*couplingSeries, kappa:teeth/r,
+    couplingSeries, couplingHalf:2*couplingSeries, kthetaA, kappa:teeth/r,
     fullStep:lead/(4*teeth), quarterStep:lead/(16*teeth),
     commandStep:lead/(4*teeth*microstepDivisor), interpolatedStep:lead/(4*teeth*256),
-    microstepDivisor, fmax:tmax/r, cm, detentPeriod:lead/(4*teeth)
+    microstepDivisor, fmax:tmax/r, cm, detentPeriod:lead/(4*teeth),
+    mEffMeasured, zetaRelativeMeasured, zetaSteel, zetaBearing,
+    zetaBallNut, zetaNutMount, axialCompliance,
+    torsionalCompliance, torsionalShare, kaxSeries, kaxSeriesFull,
+    kaxCplx, caxCplx, zetaCplx, kaxMeasured, caxMeasured, kBallMeasured,
+    muRel, massRatio:md/ms, relativeZeta, routeModesS, routeModesF, routeModesM,
+    routeCF1, routeCF2, routeCKax, routeCCax, routeCZeta, routeCKBall,
+    fullModelZeta, fullModelSettling, fullModelUpperHz,
+    firstFixedInterfaceHz, firstDiscardedHz, nu, frictionSites,
+    tauC, etaScrew, preloadNut,
+    routePSettling:settling(relativeZeta,modes[1]),
+    routeFSettling:settling(zetaCplx,routeModesF[1]),
+    routeMSettling:settling(zetaRelativeMeasured,routeModesM[1]),
+    routeCSettling:settling(routeCZeta,routeCF2)
   };
 }
 function formatDerivedValue(key, value) {
@@ -470,6 +580,30 @@ function formatDerivedValue(key, value) {
   if (key==='reduced_stage_mass') return value.toFixed(3);
   if (key==='screw_mass' || key==='screw_segment_mass') return value.toFixed(6);
   if (key==='k_c_half') return value.toFixed(3);
+  if (/^route_[psbfcm]_(md|ms)$/.test(key)) return value.toFixed(3);
+  if (/^route_[psbfcm]_(kax|kball)$/.test(key) || key==='route_s_kax_full')
+    return (value/1e6).toFixed(3);
+  if (/^route_[psbfcm]_cax$/.test(key)) return value.toFixed(2);
+  if (key==='interface_axial_damping') return value.toFixed(2);
+  if (/^route_[psbfcm]_zeta$/.test(key) || key==='full_model_zeta') return value.toExponential(3);
+  if (/^route_[psbfcm]_f[12]$/.test(key)) return value.toFixed(2);
+  if (/^route_[psbfcm]_settling$/.test(key) || key==='full_model_settling')
+    return (value*1e3).toFixed(1);
+  if (key==='torsional_share') return (100*value).toFixed(3);
+  if (key==='mass_ratio') return value.toFixed(2);
+  if (key==='reduced_mu') return value.toFixed(4);
+  if (key==='mu_fraction') return value.toFixed(4);
+  if (key==='cb_frequency_delta' || key==='cb_damping_delta') return value.toFixed(2);
+  if (key==='fixed_interface_separation' || key==='discarded_pole_separation')
+    return value.toFixed(3);
+  if (/^yield_[gnd]_[1-4]_(fs|fc)$/.test(key) || /^static_deflection_[gnd]$/.test(key))
+    return (value*1e6).toFixed(2);          // micrometres
+  if (/^yield_span_[gnd]$/.test(key)) return value.toFixed(1);
+  if (/^gms_rate_[gnd]$/.test(key)) return value.toFixed(0);
+  if (/^tau_C_[gnd]$/.test(key) || key==='retained_mode_period') return (value*1e3).toFixed(3);
+  if (key.startsWith('detent_velocity_')) return (value*1e3).toFixed(3);
+  if (key==='d_Fs_efficiency_estimate' || key==='tau_C_mode_ratio') return value.toFixed(2);
+  if (key==='d_Fs_torque_equivalent') return (value*1e3).toFixed(3);
   if (key.endsWith('_hz')) return value.toFixed(2);
   return Number(value).toPrecision(6);
 }
@@ -482,6 +616,7 @@ function refreshDerivedOutputs(data) {
     magnetic_stiffness:data.km,
     detent_stiffness:data.kdet,
     reduced_axial_stiffness:data.kax,
+    interface_axial_damping:data.caxCplx,
     k_ball:data.kBall,
     full_step_pitch:data.fullStep,
     quarter_step_bound:data.quarterStep,
@@ -497,6 +632,62 @@ function refreshDerivedOutputs(data) {
     drive_stiffness:data.km,
     force_limit:data.fmax,
     spatial_wavenumber:data.kappa
+    ,route_p_md:data.md, route_p_ms:data.ms, route_p_kax:data.kax,
+    route_p_cax:data.cax, route_p_zeta:data.relativeZeta,
+    route_p_f1:data.modes[0], route_p_f2:data.modes[1], route_p_kball:data.kBall,
+    route_p_settling:data.routePSettling,
+    route_s_md:data.md, route_s_ms:data.ms, route_s_kax:data.kaxSeries,
+    route_s_cax:data.cax, route_s_zeta:data.relativeZeta,
+    route_s_f1:data.routeModesS[0], route_s_f2:data.routeModesS[1], route_s_kball:data.kBall,
+    route_s_settling:data.routePSettling,
+    route_b_md:data.md, route_b_ms:data.ms, route_b_kax:data.kaxSeries,
+    route_b_cax:data.cax, route_b_zeta:data.relativeZeta,
+    route_b_f1:data.routeModesS[0], route_b_f2:data.routeModesS[1], route_b_kball:data.kBall,
+    route_b_settling:data.routePSettling,
+    route_f_md:data.md, route_f_ms:data.ms, route_f_kax:data.kaxCplx,
+    route_f_cax:data.caxCplx, route_f_zeta:data.zetaCplx,
+    route_f_f1:data.routeModesF[0], route_f_f2:data.routeModesF[1], route_f_kball:data.kBall,
+    route_f_settling:data.routeFSettling,
+    route_c_md:data.md, route_c_ms:data.ms, route_c_kax:data.routeCKax,
+    route_c_cax:data.routeCCax, route_c_zeta:data.routeCZeta,
+    route_c_f1:data.routeCF1, route_c_f2:data.routeCF2, route_c_kball:data.routeCKBall,
+    route_c_settling:data.routeCSettling,
+    route_m_md:data.md, route_m_ms:data.mEffMeasured, route_m_kax:data.kaxMeasured,
+    route_m_cax:data.caxMeasured, route_m_zeta:data.zetaRelativeMeasured,
+    route_m_f1:data.routeModesM[0], route_m_f2:data.routeModesM[1], route_m_kball:data.kBallMeasured,
+    route_m_settling:data.routeMSettling,
+    route_s_kax_full:data.kaxSeriesFull, torsional_share:data.torsionalShare,
+    mass_ratio:data.massRatio, reduced_mu:data.muRel,
+    full_model_zeta:data.fullModelZeta, full_model_settling:data.fullModelSettling,
+    full_model_upper_hz:data.fullModelUpperHz,
+    cb_frequency_delta:100*Math.abs(data.routeCF2-data.fullModelUpperHz)/data.fullModelUpperHz,
+    cb_damping_delta:100*Math.abs(data.routeCZeta-data.fullModelZeta)/data.fullModelZeta,
+    route_p_bandwidth_hz:2*data.relativeZeta*data.modes[1],
+    full_model_bandwidth_hz:2*data.fullModelZeta*data.fullModelUpperHz,
+    first_fixed_interface_hz:data.firstFixedInterfaceHz,
+    first_discarded_hz:data.firstDiscardedHz,
+    fixed_interface_separation:Math.pow(data.axialModeTarget/data.firstFixedInterfaceHz,2),
+    discarded_pole_separation:Math.pow(data.axialModeTarget/data.firstDiscardedHz,2)
+    ,mu_fraction:data.muRel/data.ms,
+    relative_mode_nearground_hz:Math.sqrt(data.kax/data.ms)/(2*Math.PI),
+    drive_pole_hz:Math.sqrt(data.km/data.md)/(2*Math.PI),
+    ...Object.fromEntries(
+      Object.entries(data.frictionSites).flatMap(([tag,site]) => [
+        ...site.yieldFs.map((v,i) => ['yield_'+tag+'_'+(i+1)+'_fs', v]),
+        ...site.yieldFc.map((v,i) => ['yield_'+tag+'_'+(i+1)+'_fc', v]),
+        ['yield_span_'+tag, site.yieldSpan],
+        ['static_deflection_'+tag, site.staticDeflection],
+        ['gms_rate_'+tag, site.Cgms],
+        ['tau_C_'+tag, site.tauC]
+      ])
+    ),
+    d_Fs_efficiency_estimate:data.preloadNut*(1/data.etaScrew-1),
+    d_Fs_torque_equivalent:data.frictionSites.d.Fs*data.r,
+    detent_velocity_drive:data.modes[0]*data.fullStep,
+    detent_velocity_axial:data.modes[1]*data.fullStep,
+    detent_velocity_discarded:data.firstDiscardedHz*data.fullStep,
+    retained_mode_period:1/data.modes[1],
+    tau_C_mode_ratio:1/(data.modes[1]*data.tauC)
   };
   document.querySelectorAll('[data-derived]').forEach(output => {
     const key=output.dataset.derived;
@@ -505,17 +696,63 @@ function refreshDerivedOutputs(data) {
 }
 function refreshLiveEquations(data) {
   const mn = value => (value/1e6).toFixed(3);
+  const reflectedKg = inertia => inertia/(data.r*data.r);
+  const compliancePct = stiffness => 100*data.kax/stiffness;
+  const torsionalCompliance = data.torsionalCompliance;
+  const fullStaticCompliance = data.axialCompliance + torsionalCompliance;
+  const fullStaticStiffness = 1/fullStaticCompliance;
+  const torsionalCompliancePct = 100*torsionalCompliance/fullStaticCompliance;
   const equations = {
     'reduced-mass':
       'm_s = m_stage + m_n = ' + data.mStage.toFixed(3) + ' + ' +
       data.mNut.toFixed(3) + ' = ' + data.ms.toFixed(3) + ' kg',
+    'inertia-aggregation':
+      'J_sum = J_m + J_c + J_s = ' + data.jTotal.toExponential(5) +
+      ' kg m^2; reflected contributions: motor ' + reflectedKg(data.jm).toFixed(3) +
+      ' kg + coupling ' + reflectedKg(data.jc).toFixed(3) +
+      ' kg + screw ' + reflectedKg(data.screwInertia).toFixed(3) +
+      ' kg = m_d ' + data.md.toFixed(3) + ' kg',
+    'compliance-breakdown':
+      'Current compliance shares: bearing ' + compliancePct(data.kbrg).toFixed(2) +
+      '%, loaded screw ' + compliancePct(data.ksha).toFixed(2) +
+      '%, ball contact ' + compliancePct(data.kBall).toFixed(2) +
+      '%, nut mount ' + compliancePct(data.kmnt).toFixed(2) + '% (sum 100.00%).',
+    'exact-static-condensation':
+      'Exact full static link: ' + (fullStaticStiffness/1e6).toFixed(3) +
+      ' MN/m; executable axial-only link: ' + (data.kax/1e6).toFixed(3) +
+      ' MN/m. Reflected torsional compliance is ' +
+      (torsionalCompliance*1e9).toFixed(3) + ' nm/N (' +
+      torsionalCompliancePct.toFixed(3) + '% of the complete static compliance).',
     'modal-stiffness':
       'f₂,target = ' + data.axialModeTarget.toFixed(2) + ' Hz  →  k_ax = ' +
       mn(data.kax) + ' MN/m',
+    'route-comparison-summary':
+      'Formal condensation, direct compliance, and the bond graph agree on the axial link to ' +
+      (100*Math.abs(data.kaxSeries-data.kax)/data.kax).toExponential(2) +
+      '%. Including the reflected torsional chain lowers the static link by ' +
+      (100*(data.kaxSeries-data.kaxSeriesFull)/data.kaxSeries).toFixed(3) +
+      '%. Frequency-domain condensation changes stiffness by ' +
+      (100*(data.kaxCplx-data.kax)/data.kax).toFixed(3) +
+      '% at f2 while replacing the damping propagation.',
+    'damping-defect':
+      'Current 2-DOF: zeta_rel=' + data.relativeZeta.toExponential(3) +
+      ', t_2%=' + (data.routePSettling*1e3).toFixed(1) +
+      ' ms; full 10-DOF audit: zeta_rel=' + data.fullModelZeta.toExponential(3) +
+      ', t_2%=' + (data.fullModelSettling*1e3).toFixed(1) +
+      ' ms; frequency-domain reduction: zeta_rel=' + data.zetaCplx.toExponential(3) +
+      ', t_2%=' + (data.routeFSettling*1e3).toFixed(1) + ' ms.',
+    'mass-conflict':
+      'BOM mass ' + data.ms.toFixed(3) + ' kg gives k_ax=' + mn(data.kax) +
+      ' MN/m and k_ball=' + mn(data.kBall) + ' MN/m; measured m_eff ' +
+      data.mEffMeasured.toFixed(3) + ' kg gives k_ax=' + mn(data.kaxMeasured) +
+      ' MN/m and k_ball=' + mn(data.kBallMeasured) + ' MN/m, a ' +
+      (data.kBallMeasured/data.kBall).toFixed(2) + 'x change.',
     'axial-compliance':
       '1/' + mn(data.kbrg) + ' + 1/' + mn(data.ksha) + ' + 1/' +
       mn(data.kBall) + ' + 1/' + mn(data.kmnt) + ' = 1/' +
-      mn(data.kax) + '  (MN/m)⁻¹'
+      mn(data.kax) + '  (MN/m)⁻¹',
+    'friction-port-summary': "Friction ports per case - 0: sites none, 4 live states; A: sites d,g, 6 live states; A2: sites d,g, 12 live states; B: sites d,n, 6 live states; B2: sites d,n, 12 live states; C: sites d,g,n, 7 live states; C2: sites d,g,n, 16 live states; A1v: sites d,g, 6 live states. The allocated RK4 vector is a fixed 19 entries; inactive site blocks hold zero derivatives.",
+    'gms-branch-census': "GMS branch census - A2/d: reversal 24, threshold 2,009, evals 959,996; A2/g: reversal 13, threshold 686, evals 959,992; B2/d: reversal 24, threshold 2,014, evals 959,996; B2/n: reversal 0, threshold 0, evals 959,996; C2/d: reversal 24, threshold 2,008, evals 959,996; C2/g: reversal 13, threshold 1,064, evals 959,992; C2/n: reversal 0, threshold 0, evals 959,996. 7,781 threshold flips total; see Section 13.2 for the priced counterfactual."
   };
   document.querySelectorAll('[data-live-equation]').forEach(element => {
     const equation = equations[element.dataset.liveEquation];

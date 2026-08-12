@@ -216,7 +216,7 @@ The following cells show the executable component values. Reflected mass and mag
 | complete screw length | [[input:screw_length=0.192]] | m |
 | approximate usable screw distance | [[input:usable_screw_travel=0.170]] | m |
 | full stage travel | [[input:stage_travel=0.150]] | m |
-| installed lead accuracy class | [[input:lead_accuracy_class=IT1]] | – |
+| installed lead accuracy class | [[input:lead_accuracy_class=IT3]] | – |
 | screw diameter | [[input:screw_diameter=8.000e-3]] | m |
 | screw density | [[assumed:screw_density=7850]] | kg/m³ |
 | derived screw $J_s$ | [[derived:screw_inertia=6.06083e-7]] | kg·m² |
@@ -224,7 +224,7 @@ The following cells show the executable component values. Reflected mass and mag
 | axial play, grade O | 0.0 | m |
 | support bearing $k_{brg}$ | [[assumed:k_brg=2.500e7]] | N/m |
 | open-loop drive damping ratio $\zeta_m$ | [[assumed:electromagnetic_zeta=0.10]] | – |
-| STEP/DIR microstep divisor | [[assumed:microstep_divisor=64]] | – |
+| pre-distortion substep divisor | [[assumed:microstep_divisor=256]] | – |
 | derived STEP/DIR quantum | [[derived:command_step=7.81250e-8]] | m |
 | derived 256-interpolated quantum | [[derived:interpolated_step=1.95313e-8]] | m |
 
@@ -378,7 +378,7 @@ The global two-DOF modes are **167.7 Hz** and **695.8 Hz**. The local detent tan
 
 Simulate both models on identical input and report the discrepancy.
 
-1. Single STEP/DIR microstep, 78.125 nm at $\mu = 64$, from rest.
+1. Single pre-distortion substep, 19.53125 nm at $\mu = 256$, from rest.
 2. Bidirectional reversal at the target repeatability scale.
 3. Trapezoidal move over full travel with deceleration shaping.
 4. Frequency sweep 10 Hz to 3 kHz, drive-to-stage transfer function.
@@ -477,7 +477,7 @@ $F_{f,d}$ is the one identifiable $v_d$ law and includes motor-bearing, coupling
 
 ### 8.1 Executed presliding discriminator
 
-The companion derivation includes [force-instrumented nested-reversal experiments](Analytical_derivation_and_responses_v3.html#9-force-instrumented-partial-slip-memory-experiment) for A/A2 and B/B2. A/A2 uses the normal free-stage plant. The dedicated B/B2 identification fixture imposes $x_s=0$, commands $x_d$, and measures the nut-path reaction, because the free stage otherwise follows the slow drive motion and provides too little relative deflection. Both use 64-microstep STEP/DIR quanta and 100 ms derived dwell. The blocked-stage B/B2 loop crosses nut yield and directly tests the $k_{ax}$/$\sigma_{0,n}$ correlation; normal B/B2 plant responses remain free-stage.
+The companion derivation includes [force-instrumented nested-reversal experiments](Analytical_derivation_and_responses_v3.html#9-force-instrumented-partial-slip-memory-experiment) for A/A2 and B/B2. A/A2 uses the normal free-stage plant. The dedicated B/B2 identification fixture imposes $x_s=0$, commands $x_d$, and measures the nut-path reaction, because the free stage otherwise follows the slow drive motion and provides too little relative deflection. Both use 256-substep pre-distortion quanta and 100 ms derived dwell. The blocked-stage B/B2 loop crosses nut yield and directly tests the $k_{ax}$/$\sigma_{0,n}$ correlation; normal B/B2 plant responses remain free-stage.
 
 ---
 
@@ -505,7 +505,7 @@ In the deployed open-loop configuration neither the drive coordinate nor the dif
 4. Carriage skirt compliance and rail bending are absorbed into the rigid stage assumption.
 5. Yaw, pitch and roll are not modeled. Drive axis only.
 6. Thermal dependence of all friction parameters is omitted.
-7. The installed screw accuracy class is IT1. A measured lead-error map is still missing.
+7. The installed screw accuracy class is IT3. A measured lead-error map is still missing.
 8. Stepper electrical dynamics omitted. Defensible below 900 RPM, not above.
 9. Nut friction load dependence, $T_{f,n}$ as a function of $|F_n|$, is written but not parameterized.
 

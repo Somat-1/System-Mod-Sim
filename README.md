@@ -41,7 +41,7 @@ LuGre uses one average bristle state per active site. GMS uses four force states
 ## Simulations and numerical checks
 
 - Frequency responses use the linearized presliding tangent and are shown per case, with topology-matched LuGre/GMS comparisons.
-- The main nonlinear command uses 78.125 nm quanta, spans 0.234–2.031 µm absolute levels, keeps adjacent increments below 1.25 µm, and ends with a positive return to zero.
+- The main nonlinear command uses a 19.53125 nm pre-distortion grid, spans 0.234–2.031 µm absolute levels, keeps adjacent increments below 1.25 µm, and ends with a positive return to zero. The physical hardware STEP/DIR setting remains an open configuration item.
 - Every main and memory plateau uses a damping-derived dwell with a 100 ms floor; metrics use the settled final 20 ms rather than the ringing transient.
 - Separate force-instrumented nested-reversal tests cross guideway and nut yield distances. A/A2 uses the normal free-stage plant. The dedicated B/B2 identification fixture blocks the stage, commands the drive coordinate, and measures nut-path reaction force; this is what tests the exact small-signal $k_{ax}$/$\sigma_{0,n}$ correlation. Normal B/B2 plant responses remain free-stage.
 - Fixed-step RK4 holds a discontinuous command constant over all four stages. GMS re-stick and yield tests use the current RK trial state before the derivative is assigned.
