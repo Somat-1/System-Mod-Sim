@@ -2580,6 +2580,81 @@ At 1/16 there are 16 commanded samples per 5 µm detent cycle, so each microstep
 2. **Assembled axis, bidirectionally averaged constant-velocity sweep**, at a velocity away from the three resonant values above. Returns $F_g+F_d$; subtract step 1 to obtain $F_d$.
 3. **Blocked-stage reversal experiments for the nut port**, against two already-known ports.
 
+### G.5 Settled-force retention diagnostic
+
+<!-- BEGIN GENERATED RETENTION DIAGNOSTIC -->
+LuGre's plotted settled force sits near zero at every deflection in Section 9 while GMS holds up a substantial fraction. The mechanism is the `|v|` term in $\dot z=v-\sigma_0|v|z/s(v)$: it relaxes $z$ for as long as any velocity exists, and a plateau is not quiescent because every command edge rings the plant. The table below reports settled friction force at every plateau, using the identical 20 ms settled window as every other metric in this document.
+
+**Guideway (A, A2): settled friction force versus plateau index**
+
+| Plateau | Commanded level | LuGre A | GMS A2 |
+|---:|---:|---:|---:|
+| 1 | +0.0000 µm | +0.0000 N | +0.0000 N |
+| 2 | +3.7500 µm | +0.0239 N | +0.6832 N |
+| 3 | +1.2500 µm | -0.0477 N | -0.0830 N |
+| 4 | +3.1250 µm | +0.0757 N | +0.7461 N |
+| 5 | +1.2500 µm | -0.0644 N | -0.2003 N |
+| 6 | +3.7500 µm | +0.0473 N | +0.7609 N |
+| 7 | +0.0000 µm | -0.0087 N | -0.1821 N |
+| 8 | -3.4375 µm | -0.0286 N | -0.6725 N |
+| 9 | -1.2500 µm | +0.0553 N | +0.0666 N |
+| 10 | -2.8125 µm | -0.1108 N | -0.7427 N |
+| 11 | -1.2500 µm | +0.0773 N | +0.1153 N |
+| 12 | -3.4375 µm | -0.0525 N | -0.8270 N |
+| 13 | +0.0000 µm | +0.0051 N | +0.1137 N |
+
+
+**Blocked nut (B, B2): settled friction force versus plateau index**
+
+| Plateau | Commanded level | LuGre B | GMS B2 |
+|---:|---:|---:|---:|
+| 1 | +0.0000 µm | +0.0000 N | +0.0000 N |
+| 2 | +0.9375 µm | +0.0003 N | +0.3054 N |
+| 3 | +0.3125 µm | -0.0080 N | -0.0372 N |
+| 4 | +0.6250 µm | +0.0485 N | +0.2532 N |
+| 5 | +0.3125 µm | -0.0441 N | -0.0620 N |
+| 6 | +0.9375 µm | +0.0066 N | +0.4028 N |
+| 7 | +0.0000 µm | -0.0014 N | -0.0772 N |
+| 8 | -0.9375 µm | -0.0004 N | -0.3047 N |
+| 9 | -0.3125 µm | +0.0080 N | +0.0385 N |
+| 10 | -0.6250 µm | -0.0485 N | -0.2518 N |
+| 11 | -0.3125 µm | +0.0441 N | +0.0633 N |
+| 12 | -0.9375 µm | -0.0066 N | -0.4015 N |
+| 13 | +0.0000 µm | +0.0014 N | +0.0785 N |
+
+
+LuGre's column stays within 0.111 N of zero at every plateau at both sites, while GMS's column tracks the commanded deflection up to 0.827 N. **The mechanism is confirmed**: this is not a plotting artifact, LuGre's column genuinely holds almost nothing.
+
+#### High-damping confirmation run
+
+The retained-mode pole at baseline structural damping sits at 729.0 Hz with $\zeta_2=0.01507$, decaying with $\tau=14.49$ ms (envelope to 5%: 43.5 ms) — far longer than the millisecond-scale bristle relaxation time computed in 9.3, which is why the ringing wipes the bristle before the settled window opens. Scaling $c_{ax}$ and $c_m$ by 50$\times$ raises the same pole to $\zeta_2=0.74264$, $\tau=0.29$ ms, envelope to 5% in 0.88 ms — ringing now dies within about a millisecond.
+
+Rerunning the guideway A/A2 experiment at this damping, with everything else unchanged:
+
+| Plateau | Commanded level | LuGre A (baseline damping) | LuGre A (ringing suppressed) | GMS A2 (ringing suppressed) |
+|---:|---:|---:|---:|---:|
+| 1 | +0.0000 µm | +0.0000 N | +0.0000 N | +0.0000 N |
+| 2 | +3.7500 µm | +0.0239 N | +1.8025 N | +1.7482 N |
+| 3 | +1.2500 µm | -0.0477 N | -0.5393 N | -0.0834 N |
+| 4 | +3.1250 µm | +0.0757 N | +0.9213 N | +1.4697 N |
+| 5 | +1.2500 µm | -0.0644 N | -0.6893 N | -0.0834 N |
+| 6 | +3.7500 µm | +0.0473 N | +1.1370 N | +1.7482 N |
+| 7 | +0.0000 µm | -0.0087 N | -1.3373 N | -0.5098 N |
+| 8 | -3.4375 µm | -0.0286 N | -2.2709 N | -1.6804 N |
+| 9 | -1.2500 µm | +0.0553 N | +0.0788 N | +0.0212 N |
+| 10 | -2.8125 µm | -0.1108 N | -1.0215 N | -1.2848 N |
+| 11 | -1.2500 µm | +0.0773 N | +0.3938 N | +0.0212 N |
+| 12 | -3.4375 µm | -0.0525 N | -1.1662 N | -1.6804 N |
+| 13 | +0.0000 µm | +0.0051 N | +1.2040 N | +0.4466 N |
+
+With ringing suppressed, LuGre's settled force recovers from a mean 0.0583 N over the nonzero plateaus to 1.0020 N — 17.2$\times$ larger, comparable to or exceeding GMS at the same raised damping. **The dither-driven relaxation mechanism is confirmed from both directions**: it is present when ringing is left alone and it disappears when ringing is suppressed.
+
+#### Continuous presliding loop
+
+![Continuous quasi-static presliding loop](rendered_assets/presliding_true_loop.svg)
+
+A slow continuous triangular ramp-reversal, no plateaus, at the guideway outer amplitude. Unlike the settled return-point maps in 9.1, this is a literature-comparable presliding $F$-$x$ loop and is the signal a quasi-static Kistler identification sweep will actually produce.
+<!-- END GENERATED RETENTION DIAGNOSTIC -->
 
 ## 7. Full-versus-reduced verification
 
@@ -2644,7 +2719,7 @@ Damping assignment is now nearly irrelevant to the residual. The executed plant 
 
 ### 7.3 Dwell consequence
 
-The ten-DOF upper mode now implies a 2% settling time of 69.8 ms, against 58.3 ms for the reduced plant. [Section 10](#10-generated-numerical-summary-and-friction-case-responses) runs its nonlinear campaign on a 100 ms plateau dwell, set by the maximum of the 100 ms floor, the 46.4 ms detent-softened drive estimate, and the 58.3 ms reduced axial-mode estimate. That floor is adequate: it exceeds the axial-mode settling time by a factor of 1.4, so the settled-window statistics are collected after the 691 Hz mode has decayed. The earlier finding that the dwell was short by a factor of six was a consequence of the understated interface loss factors and does not survive their correction.
+The ten-DOF upper mode now implies a 2% settling time of 69.8 ms, against 58.3 ms for the reduced plant. [Section 10](#10-friction-case-responses-and-generated-summary) runs its nonlinear campaign on a 100 ms plateau dwell, set by the maximum of the 100 ms floor, the 46.4 ms detent-softened drive estimate, and the 58.3 ms reduced axial-mode estimate. That floor is adequate: it exceeds the axial-mode settling time by a factor of 1.4, so the settled-window statistics are collected after the 691 Hz mode has decayed. The earlier finding that the dwell was short by a factor of six was a consequence of the understated interface loss factors and does not survive their correction.
 
 ### 7.4 Reading the trajectory
 
@@ -2978,9 +3053,9 @@ LuGre adds tangent damping $(\sigma_1+\sigma_2)\mathbf H^T\mathbf H$; the presen
 <div class="section-takeaway">
 **Answers.** Which experiment can distinguish the constitutive laws?
 
-**The number.** GMS $F_{ret}$ is [[derived:guideway_return_force_ratio=4.63]]× the LuGre value.
+**The number.** LuGre retains [[derived:guideway_r_hold_lugre_pct=4.0]]% of the available elastic force at rest ($R_{hold}$); GMS retains [[derived:guideway_r_hold_gms_pct=24.1]]%, [[derived:guideway_r_hold_ratio=6.02]]× more. GMS $F_{ret}$ is [[derived:guideway_return_force_ratio=4.63]]× the LuGre value, but that ratio is a consequence of the retention gap, not an independent result.
 
-**Why it matters.** Non-closure on repeated returns is the constitutive-memory signature.
+**Why it matters.** LuGre's single bristle state is wiped by post-edge structural ringing before every settled window opens, so its near-zero settled force makes $F_{ret,LuGre}$ small by construction rather than by genuine return-point closure (Appendix G.5). Non-closure on repeated returns is still the constitutive-memory signature; retention is what shows it is real for GMS and degenerate for LuGre.
 
 **What it is not.** This is not a claim that either law is better; force is the discriminator because displacement is near the [[derived:project_adev_floor_nm=4.6]] nm project ADEV floor.
 </div>
@@ -3003,10 +3078,15 @@ The blocked-stage B/B2 fixture instead fixes $x_s=0$, commands $x_d$, and measur
 | Closed-loop energy $A_{loop}$ | 53.32 µJ | 31.88 µJ | 0.60× | 55.49 µJ | 32.99 µJ | -1.11 µJ (-3.4%) |
 | Whole-sequence RMS deviation † | 454.95 nm | 440.16 nm | 0.97× | 464.53 nm | 449.93 nm | -9.77 nm (-2.2%) |
 | Peak absolute deviation † | 3995.67 nm | 3882.25 nm | 0.97× | 3997.30 nm | 3899.49 nm | -17.24 nm (-0.4%) |
+| **Retention $R_{hold}$ ‡** | 4.0% | 24.1% | 6.02× | 3.6% | 24.2% | -0.0 pp (-0.2%) |
 
 † Edge-dominated response descriptor; included for context, not as a memory discriminator.
 
+‡ $R_{hold}=|F_{settled}|/\min(\sigma_0|x_{plateau}|,s(0))$, the fraction of the available elastic force actually held at rest, averaged over the six non-zero plateau levels. See [Appendix G.5](#g-5-settled-force-retention-diagnostic).
+
 The two laws produce almost the same stage motion: whole-sequence RMS differs by 3.3% and peak deviation by 2.8%. They differ sharply in what the interface remembers. GMS's return-force mismatch is 4.63× LuGre's and its residual error at the origin is 25× larger. GMS also dissipates only 59.8% of the LuGre loop energy, which is consistent rather than contradictory: elements below yield store elastic energy instead of burning it, and that same partial yielding is what prevents return-point closure.
+
+**That $F_{ret}$ ratio is a consequence of a retention gap, not an independent result.** LuGre retains just 4.0% of the available elastic force at rest ($R_{hold}$); GMS retains 24.1%, 6.0× more. Post-edge structural ringing bleeds the single LuGre bristle state down within a few milliseconds of every command edge, long before the settled window opens at 80 to 100 ms, so LuGre's near-zero settled force makes the levels agree with each other trivially and makes $F_{ret,LuGre}$ small by construction rather than by genuine return-point closure. GMS's four yielded-and-stuck elements survive the same ringing far better. See [Appendix G.5](#g-5-settled-force-retention-diagnostic) for the per-plateau diagnostic and a high-damping confirmation run.
 
 **Ablating the drive port moves every guideway metric by under 10%, and $F_{ret}$, the metric the comparison rests on, by 0.9%.** A/A2 is therefore a serviceable proxy for the guideway law comparison despite not being a physical uncoupled fixture. This supersedes the pre-1/16 estimate of a 27 to 32% drive-port contribution, computed on the finer command grid, which no longer holds.
 
@@ -3021,20 +3101,27 @@ The two laws produce almost the same stage motion: whole-sequence RMS differs by
 | Closed-loop energy $A_{loop}$ | 5.00 µJ | 2.61 µJ | 0.52× | -2.39 µJ |
 | Whole-sequence RMS deviation † | 177.11 nm | 182.40 nm | 1.03× | +5.29 nm |
 | Peak absolute deviation † | 938.46 nm | 938.14 nm | 1.00× | -0.32 nm |
+| **Retention $R_{hold}$ ‡** | 2.8% | 16.8% | 6.09× | +14.0 pp |
 
 † Edge-dominated response descriptor; included for context, not as a memory discriminator.
 
+‡ $R_{hold}=|F_{settled}|/\min(\sigma_0|x_{plateau}|,s(0))$, the fraction of the available elastic force actually held at rest, averaged over the six non-zero plateau levels. See [Appendix G.5](#g-5-settled-force-retention-diagnostic).
+
 The nut port shows the same signature at 2.88× on $F_{ret}$ and 52.2% relative loop energy, on a command 4× smaller. The blocked fixture is what makes this visible: on a free stage the drive and stage move together, the port sees almost no relative travel, and no element yields.
+
+The same retention gap that drives the guideway $F_{ret}$ ratio is present here: LuGre holds 2.8% of the available elastic force at rest against GMS's 16.8%, 6.1× more. $F_{ret,LuGre}$ at the nut is the same order as the settled force level itself, the signature of a degenerate denominator rather than a genuinely closed return point.
 
 ### 9.3 What this means for identification
 
 Return-point force non-closure, not edge-dominated displacement, is the discriminating observable. The comparison does not assume that GMS is better; measured force loops must select and fit the constitutive law. Appendix G records the exact commands, yield-window rationale, memory mechanism, and forced identification order.
+
+**Drift under a zero-mean or oscillating velocity is a documented deficiency of the single-state LuGre bristle, not a defect introduced here.** Averaging the Stribeck-scaled relaxation term over any nonzero dither leaves a nonzero mean bleed rate, so any ringing, vibration, or dither superimposed on a nominally stationary contact drains $z$ even though the mean commanded velocity is zero. This is one of the reasons the literature moved to multi-state Maxwell-slip constructions such as GMS, whose stuck elements obey $\dot F_i=k_iv$, odd in $v$, so a symmetric dither produces no net drift. The retention gap measured in [Appendix G.5](#g-5-settled-force-retention-diagnostic) is that known property showing up on this plant's post-edge ringing, and it supports the GMS/Maxwell-slip model choice for identification work rather than counting against either law.
 <!-- END GENERATED PRESLIDING SUMMARY -->
 
 <a id="10-response-comparison-across-friction-cases"></a>
 <a id="11-generated-numerical-summary"></a>
 
-## 10. Generated numerical summary and friction-case responses
+## 10. Friction-case responses and generated summary
 
 All [[derived:case_count=10]] cases use the same mechanical plant. Their active ports are defined once in [8.0](#8-0-how-the-friction-laws-attach-to-the-plant).
 
@@ -3101,16 +3188,17 @@ The legends report settled-window RMS and maximum **modeled command-stage deviat
 ![All-case Bode overlay, resonance zoom, and matched-law magnitude differences](rendered_assets/lugre_gms_pairwise_comparison.svg)
 
 <!-- BEGIN GENERATED BODE COMPARISON -->
-| Topology | Local peak | Shift from Case 0 | Largest GMS/LuGre gap | Cause |
-|---|---:|---:|---:|---|
-| Case 0 | 695.5 Hz | reference | not applicable | No friction tangent |
-| A/A2 | 728.2 Hz | +32.7 Hz, +4.7% | 0.00 dB at 5 Hz | Guideway presliding stiffness acts against ground |
-| G/G2 | 728.2 Hz | +32.7 Hz, +4.7% | 0.00 dB at 5 Hz | Guideway-only drive-port ablation on the same free-stage plant |
-| B/B2 | 781.0 Hz | +85.5 Hz, +12.3% | 0.00 dB at 5 Hz | Nut microslip shifts the relative mode; the same lumped drive tangent is shared by every friction case |
-| C/C2 | 809.6 Hz | +114.2 Hz, +16.4% | 0.00 dB at 5 Hz | All three identifiable friction tangents are active |
+| Topology | Low mode | High mode | Shift from Case 0 | Largest GMS/LuGre gap | Cause |
+|---|---:|---:|---:|---:|---|
+| Case 0 | 167.9 Hz | 695.8 Hz | reference | not applicable | No friction tangent |
+| A/A2 | 170.5 Hz | 729.1 Hz | +33.2 Hz, +4.8% | 0.00 dB at 5 Hz | Guideway presliding stiffness acts against ground |
+| G/G2 | 168.4 Hz | 729.1 Hz | +33.2 Hz, +4.8% | 0.00 dB at 5 Hz | Guideway-only drive-port ablation on the same free-stage plant |
+| B/B2 | 170.0 Hz | 780.9 Hz | +85.0 Hz, +12.2% | 0.00 dB at 5 Hz | Nut microslip shifts the relative mode; the same lumped drive tangent is shared by every friction case |
+| C/C2 | 170.5 Hz | 810.6 Hz | +114.8 Hz, +16.5% | 0.00 dB at 5 Hz | All three identifiable friction tangents are active |
+| A1v | 170.5 Hz | 729.1 Hz | +33.2 Hz, +4.8% | not applicable (no GMS pair) | Micro-viscous sensitivity: former $\sigma_1$ restored on the drive and guideway ports |
 <!-- END GENERATED BODE COMPARISON -->
 
-Each matched LuGre/GMS pair has the same presliding stiffness, so its resonance frequency is the same. LuGre adds $\sigma_1+\sigma_2$ tangent damping. The current GMS tangent adds only $\sigma_2$. This damping difference changes peak height, most visibly in C/C2.
+Each matched LuGre/GMS pair has the same presliding stiffness, so its resonance frequency is the same. With $\sigma_1$ set to zero at all three sites, each matched LuGre/GMS pair contributes an identical $\sigma_2\mathbf H^T\mathbf H$ tangent, so the linear responses coincide exactly and the gap column is zero by construction. A1v is the only case with $\sigma_1$ restored, and it is where any tangent-damping difference appears.
 
 ### 10.2 Generated numerical summary
 
@@ -3130,7 +3218,9 @@ Each matched LuGre/GMS pair has the same presliding stiffness, so its resonance 
 
 The displayed modes and gains are the global commutation linearization: periodic detent is deliberately excluded from the global stiffness matrix. The friction tangent is local and valid only below the listed first-yield travel. The nonlinear cases include periodic detent torque and use a 100 ms dwell: max(100 ms, 46.4 ms detent-softened drive, 58.3 ms reduced axial mode). Settled values collect the last 20 ms of every plateau. All deviation columns use $d(t)=x_{cmd}(t)-x_s(t)$ and describe open-loop modeled plant behavior, not servo tracking performance. Case 0 remains frictionless.
 
-### Generated reduction audit
+**The first-yield travel column is an independent check on the ablation.** A/A2's smallest first-yield travel is 0.583 µm, the drive port's first element; G/G2's is 0.987 µm, the guideway's first element. The two travels come from different ports because G/G2 removes the drive port, confirming that the ablation removes the port it claims to remove.
+
+### 10.3 Generated reduction audit
 
 | Quantity | Executed value |
 |---|---:|
@@ -3288,6 +3378,8 @@ The repeated-return metrics compare settled means at the *same* command level re
 On the metric the experiment is built around, the departure moves $F_{ret}$ for A2 by 0.0248 N against a law gap of 0.0781 N, which is 32% of the effect being measured.
 
 This conclusion is conditional on command resolution. The earlier 1/256 run priced the same A2 $F_{ret}$ departure at 91.5% of the law gap; the rebuilt production 1/16 sequence prices it at 32%. Coarser executable commands changed the loop trajectory and the comparison margin, so the branch-model warning must be re-evaluated whenever the microstep divisor or reversal sequence changes.
+
+**That denominator is not a clean two-law difference.** [Appendix G.5](#g-5-settled-force-retention-diagnostic) shows $F_{ret,LuGre}$ at the guideway is degenerate: LuGre's settled force is wiped by post-edge ringing before every settled window opens, so the law gap above is dominated by $F_{ret,GMS}$ rather than by a genuine LuGre-versus-GMS contrast. Equivalently, the departure moves GMS's own return-force mismatch by about 32% of its own value. That is still a meaningful bound on the branch-selection departure, but it is not the two-law comparison the percentage suggests at first read.
 
 No Section 9.4 metric moves by more than the GMS-minus-LuGre difference on that metric, so the departure stays below the effect the experiment is designed to detect. It remains a defect to close before identification, because the margin is not large.
 <!-- END GENERATED BRANCH CENSUS -->
