@@ -208,8 +208,10 @@ The following cells show the executable component values. Reflected mass and mag
 | detent phase $\phi_{det}$ | [[assumed:detent_phase=0.0]] | rad |
 | derived $K_m$ | [[derived:magnetic_stiffness=1.18435e8]] | N/m |
 | local $K_{det}(x_0)$ at the report origin; not in global $\mathbf K$ | [[derived:detent_stiffness=3.94784e7]] | N/m |
-| measured upper-mode target $f_{2,target}$ | [[input:axial_mode_target_hz=695.82]] | Hz |
-| modal-calibrated $k_{ax}$ | [[derived:reduced_axial_stiffness=7.70993e6]] | N/m |
+| upper-mode calibration target $f_{2,target}$, selected not measured | [[input:axial_mode_target_hz=695.82]] | Hz |
+| measured axial band, lower edge | [[input:measured_axial_band_low_hz=681.0]] | Hz |
+| measured axial band, upper edge | [[input:measured_axial_band_high_hz=690.0]] | Hz |
+| modal-calibrated $k_{ax}$ (frictionless branch; see 6.3 for the presliding-inclusive branch) | [[derived:reduced_axial_stiffness=7.70993e6]] | N/m |
 | closure-derived $k_{ball}$ | [[derived:k_ball=1.54375e7]] | N/m |
 | motor $J_m$ | [[input:J_m=9.000e-7]] | kg·m² |
 | coupling $J_c$ | [[assumed:J_c=1.180e-6]] | kg·m² |
@@ -217,9 +219,11 @@ The following cells show the executable component values. Reflected mass and mag
 | approximate usable screw distance | [[input:usable_screw_travel=0.170]] | m |
 | full stage travel | [[input:stage_travel=0.150]] | m |
 | installed lead accuracy class | [[input:lead_accuracy_class=IT3]] | – |
-| screw diameter | [[input:screw_diameter=8.000e-3]] | m |
+| nominal screw diameter, mass only | [[input:screw_diameter=8.000e-3]] | m |
+| root diameter, stiffness and polar inertia | [[assumed:screw_root_diameter=6.800e-3]] | m |
+| support-to-nut free length, declared worst-case datum | [[assumed:nut_axial_datum=0.158]] | m |
 | screw density | [[assumed:screw_density=7850]] | kg/m³ |
-| derived screw $J_s$ | [[derived:screw_inertia=6.06083e-7]] | kg·m² |
+| derived screw $J_s$ from the root section | [[derived:screw_inertia=3.16378e-7]] | kg·m² |
 | derived screw mass | [[derived:screw_mass=0.075760]] | kg |
 | axial play, grade O | 0.0 | m |
 | support bearing $k_{brg}$ | [[assumed:k_brg=2.500e7]] | N/m |

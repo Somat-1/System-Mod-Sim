@@ -73,9 +73,24 @@ MODEL = {
     # its tangent is reported separately and is never used as a global spring.
     "T_det": configured("detent_torque", 0.005),
     "detent_phase": configured("detent_phase", 0.0),
-    # Measured upper axial mode used to calibrate the reduced axial chain.
+    # Selected upper-mode calibration target.  Appendix G.4 records that this
+    # is NOT a measured number: the measured axial band is the pair below and
+    # 695.82 is the value the reduced chain is calibrated to reproduce.  Its
+    # own provenance is still undocumented and is an open identification item.
     # Stage and nut masses live in FULL; m_s, k_ax, and k_ball are derived.
     "axial_mode_target_hz": configured("axial_mode_target_hz", 695.82),
+    # Measured axial band from the modal campaign, kept separate from the
+    # calibration target so the two can never be quoted as the same number.
+    "measured_axial_band_low_hz": configured("measured_axial_band_low_hz", 681.0),
+    "measured_axial_band_high_hz": configured("measured_axial_band_high_hz", 690.0),
+    # Detent enable flag.  The nonlinear campaign runs with detent on; the
+    # paired ablation reruns every case with this term removed so the settled
+    # window can be split into a detent term and a friction term.
+    "detent_enabled": configured("detent_enabled", 1),
+    # Correction levels a positional pre-distortion table must place across one
+    # period of the detent equilibrium error.  It sets the command-grid
+    # requirement in Section 5 and is a design choice, not a measurement.
+    "predistortion_levels": configured("predistortion_levels", 7),
     # Effective mass and relative-mode damping from the modal campaign.  The
     # damping value remains provisional until the half-power extraction is
     # repeated from the source FRF.
@@ -101,7 +116,7 @@ MODEL = {
     # identified from measured hysteresis loops, never assumed.
     "tau_C": configured("tau_C", 2.0e-4),
     # Provenance inputs for the drive-port breakaway estimate only.  They are
-    # never applied to the transformer; see the standing constraint in 8.0.
+    # never applied to the transformer; see the standing constraint in 8.1.
     "eta_screw": configured("eta_screw", 0.90),
     "F_preload_nut": configured("F_preload_nut", 100.0),
 }
@@ -118,8 +133,24 @@ FULL = {
     "screw_length": configured("screw_length", 0.192),
     "usable_screw_travel": configured("usable_screw_travel", 0.170),
     "stage_travel": configured("stage_travel", 0.150),
+    # Two diameters, because a ball screw is not a plain cylinder.  The
+    # nominal diameter is the mass diameter used for m_screw; every stiffness
+    # and the polar inertia use the root diameter, which is the section that
+    # actually carries torsion and axial load.  The root value is an estimate
+    # from the KGT-F1-08-01 class and must be confirmed against the
+    # manufacturer drawing or the Creo mass properties.
     "screw_diameter": configured("screw_diameter", 8.00e-3),
+    "screw_root_diameter": configured("screw_root_diameter", 6.80e-3),
     "screw_density": configured("screw_density", 7850.0),
+    # Material constants for the derived screw stiffnesses.
+    "youngs_modulus": configured("youngs_modulus", 210.0e9),
+    "shear_modulus": configured("shear_modulus", 80.8e9),
+    # Declared support-to-nut free length.  Appendix A maps free length to
+    # 20 mm plus stage position, so this datum is a 138 mm stage position of
+    # 150 mm travel: the softest end of the axis, retained deliberately as the
+    # worst case.  L_b = L_s - L_a, so the two screw segments close on the
+    # complete screw length by construction.
+    "nut_axial_datum": configured("nut_axial_datum", 0.158),
     "m_n": configured("nut_mass", 0.050),
     # Measured stage body mass.  The retained stage-side mass also includes
     # the nut body after the internal nut coordinate is collapsed.
@@ -127,38 +158,31 @@ FULL = {
     # Datasheet series stiffness is 1.2 N m/deg = 68.7549 N m/rad.
     # Two equal half-springs must each be twice the series value.
     "k_c_series": configured("k_c_series", 1.2 * 180.0 / np.pi),
-    "k_theta_a": configured("k_theta_a", 211.0),
-    "k_theta_b": configured("k_theta_b", 211.0),
+    # k_theta_a, k_theta_b, k_sha and k_shb are no longer independent entries.
+    # Entered separately they described two different screws: the equal
+    # torsional pair placed the nut at midspan, the axial pair placed it at
+    # 75% of span, and both implied segment sums longer than L_s.  They are
+    # now derived from E, G, the root diameter and the declared nut datum in
+    # screw_segment_stiffnesses(), which closes L_a + L_b = L_s by
+    # construction.
     # 25 N/um is the closure-consistent bearing assumption discussed in Rev 3.
     "k_brg": configured("k_brg", 25.0e6),
-    "k_sha": configured("k_sha", 67.0e6),
-    "k_shb": configured("k_shb", 200.0e6),
     "k_mnt": configured("k_mnt", 100.0e6),
-    # Interface damping ratios that realize the target loss factors below.
-    #
-    # The Revision 3 values were converted with the light-damping identity
-    # eta = 2*zeta.  That identity holds only at the element's OWN resonance:
-    # a frequency-independent dashpot gives eta_j(w) = 2*zeta_j*w/w_j, so at
-    # the retained 696 Hz mode every element delivered one to two orders less
-    # loss than intended.  These entries instead solve
-    #
-    #     zeta_j = eta_j * f_j / (2 * f_2)
-    #
-    # so the EXECUTED loss factor at the retained mode equals the target.
-    # validate_interface_loss_factors() fails the build if the two drift apart.
-    "zeta_steel": configured("zeta_steel", 0.004165392),
-    "zeta_bearing": configured("zeta_bearing", 0.107950521),
-    "zeta_ball_nut": configured("zeta_ball_nut", 0.104178265),
-    "zeta_nut_mount": configured("zeta_nut_mount", 0.163886363),
+    # The four interface damping ratios are no longer entries.  The
+    # light-damping identity eta = 2*zeta holds only at an element's OWN
+    # resonance, so hand-entered ratios drift out of their target loss factor
+    # whenever the geometry changes.  interface_damping_ratios() solves
+    # zeta_j = eta_j * f_j / (2 * f_2) from the loss factors below, and
+    # validate_interface_loss_factors() still checks the executed result.
 }
 
 # Target loss factors at the retained upper mode.  Joints are bolted,
 # preloaded, rolling-element interfaces; the screw segment is monolithic steel.
 INTERFACE_LOSS_FACTORS = {
-    "zeta_bearing": 0.03,
-    "zeta_steel": 0.0005,
-    "zeta_ball_nut": 0.03,
-    "zeta_nut_mount": 0.03,
+    "zeta_bearing": configured("eta_bearing", 0.03),
+    "zeta_steel": configured("eta_steel", 0.0005),
+    "zeta_ball_nut": configured("eta_ball_nut", 0.03),
+    "zeta_nut_mount": configured("eta_nut_mount", 0.03),
 }
 
 FULL_DOF_LABELS = (
@@ -196,7 +220,7 @@ FRICTION = {
 
 # sigma_1 is zero in the executed A/B/C comparison so that LuGre and GMS
 # contribute the identical tangent damping sigma_2*H^T H.  Without this the
-# closure claim in 8.3 is false for damping: LuGre adds sigma_1+sigma_2 while
+# closure claim in 8.4 is false for damping: LuGre adds sigma_1+sigma_2 while
 # GMS adds only sigma_2, a factor of 8.5 to 21 across the three sites, and any
 # plotted difference mixes memory structure with port damping.  The former
 # values are retained here and restored by the A1v micro-viscous variant.
@@ -315,10 +339,35 @@ PARAMETER_REGISTRY: dict[str, dict[str, object]] = {
     "zeta_relative_measured": {"category": "assumed", "dependencies": (), "section": "2-entry-parameters"},
     "axial_damping": {"category": "assumed", "dependencies": (), "section": "2-entry-parameters"},
     "electromagnetic_zeta": {"category": "assumed", "dependencies": (), "section": "2-entry-parameters"},
-    "zeta_steel": {"category": "assumed", "dependencies": (), "section": "2-entry-parameters"},
-    "zeta_bearing": {"category": "assumed", "dependencies": (), "section": "2-entry-parameters"},
-    "zeta_ball_nut": {"category": "assumed", "dependencies": (), "section": "2-entry-parameters"},
-    "zeta_nut_mount": {"category": "assumed", "dependencies": (), "section": "2-entry-parameters"},
+    # Target loss factors are the assumption; the four damping ratios that
+    # realize them at the retained mode are derived from the element
+    # frequencies, so they can never be left describing a different assembly.
+    "eta_steel": {"category": "assumed", "dependencies": (), "section": "2-entry-parameters"},
+    "eta_bearing": {"category": "assumed", "dependencies": (), "section": "2-entry-parameters"},
+    "eta_ball_nut": {"category": "assumed", "dependencies": (), "section": "2-entry-parameters"},
+    "eta_nut_mount": {"category": "assumed", "dependencies": (), "section": "2-entry-parameters"},
+    "zeta_steel": {
+        "category": "derived",
+        "dependencies": ("eta_steel", "k_sha", "screw_mass", "axial_mode_target_hz"),
+        "section": "2-entry-parameters",
+    },
+    "zeta_bearing": {
+        "category": "derived",
+        "dependencies": ("eta_bearing", "k_brg", "screw_mass", "axial_mode_target_hz"),
+        "section": "2-entry-parameters",
+    },
+    "zeta_ball_nut": {
+        "category": "derived",
+        "dependencies": ("eta_ball_nut", "k_ball", "screw_mass", "screw_inertia",
+                         "nut_mass", "axial_mode_target_hz"),
+        "section": "2-entry-parameters",
+    },
+    "zeta_nut_mount": {
+        "category": "derived",
+        "dependencies": ("eta_nut_mount", "k_mnt", "nut_mass", "stage_mass",
+                         "axial_mode_target_hz"),
+        "section": "2-entry-parameters",
+    },
     "interface_axial_damping": {
         "category": "derived",
         "dependencies": (
@@ -336,11 +385,42 @@ PARAMETER_REGISTRY: dict[str, dict[str, object]] = {
         "section": "6-reduction-from-ten-dofs-to-two",
     },
     "k_c_series": {"category": "input", "dependencies": (), "section": "4-full-ten-dof-derivation"},
-    "k_theta_a": {"category": "assumed", "dependencies": (), "section": "4-full-ten-dof-derivation"},
-    "k_theta_b": {"category": "assumed", "dependencies": (), "section": "4-full-ten-dof-derivation"},
+    # Screw section and material, shared by both segment stiffness pairs.
+    "screw_root_diameter": {"category": "assumed", "dependencies": (), "section": "2-entry-parameters"},
+    "youngs_modulus": {"category": "assumed", "dependencies": (), "section": "2-entry-parameters"},
+    "shear_modulus": {"category": "assumed", "dependencies": (), "section": "2-entry-parameters"},
+    "nut_axial_datum": {"category": "assumed", "dependencies": (), "section": "2-entry-parameters"},
+    "screw_length_a": {
+        "category": "derived", "dependencies": ("nut_axial_datum",),
+        "section": "2-entry-parameters",
+    },
+    "screw_length_b": {
+        "category": "derived", "dependencies": ("nut_axial_datum", "screw_length"),
+        "section": "2-entry-parameters",
+    },
+    "k_theta_a": {
+        "category": "derived",
+        "dependencies": ("shear_modulus", "screw_root_diameter", "nut_axial_datum"),
+        "section": "4-full-ten-dof-derivation",
+    },
+    "k_theta_b": {
+        "category": "derived",
+        "dependencies": ("shear_modulus", "screw_root_diameter", "nut_axial_datum",
+                         "screw_length"),
+        "section": "4-full-ten-dof-derivation",
+    },
     "k_brg": {"category": "assumed", "dependencies": (), "section": "4-full-ten-dof-derivation"},
-    "k_sha": {"category": "assumed", "dependencies": (), "section": "4-full-ten-dof-derivation"},
-    "k_shb": {"category": "assumed", "dependencies": (), "section": "4-full-ten-dof-derivation"},
+    "k_sha": {
+        "category": "derived",
+        "dependencies": ("youngs_modulus", "screw_root_diameter", "nut_axial_datum"),
+        "section": "4-full-ten-dof-derivation",
+    },
+    "k_shb": {
+        "category": "derived",
+        "dependencies": ("youngs_modulus", "screw_root_diameter", "nut_axial_datum",
+                         "screw_length"),
+        "section": "4-full-ten-dof-derivation",
+    },
     "k_ball": {
         "category": "derived",
         "dependencies": ("reduced_axial_stiffness", "k_brg", "k_sha", "k_mnt"),
@@ -359,7 +439,7 @@ PARAMETER_REGISTRY: dict[str, dict[str, object]] = {
     },
     "screw_inertia": {
         "category": "derived",
-        "dependencies": ("screw_mass", "screw_diameter"),
+        "dependencies": ("screw_root_diameter", "screw_length", "screw_density"),
         "section": "2-entry-parameters",
     },
     "screw_segment_inertia": {
@@ -512,7 +592,7 @@ for _index in range(1, GMS_N + 1):
 for _key in ("stribeck_delta", "tau_C", "eta_screw", "F_preload_nut"):
     PARAMETER_REGISTRY[_key] = {
         "category": "assumed", "dependencies": (),
-        "section": "8-2-executed-provisional-friction-values",
+        "section": "8-3-executed-provisional-friction-values",
     }
 for _key, _dependencies in {
     "d_Fs_efficiency_estimate": ("eta_screw", "F_preload_nut"),
@@ -562,26 +642,62 @@ for _site in ("g", "n", "d"):
     PARAMETER_REGISTRY[f"yield_span_{_site}"] = {
         "category": "derived",
         "dependencies": _site_deps + _fraction_deps,
-        "section": "8-3-implementation-choices",
+        "section": "8-4-implementation-choices",
     }
     PARAMETER_REGISTRY[f"static_deflection_{_site}"] = {
         "category": "derived",
         "dependencies": (f"{_site}_Fs", f"{_site}_sigma0"),
-        "section": "8-3-implementation-choices",
+        "section": "8-4-implementation-choices",
     }
 
 for _key, _dependencies in {
     "detent_settling_time_2pct": ("electromagnetic_zeta", "detent_torque", "detent_phase", "holding_torque", "reduced_drive_mass"),
     "axial_settling_time_2pct": ("axial_damping", "reduced_axial_stiffness", "reduced_drive_mass", "reduced_stage_mass", "electromagnetic_zeta"),
-    "plateau_dwell": ("detent_settling_time_2pct", "axial_settling_time_2pct"),
+    "plateau_dwell": ("detent_settling_time_2pct", "axial_settling_time_2pct",
+                      "interface_settling_ms", "measured_settling_ms"),
     "guideway_a2_final_origin_nm": ("g_sigma0", "g_Fs", "g_Fc", "tau_C", "command_step"),
     "guideway_loop_energy_ratio_pct": ("g_sigma0", "g_Fs", "g_Fc", "tau_C", "command_step"),
     "nut_loop_energy_ratio_pct": ("n_sigma0", "n_Fs", "n_Fc", "tau_C", "command_step"),
-    "guideway_return_force_ratio": ("g_sigma0", "g_Fs", "g_Fc", "tau_C", "command_step"),
     "nut_return_force_ratio": ("n_sigma0", "n_Fs", "n_Fc", "tau_C", "command_step"),
     "guideway_r_hold_lugre_pct": ("g_sigma0", "g_Fs", "command_step"),
     "guideway_r_hold_gms_pct": ("g_sigma0", "g_Fs", "command_step"),
     "guideway_r_hold_ratio": ("g_sigma0", "g_Fs", "command_step"),
+    "retention_ratio_low": ("g_sigma0", "g_Fs", "axial_damping",
+                            "zeta_relative_measured"),
+    "retention_ratio_high": ("g_sigma0", "g_Fs", "axial_damping",
+                             "zeta_relative_measured"),
+    # Prose frequencies, band edges and requirements.  Every one of these was
+    # a hand-typed literal that had drifted from its generated source.
+    "detent_band_low_hz": ("detent_torque", "holding_torque", "rotor_teeth",
+                           "lead", "reduced_drive_mass", "reduced_stage_mass",
+                           "reduced_axial_stiffness"),
+    "detent_band_high_hz": ("detent_torque", "holding_torque", "rotor_teeth",
+                            "lead", "reduced_drive_mass", "reduced_stage_mass",
+                            "reduced_axial_stiffness"),
+    "operating_mode_hz": ("reduced_axial_stiffness", "reduced_stage_mass",
+                          "g_sigma0", "n_sigma0", "d_sigma0"),
+    "operating_fixed_interface_separation": (
+        "operating_mode_hz", "first_fixed_interface_hz"),
+    "operating_fixed_interface_ratio": (
+        "operating_mode_hz", "first_fixed_interface_hz"),
+    "baseline_fixed_interface_ratio": (
+        "axial_mode_target_hz", "first_fixed_interface_hz"),
+    "presliding_k_ax_mn": ("reduced_axial_stiffness", "g_sigma0", "n_sigma0",
+                           "axial_mode_target_hz"),
+    "closure_singular_limit_mn": ("reduced_axial_stiffness", "k_sha", "k_mnt"),
+    "measured_settling_ms": ("zeta_relative_measured", "axial_mode_target_hz"),
+    "interface_settling_ms": ("interface_axial_damping", "reduced_axial_stiffness",
+                              "reduced_drive_mass", "reduced_stage_mass"),
+    "executed_settling_ms": ("axial_damping", "reduced_axial_stiffness",
+                             "reduced_drive_mass", "reduced_stage_mass"),
+    "detent_equilibrium_error_nm": ("detent_torque", "holding_torque",
+                                    "rotor_teeth", "lead"),
+    "predistortion_resolution_nm": ("detent_equilibrium_error_nm",
+                                    "predistortion_levels"),
+    "required_microstep_divisor": ("predistortion_resolution_nm", "full_step_pitch"),
+    "predistortion_levels_executed": ("detent_equilibrium_error_nm", "command_step"),
+    "predistortion_levels": (),
+    "screw_inertia_nominal": ("screw_diameter", "screw_length", "screw_density"),
 }.items():
     PARAMETER_REGISTRY[_key] = {
         "category": "output", "dependencies": _dependencies,
@@ -589,10 +705,13 @@ for _key, _dependencies in {
     }
 
 for _key, _section in {
-    "friction_site_definitions": "8-0-how-the-friction-laws-attach-to-the-plant",
-    "friction_state_definition": "8-1-constitutive-laws",
-    "identifiability_analysis": "8-3-implementation-choices",
+    "friction_site_definitions": "8-1-how-the-friction-laws-attach-to-the-plant",
+    "friction_state_definition": "8-2-constitutive-laws",
+    "identifiability_analysis": "8-4-implementation-choices",
     "metrology_campaign": "9-force-instrumented-partial-slip-memory-experiment",
+    "measured_axial_band_low_hz": "2-entry-parameters",
+    "measured_axial_band_high_hz": "2-entry-parameters",
+    "detent_enabled": "2-entry-parameters",
 }.items():
     PARAMETER_REGISTRY[_key] = {
         "category": "input", "dependencies": (), "section": _section,
@@ -664,7 +783,7 @@ def validate_parameter_registry() -> None:
                            + ", ".join(missing_dependencies))
 
     rendered_derived: set[str] = set()
-    pattern = re.compile(r"\[\[derived:([A-Za-z0-9_]+)=")
+    pattern = re.compile(r"\[\[derived:([A-Za-z0-9_]+)(?:@[a-z_]+)?=")
     for document in (DESCRIPTION_MD, DERIVATION_MD):
         rendered_derived.update(pattern.findall(document.read_text(encoding="utf-8")))
     missing = sorted(rendered_derived - PARAMETER_REGISTRY.keys())
@@ -834,6 +953,162 @@ def validate_command_design(constants: dict[str, float]) -> dict[str, float]:
     }
 
 
+def presliding_calibrated_axial_stiffness(
+        m_d: float, m_s: float, k_m: float, target_hz: float,
+        sites: tuple[str, ...] = ("g", "n")) -> float:
+    """Solve k_ax so the presliding-tangent plant reproduces the measured mode.
+
+    A hammer FRF at micrometre amplitudes excites the assembled axis inside
+    the presliding regime, where every rolling contact behaves as a spring of
+    stiffness sigma_0.  The measured pole therefore already contains the
+    guideway and nut presliding tangents, and calibrating k_ax on the
+    frictionless eigenproblem attributes that stiffness to the structure a
+    second time when the friction ports are added back.  This branch removes
+    the double count by requiring the friction-on plant, not the frictionless
+    one, to land on the target.
+    """
+    eigenvalue = (2.0 * np.pi * target_hz) ** 2
+    sigma_d = sum(FRICTION[site]["sigma0"] for site in sites if site == "d")
+    sigma_g = sum(FRICTION[site]["sigma0"] for site in sites if site == "g")
+    sigma_n = sum(FRICTION[site]["sigma0"] for site in sites if site == "n")
+    # K = [[k_m + sigma_d + k_ax + sigma_n, -(k_ax + sigma_n)],
+    #      [-(k_ax + sigma_n), k_ax + sigma_n + sigma_g]]
+    # det(K - lambda M) = 0 is linear in the relative stiffness k = k_ax+sigma_n.
+    drive = k_m + sigma_d - eigenvalue * m_d
+    stage = sigma_g - eigenvalue * m_s
+    denominator = drive + stage
+    if abs(denominator) <= np.finfo(float).eps * max(abs(k_m), 1.0):
+        raise ValueError("Presliding-inclusive calibration is singular for these inputs")
+    relative = -drive * stage / denominator
+    k_ax = relative - sigma_n
+    if not np.isfinite(k_ax) or k_ax <= 0.0:
+        raise ValueError(
+            "The presliding-inclusive branch leaves no positive structural "
+            f"stiffness (k_ax={k_ax:.6g} N/m); the measured mode is below the "
+            "presliding tangents alone")
+    return float(k_ax)
+
+
+def ball_closure_band(k_ax: float, k_sha: float, k_mnt: float) -> dict[str, float]:
+    """Report how much of k_ball is a choice of k_brg rather than a result.
+
+    k_ball is a closure residual: it absorbs whatever axial compliance the
+    other three elements leave over.  Below a singular limit on k_brg there is
+    nothing left to absorb, and just above it the residual swings by a factor
+    of two, so the reported k_ball carries the bearing assumption with it.
+    """
+    residual = 1.0 / k_ax - 1.0 / k_sha - 1.0 / k_mnt
+    if residual <= 0.0:
+        raise ValueError(
+            "The screw and nut-mount compliances alone exceed the calibrated "
+            "axial compliance; no bearing stiffness can close the budget")
+    singular_limit = 1.0 / residual
+    def k_ball_at(k_brg: float) -> float:
+        remaining = residual - 1.0 / k_brg
+        return float("inf") if remaining <= 0.0 else 1.0 / remaining
+    return {
+        "singular_limit": singular_limit,
+        "k_ball_at": k_ball_at,
+        "samples": tuple(
+            (k_brg, k_ball_at(k_brg))
+            for k_brg in (1.05 * singular_limit, 15.0e6, 25.0e6, 40.0e6)
+            if k_brg > singular_limit),
+    }
+
+
+def validate_closure_band(constants: dict[str, float],
+                          component: dict[str, float]) -> dict[str, float]:
+    """Fail the build if the bearing assumption sits at the singular limit."""
+    band = ball_closure_band(
+        constants["k_ax"], component["k_sha"], component["k_mnt"])
+    k_brg = component["k_brg"]
+    limit = band["singular_limit"]
+    if k_brg <= limit:
+        raise ValueError(
+            f"k_brg={k_brg / 1e6:.3f} MN/m is at or below the closure singular "
+            f"limit {limit / 1e6:.3f} MN/m; k_ball cannot be positive")
+    margin = k_brg / limit
+    if margin < 1.10:
+        raise ValueError(
+            f"k_brg={k_brg / 1e6:.3f} MN/m sits within 10% of the "
+            f"{limit / 1e6:.3f} MN/m closure singular limit; k_ball is not a "
+            "reportable quantity there")
+    return {"singular_limit": limit, "margin": margin,
+            "k_brg": k_brg, "k_ball": constants["k_ball"]}
+
+
+def validate_prose_frequencies() -> dict[str, int]:
+    """Fail if a two-decimal frequency is typed into prose instead of tokenized.
+
+    A literal such as `695.82 Hz` or `166.93 Hz` is a generated value that was
+    pasted by hand; every one of them in Revision 3 had drifted from its
+    source by the time it was found.  Generated blocks are exempt because the
+    builder writes them on every run, and so are integer bands such as
+    `681-690 Hz`, which are recorded inputs rather than computed outputs.
+    """
+    literal = re.compile(r"(?<!derived:)(?<![\w.])\d{2,4}\.\d{2}\s*(?:Hz|kHz)")
+    generated = re.compile(r"<!-- BEGIN GENERATED.*?<!-- END GENERATED[^>]*-->",
+                           flags=re.DOTALL)
+    offenders: dict[str, int] = {}
+    for document in (DESCRIPTION_MD, DERIVATION_MD):
+        text = generated.sub("", document.read_text(encoding="utf-8"))
+        # Strip token bodies: the fallback text inside [[derived:x=695.82]] is
+        # generator-owned and is rewritten on every build.
+        text = re.sub(r"\[\[[a-z]+:[^\]]+\]\]", "", text)
+        for match in literal.finditer(text):
+            offenders[f"{document.name}: {match.group(0)}"] = (
+                offenders.get(f"{document.name}: {match.group(0)}", 0) + 1)
+    if offenders:
+        raise ValueError(
+            "Hand-typed frequencies must be generated tokens: "
+            + "; ".join(f"{key} x{count}" for key, count in sorted(offenders.items())))
+    return offenders
+
+
+def validate_breakaway_forces() -> dict[str, dict[str, float]]:
+    """Warn when an executed breakaway force leaves its own stated range.
+
+    This is a report rather than an abort: the executed guideway value is
+    outside its stated likely range on purpose, Section 12.4 executes the
+    alternative, and the build has to stay runnable in order to price it.
+    """
+    stated_ranges = {"g": (1.0, 1.5)}
+    report: dict[str, dict[str, float]] = {}
+    for site, (low, high) in stated_ranges.items():
+        force = float(FRICTION[site]["F_s"])
+        report[site] = {
+            "F_s": force, "low": low, "high": high,
+            "inside": bool(low <= force <= high),
+            "factor_above": force / high if force > high else 1.0,
+        }
+    return report
+
+
+def validate_predistortion_authority(constants: dict[str, float]) -> dict[str, float]:
+    """Report whether the command grid can express a detent pre-distortion.
+
+    This is deliberately a report and not an abort.  The executed divisor
+    fails the requirement by a large factor, and that failure is a documented
+    finding in Section 5 and Appendix C item 16 rather than a build error: the
+    model must stay runnable at the production setting in order to quantify
+    what that setting costs.
+    """
+    achieved_levels = (constants["detent_equilibrium_error"]
+                       / constants["command_step"])
+    return {
+        "command_step": constants["command_step"],
+        "required_resolution": constants["predistortion_resolution"],
+        "required_divisor": constants["required_microstep_divisor"],
+        "executed_divisor": float(MODEL["microstep_divisor"]),
+        "requested_levels": float(MODEL["predistortion_levels"]),
+        "achieved_levels": achieved_levels,
+        "satisfied": bool(constants["command_step"]
+                          <= constants["predistortion_resolution"]),
+        "shortfall": constants["required_microstep_divisor"]
+        / float(MODEL["microstep_divisor"]),
+    }
+
+
 def modal_calibrated_axial_stiffness(
         m_d: float, m_s: float, k_m: float, target_hz: float) -> float:
     """Invert the two-DOF characteristic equation for the axial stiffness.
@@ -934,8 +1209,32 @@ def physical_constants() -> dict[str, float]:
     axial_frequency, axial_zeta = _damped_modal_data(mass, damping, stiffness)[1]
     axial_settling_time_2pct = SETTLING_2PCT_FACTOR / (
         axial_zeta * 2.0 * np.pi * axial_frequency)
+    # Three candidate settling times exist for the same retained mode and they
+    # disagree by a factor of eleven: the executed link damper, the interface
+    # loss factors propagated in E.5, and the measured relative-mode damping.
+    # The rule previously took the maximum of a set that omitted the two
+    # longest candidates, which silently selected the shortest branch.  The
+    # dwell now covers every candidate, so the settled window is defensible on
+    # whichever branch the E.7 half-power extraction confirms.
+    interface_zeta = _damped_modal_data(
+        mass,
+        np.array([[c_m + c_ax_interface, -c_ax_interface],
+                  [-c_ax_interface, c_ax_interface]]),
+        stiffness)[1][1]
+    interface_settling_time_2pct = SETTLING_2PCT_FACTOR / (
+        interface_zeta * 2.0 * np.pi * axial_mode_target_hz)
+    measured_settling_time_2pct = SETTLING_2PCT_FACTOR / (
+        MODEL["zeta_relative_measured"] * 2.0 * np.pi * axial_mode_target_hz)
     plateau_dwell = max(
-        0.100, detent_settling_time_2pct, axial_settling_time_2pct)
+        0.100, detent_settling_time_2pct, axial_settling_time_2pct,
+        interface_settling_time_2pct, measured_settling_time_2pct)
+    # Positional pre-distortion authority.  The detent equilibrium error is a
+    # position-periodic term, so a correction table can only address it if the
+    # command grid can place levels inside it.  This is a divisor requirement,
+    # not a quantization-noise argument; see Section 5 and Appendix C item 16.
+    detent_equilibrium_error = (r / teeth) * np.arcsin(min(t_det / t_max, 1.0))
+    predistortion_resolution = detent_equilibrium_error / MODEL["predistortion_levels"]
+    required_divisor = full_step / predistortion_resolution
     return {
         "r": r,
         "kappa": kappa,
@@ -962,20 +1261,146 @@ def physical_constants() -> dict[str, float]:
         "settling_time_2pct": detent_settling_time_2pct,
         "detent_settling_time_2pct": detent_settling_time_2pct,
         "axial_settling_time_2pct": axial_settling_time_2pct,
+        "interface_settling_time_2pct": interface_settling_time_2pct,
+        "measured_settling_time_2pct": measured_settling_time_2pct,
+        "axial_zeta_executed": axial_zeta,
+        "axial_zeta_interface": interface_zeta,
+        "axial_zeta_measured": MODEL["zeta_relative_measured"],
         "plateau_dwell": plateau_dwell,
         "metric_window": min(0.020, 0.20 * plateau_dwell),
+        "detent_equilibrium_error": detent_equilibrium_error,
+        "predistortion_resolution": predistortion_resolution,
+        "required_microstep_divisor": required_divisor,
+        "detent_enabled": float(MODEL["detent_enabled"]),
+    }
+
+
+def screw_segment_stiffnesses() -> dict[str, float]:
+    """Derive both screw segment stiffness pairs from one geometry.
+
+    Torsional and axial stiffness must describe the same screw and the same
+    nut position.  Both segments therefore come from the declared datum
+    L_a = nut_axial_datum with L_b = L_s - L_a, and from the root-diameter
+    section rather than the nominal thread diameter, so that
+    k_theta_a/k_theta_b and k_sha/k_shb are the same length ratio by
+    construction.
+    """
+    length_a = float(FULL["nut_axial_datum"])
+    length_b = float(FULL["screw_length"]) - length_a
+    if length_a <= 0.0 or length_b <= 0.0:
+        raise ValueError(
+            f"Nut axial datum {length_a:.4f} m must lie inside the "
+            f"{FULL['screw_length']:.4f} m screw")
+    root_radius = 0.5 * float(FULL["screw_root_diameter"])
+    area = np.pi * root_radius**2
+    polar_inertia = 0.5 * np.pi * root_radius**4
+    tensile = float(FULL["youngs_modulus"]) * area
+    torsional = float(FULL["shear_modulus"]) * polar_inertia
+    return {
+        "screw_length_a": length_a,
+        "screw_length_b": length_b,
+        "screw_root_area": area,
+        "screw_root_polar_inertia": polar_inertia,
+        "k_theta_a": torsional / length_a,
+        "k_theta_b": torsional / length_b,
+        "k_sha": tensile / length_a,
+        "k_shb": tensile / length_b,
+        "axial_rigidity": tensile,
+        "torsional_rigidity": torsional,
+    }
+
+
+def validate_screw_geometry() -> dict[str, float]:
+    """Fail the build if the two screw segments stop describing one screw."""
+    segments = screw_segment_stiffnesses()
+    length_sum = segments["screw_length_a"] + segments["screw_length_b"]
+    if not np.isclose(length_sum, FULL["screw_length"], rtol=0.0, atol=1.0e-9):
+        raise ValueError(
+            f"Screw segments sum to {length_sum:.6f} m against a "
+            f"{FULL['screw_length']:.6f} m screw")
+    torsional_ratio = segments["k_theta_a"] / segments["k_theta_b"]
+    axial_ratio = segments["k_sha"] / segments["k_shb"]
+    if not np.isclose(torsional_ratio, axial_ratio, rtol=1.0e-9, atol=0.0):
+        raise ValueError(
+            f"Torsional segment ratio {torsional_ratio:.6f} disagrees with the "
+            f"axial ratio {axial_ratio:.6f}; the two pairs describe different "
+            "nut positions")
+    if segments["screw_root_polar_inertia"] <= 0.0:
+        raise ValueError("Screw root section must be positive")
+    return segments
+
+
+def _axial_element_frequencies(p: dict[str, float]) -> dict[str, dict[str, float]]:
+    """Stiffness and relative mass of every axial interface element.
+
+    This is the one place the four elements are defined.  It runs before
+    physical_constants() so that the damping ratios can be derived rather than
+    entered, and it therefore recomputes k_ax and k_ball from the same closed
+    form those functions use rather than importing them.
+    """
+    r = MODEL["lead"] / (2.0 * np.pi)
+    m_d = (p["J_m"] + p["J_c"] + p["screw_inertia"]) / r**2
+    m_s = p["m_stage"] + p["m_n"]
+    k_m = MODEL["rotor_teeth"] * MODEL["T_max"] / r**2
+    k_ax = modal_calibrated_axial_stiffness(
+        m_d, m_s, k_m, MODEL["axial_mode_target_hz"])
+    k_ball = closure_ball_stiffness(k_ax, p["k_brg"], p["k_sha"], p["k_mnt"])
+    segment_mass = p["screw_mass"] / 3.0
+    segment_inertia = p["screw_inertia"] / 3.0
+    pair = lambda a, b: a * b / (a + b)  # noqa: E731
+    elements = {
+        "zeta_bearing": (p["k_brg"], segment_mass),
+        "zeta_steel": (p["k_sha"], pair(segment_mass, segment_mass)),
+        "zeta_ball_nut": (k_ball, 1.0 / (
+            r**2 / segment_inertia + 1.0 / segment_mass + 1.0 / p["m_n"])),
+        "zeta_nut_mount": (p["k_mnt"], pair(p["m_n"], p["m_stage"])),
+    }
+    return {
+        key: {
+            "stiffness": stiffness,
+            "relative_mass": relative_mass,
+            "f_j": float(np.sqrt(stiffness / relative_mass) / (2.0 * np.pi)),
+        }
+        for key, (stiffness, relative_mass) in elements.items()
+    }
+
+
+def interface_damping_ratios(p: dict[str, float]) -> dict[str, float]:
+    """Solve each interface damping ratio from its target loss factor.
+
+    A frequency-independent dashpot delivers eta_j(w) = 2*zeta_j*w/w_j, so the
+    ratio that realizes a target loss factor AT THE RETAINED MODE is
+
+        zeta_j = eta_j * f_j / (2 * f_2).
+
+    The ratios are derived here rather than entered, so a change of screw
+    geometry or bearing stiffness cannot leave four hand-copied constants
+    describing a different assembly.  This is the only conversion in the
+    document; Section 2 and E.5 both quote it from here.
+    """
+    f_2 = MODEL["axial_mode_target_hz"]
+    return {
+        key: INTERFACE_LOSS_FACTORS[key] * element["f_j"] / (2.0 * f_2)
+        for key, element in _axial_element_frequencies(p).items()
     }
 
 
 def component_parameters() -> dict[str, float]:
     """Derive screw inertia and lumped masses from the 0.192 m component."""
     p = dict(FULL)
-    radius = 0.5 * p["screw_diameter"]
-    area = np.pi * radius**2
-    screw_mass = p["screw_density"] * area * p["screw_length"]
-    screw_inertia = 0.5 * screw_mass * radius**2
+    p.update(screw_segment_stiffnesses())
+    # Mass follows the nominal diameter; the polar inertia follows the root
+    # section, because the thread removes exactly the material that would
+    # otherwise dominate a d^4 quantity.
+    mass_radius = 0.5 * p["screw_diameter"]
+    root_radius = 0.5 * p["screw_root_diameter"]
+    screw_mass = p["screw_density"] * np.pi * mass_radius**2 * p["screw_length"]
+    screw_inertia = (0.5 * np.pi * root_radius**4
+                     * p["screw_density"] * p["screw_length"])
     p["screw_mass"] = screw_mass
     p["screw_inertia"] = screw_inertia
+    p["screw_inertia_nominal"] = 0.5 * screw_mass * mass_radius**2
+    p.update(interface_damping_ratios(p))
     for key in ("J_s1", "J_s2", "J_s3"):
         p[key] = screw_inertia / 3.0
     for key in ("m_b", "m_e", "m_f"):
@@ -1218,7 +1643,13 @@ def multi_route_reduction_metrics() -> dict[str, float]:
         "c": route_row(ms, kax_c, cax_c, kball_c),
         "m": route_row(m_eff, kax_m, cax_m, kball_m),
     }
-    rows["c"].update(f1=float(cb_modes[0]), f2=float(cb_modes[1]),
+    # Report the DAMPED modal frequencies, which is what the Section 7.2
+    # per-plant audit tabulates.  The undamped pair differed in the second
+    # decimal and the two appeared in the document as two different numbers
+    # for one quantity.
+    cb_lower_damped = _damped_modal_data(
+        cb_plant["mass"], cb_plant["damping"], cb_plant["stiffness"])[0]
+    rows["c"].update(f1=float(cb_lower_damped[0]), f2=float(cb_upper_damped[0]),
                      zeta=cb_upper_damped[1], settling=(
                          SETTLING_2PCT_FACTOR / (
                              cb_upper_damped[1] * 2.0 * np.pi * cb_upper_damped[0])))
@@ -2178,6 +2609,218 @@ def time_responses(constants: dict[str, float],
     return times, command, results, metrics
 
 
+def detent_ablation_study(constants: dict[str, float],
+                          metrics: dict[str, dict[str, float]],
+                          executor: Executor | None = None) -> dict[str, object]:
+    """Rerun every case with the detent torque removed.
+
+    Case 0 is frictionless but not force-free: the nonlinear campaign runs
+    with the periodic detent torque enabled, so its settled-window deviation
+    is a pure detent number.  Every other case therefore reports a settled
+    window containing both terms.  Rerunning the identical command with
+    T_det = 0 separates them by measurement instead of by quadrature.
+    """
+    if not MODEL["detent_enabled"]:
+        raise RuntimeError(
+            "The executed campaign already has detent disabled; the ablation "
+            "pair would be two copies of the same run")
+    ablated = dict(constants)
+    ablated["T_det"] = 0.0
+    if executor is None:
+        completed = [_main_response_job(key, ablated, False) for key in CASES]
+    else:
+        futures = [executor.submit(_main_response_job, key, ablated, False)
+                   for key in CASES]
+        completed = [future.result() for future in futures]
+    times = completed[0][1]
+    command = np.array([
+        command_position(t, ablated["command_step"], ablated["plateau_dwell"])
+        for t in times
+    ])
+    settled_mask, _final_window = settled_window_masks(times, ablated)
+    rows: "OrderedDict[str, dict[str, float]]" = OrderedDict()
+    for key, _case_times, states, _census in sorted(
+            completed, key=lambda item: list(CASES).index(item[0])):
+        error = command - states[:, 1]
+        friction_only = float(np.sqrt(np.mean(error[settled_mask] ** 2)) * 1e9)
+        executed = float(metrics[key]["rms_settled_deviation_nm"])
+        rows[key] = {
+            "executed_nm": executed,
+            "detent_off_nm": friction_only,
+            "detent_share_pct": 100.0 * (1.0 - friction_only / executed)
+            if executed > 0.0 else float("nan"),
+            "quadrature_nm": float(np.sqrt(max(
+                executed**2 - float(metrics["0"]["rms_settled_deviation_nm"])**2, 0.0))),
+        }
+    baseline = rows["0"]
+    return {
+        "rows": rows,
+        "detent_only_nm": float(metrics["0"]["rms_settled_deviation_nm"]),
+        "detent_off_baseline_nm": baseline["detent_off_nm"],
+        "largest_friction_nm": max(row["detent_off_nm"] for row in rows.values()),
+        "worst_share_pct": max(row["detent_share_pct"] for row in rows.values()),
+    }
+
+
+def _retention_damping_job(multiplier: float, constants: dict[str, float]
+                           ) -> tuple[float, dict[str, float]]:
+    """Process-pool unit for one point of the retention-versus-damping sweep."""
+    scaled = dict(constants)
+    scaled["c_ax"] = constants["c_ax"] * multiplier
+    scaled["c_m"] = constants["c_m"] * multiplier
+    experiment = presliding_responses(scaled, ("A", "A2"), "g")
+    metrics = experiment["metrics"]
+    lugre = 100.0 * float(metrics["A"]["r_hold"])
+    gms = 100.0 * float(metrics["A2"]["r_hold"])
+    return multiplier, {
+        "r_hold_lugre_pct": lugre,
+        "r_hold_gms_pct": gms,
+        "r_hold_ratio": gms / max(lugre, 1.0e-9),
+        "force_mismatch_lugre_N": float(metrics["A"]["return_force_mismatch_N"]),
+        "force_mismatch_gms_N": float(metrics["A2"]["return_force_mismatch_N"]),
+        "force_ratio": (float(metrics["A2"]["return_force_mismatch_N"])
+                        / max(float(metrics["A"]["return_force_mismatch_N"]), 1e-30)),
+    }
+
+
+def retention_damping_sweep(constants: dict[str, float],
+                            executor: Executor | None = None,
+                            targets: tuple[float, ...] = (
+                                0.0014, 0.0133, 0.0157, 0.05, 0.743),
+                            ) -> dict[str, object]:
+    """Measure the Section 9 discriminator as a function of retained-mode damping.
+
+    Appendix G.5 already shows that suppressing post-edge ringing collapses
+    the LuGre/GMS retention gap, which makes the headline 6x a property of
+    this plant's damping rather than of the constitutive laws.  The damping
+    branch is exactly the quantity Section 7.3 cannot resolve, so the
+    discriminator is reported across the whole disputed range and the window
+    in which force discriminates becomes a fixture requirement.
+    """
+    sites = tuple(CASES["A"]["sites"])
+
+    def zeta_of(multiplier: float) -> float:
+        pole = _retained_mode_pole(constants, sites, multiplier)
+        return float("inf") if pole is None else float(pole["zeta"])
+
+    baseline_zeta = zeta_of(1.0)
+    multipliers: list[float] = []
+    for target in targets:
+        # zeta is monotone in the multiplier over this range, so a bisection
+        # on the executed pole gives the multiplier that realizes each target.
+        low, high = 1.0e-4, 1.0e4
+        for _ in range(200):
+            middle = np.sqrt(low * high)
+            if zeta_of(middle) < target:
+                low = middle
+            else:
+                high = middle
+        multipliers.append(float(np.sqrt(low * high)))
+    if executor is None:
+        completed = [_retention_damping_job(m, constants) for m in multipliers]
+    else:
+        futures = [executor.submit(_retention_damping_job, m, constants)
+                   for m in multipliers]
+        completed = [future.result() for future in futures]
+    by_multiplier = dict(completed)
+    rows = []
+    for target, multiplier in zip(targets, multipliers):
+        pole = _retained_mode_pole(constants, sites, multiplier)
+        record = dict(by_multiplier[multiplier])
+        record.update({
+            "target_zeta": target,
+            "multiplier": multiplier,
+            "executed_zeta": float("nan") if pole is None else float(pole["zeta"]),
+            "settling_2pct_s": SETTLING_2PCT_FACTOR / (
+                target * 2.0 * np.pi * constants["axial_mode_target_hz"]),
+        })
+        rows.append(record)
+    discriminating = [row for row in rows if row["r_hold_ratio"] >= 2.0]
+    return {
+        "rows": rows,
+        "baseline_zeta": baseline_zeta,
+        "discriminating_zeta": (
+            (min(row["target_zeta"] for row in discriminating),
+             max(row["target_zeta"] for row in discriminating))
+            if discriminating else None),
+        "ratio_range": (min(row["r_hold_ratio"] for row in rows),
+                        max(row["r_hold_ratio"] for row in rows)),
+    }
+
+
+def _breakaway_job(force: float, constants: dict[str, float]
+                   ) -> tuple[float, dict[str, object]]:
+    """Process-pool unit for one guideway breakaway-force variant."""
+    original = FRICTION["g"]["F_s"]
+    original_coulomb = FRICTION["g"]["F_c"]
+    original_rate = FRICTION["g"]["C_gms"]
+    # F_c scales with F_s at the executed Stribeck ratio.  Holding F_c fixed
+    # while lowering F_s would invert the Stribeck curve, which is a different
+    # and unphysical model rather than a lower breakaway force.
+    coulomb = original_coulomb * force / original
+    FRICTION["g"]["F_s"] = force
+    FRICTION["g"]["F_c"] = coulomb
+    FRICTION["g"]["C_gms"] = (force - coulomb) / MODEL["tau_C"]
+    try:
+        experiment = presliding_responses(constants, ("A", "A2"), "g")
+        metrics = experiment["metrics"]
+        yields = GMS_WEIGHTS * force / GMS_STIFFNESS_BY_SITE["g"]
+        record = {
+            "F_s": force,
+            "F_c": coulomb,
+            "yields_um": tuple(float(value * 1e6) for value in yields),
+            "force_mismatch_gms_N": float(metrics["A2"]["return_force_mismatch_N"]),
+            "force_ratio": (float(metrics["A2"]["return_force_mismatch_N"])
+                            / max(float(metrics["A"]["return_force_mismatch_N"]), 1e-30)),
+            "loop_area_gms_J": float(metrics["A2"]["loop_area_J"]),
+            "r_hold_gms_pct": 100.0 * float(metrics["A2"]["r_hold"]),
+        }
+    finally:
+        FRICTION["g"]["F_s"] = original
+        FRICTION["g"]["F_c"] = original_coulomb
+        FRICTION["g"]["C_gms"] = original_rate
+    return force, record
+
+
+def breakaway_sensitivity(constants: dict[str, float],
+                          executor: Executor | None = None,
+                          likely_range: tuple[float, float] = (1.0, 1.5),
+                          ) -> dict[str, object]:
+    """Execute the guideway breakaway force at the middle of its stated range.
+
+    Section 8.3 executes F_s = 3.0 N at the guideway while stating a likely
+    range of 1.0 to 1.5 N.  The command design depends on which is right: the
+    four element yield distances scale with F_s, so the inner 1.250 um level
+    crosses a different threshold at the low value.  This runs the variant
+    instead of describing it.
+    """
+    executed = float(FRICTION["g"]["F_s"])
+    middle = 0.5 * (likely_range[0] + likely_range[1])
+    forces = (executed, middle)
+    if executor is None:
+        completed = [_breakaway_job(force, constants) for force in forces]
+    else:
+        futures = [executor.submit(_breakaway_job, force, constants)
+                   for force in forces]
+        completed = [future.result() for future in futures]
+    rows = [record for _force, record in
+            sorted(completed, key=lambda item: -item[0])]
+    inner_level = 4.0 * constants["command_step"]
+    for row in rows:
+        crossed = sum(1 for value in row["yields_um"] if inner_level * 1e6 > value)
+        row["inner_level_um"] = inner_level * 1e6
+        row["elements_yielded_at_inner"] = crossed
+    return {
+        "rows": rows,
+        "executed_F_s": executed,
+        "likely_range": likely_range,
+        "middle": middle,
+        "inner_level_um": inner_level * 1e6,
+        "design_changes": rows[0]["elements_yielded_at_inner"]
+        != rows[-1]["elements_yielded_at_inner"],
+    }
+
+
 def gms_branch_census_study(constants: dict[str, float], times: np.ndarray,
                             command: np.ndarray,
                             censuses: dict[str, GmsBranchCensus],
@@ -2457,15 +3100,59 @@ def plot_case_responses(frequencies: np.ndarray, responses: dict[str, np.ndarray
     return outputs
 
 
-def plot_case_response_overlay(frequencies: np.ndarray,
-                               responses: dict[str, np.ndarray]) -> Path:
-    """Overlay every case and quantify the small differences near resonance."""
-    fig = plt.figure(figsize=(12.2, 9.0))
-    grid = fig.add_gridspec(2, 2, height_ratios=(1.08, 1.0), hspace=0.30, wspace=0.25)
-    ax_full = fig.add_subplot(grid[0, :])
-    ax_zoom = fig.add_subplot(grid[1, 0])
-    ax_delta = fig.add_subplot(grid[1, 1])
+def _audit_mode_shift_labels(drawn_notes: dict[str, str],
+                             linear_metrics: dict[str, dict[str, float | np.ndarray]]) -> None:
+    """Read back what the shift figure actually prints and re-derive it.
 
+    The previous figure rounded a peak to whole hertz but kept an unrounded
+    delta, so each label implied a different baseline and none of them matched
+    the 10.1 percentages.  This parses the drawn strings and checks, against
+    the eigenvalues alone, that the printed delta is the difference of the two
+    printed frequencies and that the printed percentage is the ladder's.
+    """
+    label_pattern = re.compile(
+        r"^[^\n]+\n(?P<peak>[\d.]+) Hz(?:, (?P<shift>[+-][\d.]+) Hz "
+        r"\((?P<percent>[+-][\d.]+)%\))?$")
+    parsed: dict[str, re.Match[str]] = {}
+    for key, note in drawn_notes.items():
+        match = label_pattern.match(note)
+        if match is None:
+            raise AssertionError(f"Mode-shift label for case {key} is unreadable: {note!r}")
+        parsed[key] = match
+    baseline_text = parsed["0"].group("peak")
+    baseline_high = float(linear_metrics["0"]["modes"][1])
+    if baseline_text != f"{baseline_high:.1f}":
+        raise AssertionError(
+            f"Mode-shift baseline label {baseline_text} Hz is not the case 0 eigenvalue "
+            f"{baseline_high:.1f} Hz")
+    failures: list[str] = []
+    for key, match in parsed.items():
+        if match.group("shift") is None:
+            continue
+        peak_text, shift_text, percent_text = match.group("peak", "shift", "percent")
+        high = float(linear_metrics[key]["modes"][1])
+        if peak_text != f"{high:.1f}":
+            failures.append(f"{key} prints {peak_text} Hz against eigenvalue {high:.1f} Hz")
+        closing_shift = f"{float(peak_text) - float(baseline_text):+.1f}"
+        if shift_text != closing_shift:
+            failures.append(
+                f"{key} prints {shift_text} Hz, but {peak_text} minus {baseline_text} "
+                f"is {closing_shift} Hz")
+        ladder_percent = f"{100.0 * (high - baseline_high) / baseline_high:+.1f}"
+        if percent_text != ladder_percent:
+            failures.append(
+                f"{key} prints {percent_text}% against the 10.1 ladder's {ladder_percent}%")
+    if failures:
+        raise AssertionError("Mode-shift figure labels are inconsistent: " + "; ".join(failures))
+
+
+def plot_case_response_overlay(frequencies: np.ndarray,
+                               responses: dict[str, np.ndarray],
+                               linear_metrics: dict[str, dict[str, float | np.ndarray]],
+                               effect: dict[str, float]
+                               ) -> tuple[Path, Path, Path]:
+    """Render the mode-shift result, the only non-degenerate tangent delta,
+    and the complete Bode overlay as three figures with distinct jobs."""
     magnitudes = {
         key: 20.0 * np.log10(np.maximum(np.abs(response), 1e-15))
         for key, response in responses.items()
@@ -2478,99 +3165,162 @@ def plot_case_response_overlay(frequencies: np.ndarray,
         "G2": "G2: guideway-only GMS",
         "B": "B: nut LuGre",
         "B2": "B2: nut GMS",
-        "C": "C: both LuGre",
-        "C2": "C2: both GMS",
+        "C": "C: all-port LuGre",
+        "C2": "C2: all-port GMS",
         "A1v": "A1v: guideway LuGre, micro-viscous",
     }
     missing_labels = sorted(set(CASES).difference(short_labels))
     if missing_labels:
         raise KeyError("Bode overlay has unlabelled cases: " + ", ".join(missing_labels))
-    for key, case in CASES.items():
-        for axis in (ax_full, ax_zoom):
-            axis.semilogx(
-                frequencies, magnitudes[key], color=case["color"],
-                linestyle=case["ls"], linewidth=1.8,
-                label=short_labels[key] if axis is ax_full else None,
-            )
 
+    # The labels quote the same unrounded eigenvalues as the 10.1 ladder, so
+    # the peak, the shift, and the percentage cannot contradict each other or
+    # the table.  A linear axis is used because the whole span is 115 Hz.
+    ladder = mode_shift_ladder(linear_metrics)
+    ladder_by_key = {str(row["key"]): row for row in ladder}
+    zoom_floor_db = -5.0
+    zoom_ceiling_db = 15.5
+    fig_zoom, ax_zoom = plt.subplots(figsize=(10.8, 6.2))
+    for key, case in CASES.items():
+        ax_zoom.plot(
+            frequencies, magnitudes[key], color=case["color"],
+            linestyle=case["ls"], linewidth=1.9,
+        )
+
+    def magnitude_at(key: str, frequency: float) -> float:
+        return float(np.interp(frequency, frequencies, magnitudes[key]))
+
+    # Each matched pair is exactly coincident, so one label per visible curve
+    # replaces a ten-entry legend.  G/G2 sit under A/A2 at this mode and are
+    # named in the footnote instead of a colliding second label.
+    annotations = (("0", 12.8), ("A", 9.4), ("B", 12.8), ("C", 9.4))
+    drawn_notes: dict[str, str] = {}
+    for key, text_height in annotations:
+        row = ladder_by_key[key]
+        frequency = float(row["high_hz"])
+        peak_magnitude = magnitude_at(key, frequency)
+        if row["shift_pct_text"] is None:
+            note = f"{row['figure_label']}\n{row['high_text']} Hz"
+        else:
+            note = (f"{row['figure_label']}\n{row['high_text']} Hz, "
+                    f"{row['shift_hz_text']} Hz ({row['shift_pct_text']}%)")
+        drawn_notes[key] = note
+        ax_zoom.plot(
+            [frequency, frequency], [peak_magnitude + 0.5, text_height - 0.4],
+            color=CASES[key]["color"], linestyle=(0, (3, 2)), linewidth=1.0,
+        )
+        ax_zoom.text(
+            frequency, text_height, note, ha="center", va="bottom",
+            fontsize=8.6, color=CASES[key]["color"], linespacing=1.35,
+        )
+    _audit_mode_shift_labels(drawn_notes, linear_metrics)
+
+    a1v_frequency = float(ladder_by_key["A"]["high_hz"])
+    ax_zoom.annotate(
+        f"A1v (dotted): same ports, $\\sigma_1$ restored;\n"
+        f"peak {effect['peak_drop_db']:.3f} dB lower, mode unmoved",
+        xy=(a1v_frequency, magnitude_at("A1v", a1v_frequency)),
+        xytext=(747.0, 6.2), textcoords="data", ha="left", va="center",
+        fontsize=8.2, color=CASES["A1v"]["color"], linespacing=1.35,
+        arrowprops={"arrowstyle": "->", "color": CASES["A1v"]["color"],
+                    "lw": 0.9, "connectionstyle": "arc3,rad=0.16"},
+    )
+    fig_zoom.text(
+        0.5, 0.015,
+        "Matched LuGre/GMS pairs are exactly coincident, so each visible curve is labelled once. "
+        "G/G2 lie under A/A2 here; the drive port moves only the low mode.",
+        ha="center", fontsize=8.2, color="#555555",
+    )
+    ax_zoom.set_xlim(678.0, 838.0)
+    ax_zoom.set_ylim(zoom_floor_db, zoom_ceiling_db)
+    ax_zoom.set_xticks([690.0, 720.0, 750.0, 780.0, 810.0])
+    ax_zoom.set_title("Presliding stiffness shifts the retained resonance")
+    ax_zoom.set_xlabel("Frequency (Hz)")
+    ax_zoom.set_ylabel("Command-to-stage magnitude (dB)")
+    ax_zoom.grid(True, which="major", color="#d1d1d1", linewidth=0.7)
+    ax_zoom.grid(True, which="minor", color="#eeeeee", linewidth=0.45)
+    ax_zoom.minorticks_on()
+    fig_zoom.tight_layout(rect=(0.0, 0.045, 1.0, 1.0))
+    zoom_output = ASSET_DIR / "friction_mode_shift_zoom.svg"
+    save_svg(fig_zoom, zoom_output)
+    plt.close(fig_zoom)
+
+    # One trace with one feature: half the height of a normal panel, no legend,
+    # and a sign the caption explains.  A negative difference is a reduction in
+    # peak magnitude produced by added damping, not a loss of gain elsewhere.
+    difference = magnitudes["A1v"] - magnitudes["A"]
+    maximum_index = int(np.argmax(np.abs(difference)))
+    maximum = float(difference[maximum_index])
+    maximum_frequency = float(frequencies[maximum_index])
+    fig_delta, ax_delta = plt.subplots(figsize=(9.3, 2.7))
+    ax_delta.semilogx(
+        frequencies, difference, color=CASES["A1v"]["color"], linewidth=2.0)
+    ax_delta.plot(maximum_frequency, maximum, "o", color=CASES["A1v"]["color"], ms=5)
+    ax_delta.annotate(
+        f"peak reduced {abs(maximum):.3f} dB at {maximum_frequency:.0f} Hz",
+        xy=(maximum_frequency, maximum), xytext=(12, 6), textcoords="offset points",
+        fontsize=8.4, color=CASES["A1v"]["color"],
+    )
+    finite_delta = difference[np.isfinite(difference)]
+    delta_min, delta_max = float(np.min(finite_delta)), float(np.max(finite_delta))
+    delta_span = max(delta_max - delta_min, abs(maximum) * 0.18, 1.0e-5)
+    ax_delta.set_ylim(delta_min - 0.16 * delta_span, delta_max + 0.16 * delta_span)
+    ax_delta.axhline(0.0, color="#888888", linewidth=0.7)
+    ax_delta.set_xlim(BODE_FOCUS_MIN_HZ, BODE_FOCUS_MAX_HZ)
+    ax_delta.set_title("A1v minus A: isolated micro-viscous tangent effect")
+    ax_delta.set_xlabel("Frequency (Hz)")
+    ax_delta.set_ylabel("Magnitude\ndifference (dB)")
+    ax_delta.grid(True, which="major", color="#d1d1d1", linewidth=0.7)
+    ax_delta.grid(True, which="minor", color="#eeeeee", linewidth=0.45)
+
+    # The full-range panel proves the flatness; the inset shows the feature.
+    inset = ax_delta.inset_axes((0.085, 0.13, 0.23, 0.64))
+    inset_mask = (frequencies >= 650.0) & (frequencies <= 850.0)
+    inset.plot(frequencies[inset_mask], difference[inset_mask],
+               color=CASES["A1v"]["color"], linewidth=1.5)
+    inset.axhline(0.0, color="#888888", linewidth=0.6)
+    inset.set_xlim(650.0, 850.0)
+    inset.set_ylim(1.10 * maximum, abs(0.10 * maximum))
+    inset.set_xticks([650.0, 750.0, 850.0])
+    inset.set_yticks([0.0, round(maximum, 2)])
+    inset.tick_params(labelsize=6.4, pad=1.5)
+    inset.set_title("650-850 Hz, linear", fontsize=6.6, pad=2.0)
+    inset.grid(True, which="major", color="#e2e2e2", linewidth=0.5)
+
+    caption = "\n".join([
+        f"Micro-viscous damping acts only at the retained mode and nowhere else. The "
+        f"{abs(maximum):.3f} dB peak reduction corresponds to a "
+        f"{100.0 * (effect['magnitude_ratio'] - 1.0):.1f}% increase in modal damping",
+        f"and shifts the settled RMS deviation by {effect['rms_shift_nm']:.1f} nm, which is why "
+        "$\\sigma_1=0$ in the matched comparisons.",
+    ])
+    fig_delta.text(0.5, 0.03, caption, ha="center", va="bottom",
+                   fontsize=8.0, color="#555555", linespacing=1.4)
+    fig_delta.tight_layout(rect=(0.0, 0.235, 1.0, 1.0))
+    delta_output = ASSET_DIR / "micro_viscous_difference.svg"
+    save_svg(fig_delta, delta_output)
+    plt.close(fig_delta)
+
+    fig_full, ax_full = plt.subplots(figsize=(11.2, 6.8))
+    for key, case in CASES.items():
+        ax_full.semilogx(
+            frequencies, magnitudes[key], color=case["color"],
+            linestyle=case["ls"], linewidth=1.8, label=short_labels[key],
+        )
     ax_full.axhline(0.0, color="#888888", linewidth=0.7)
     ax_full.set_xlim(BODE_FOCUS_MIN_HZ, BODE_FOCUS_MAX_HZ)
     ax_full.set_ylim(-90.0, 30.0)
     ax_full.set_title("All command-to-stage Bode responses")
+    ax_full.set_xlabel("Frequency (Hz)")
     ax_full.set_ylabel("Magnitude (dB)")
+    ax_full.grid(True, which="major", color="#d1d1d1", linewidth=0.7)
+    ax_full.grid(True, which="minor", color="#eeeeee", linewidth=0.45)
     ax_full.legend(loc="lower left", ncol=2, fontsize=8)
-
-    zoom_mask = (frequencies >= 620.0) & (frequencies <= 830.0)
-    zoom_indices = np.flatnonzero(zoom_mask)
-    baseline_index = zoom_indices[np.argmax(magnitudes["0"][zoom_mask])]
-    baseline_frequency = float(frequencies[baseline_index])
-    annotations = (
-        ("0", "0", (682.0, 14.2)),
-        ("A2", "A/A2", (720.0, 15.2)),
-        ("B2", "B/B2", (750.0, 12.8)),
-        ("C2", "C/C2", (796.0, 14.8)),
-    )
-    for key, label, text_position in annotations:
-        peak_index = zoom_indices[np.argmax(magnitudes[key][zoom_mask])]
-        peak_frequency = float(frequencies[peak_index])
-        peak_magnitude = float(magnitudes[key][peak_index])
-        if key == "0":
-            note = f"{label}: {peak_frequency:.0f} Hz"
-        else:
-            shift_hz = peak_frequency - baseline_frequency
-            shift_pct = 100.0 * shift_hz / baseline_frequency
-            note = f"{label}: {peak_frequency:.0f} Hz\n+{shift_hz:.1f} Hz ({shift_pct:.1f}%)"
-        ax_zoom.annotate(
-            note, xy=(peak_frequency, peak_magnitude),
-            xytext=text_position, textcoords="data", ha="center", fontsize=7.8,
-            color=CASES[key]["color"],
-            arrowprops={"arrowstyle": "->", "color": CASES[key]["color"], "lw": 0.8},
-        )
-    ax_zoom.set_xlim(620.0, 830.0)
-    ax_zoom.set_ylim(2.0, 16.2)
-    ax_zoom.set_title("Higher resonance: topology shifts the peak")
-    ax_zoom.set_xlabel("Frequency (Hz)")
-    ax_zoom.set_ylabel("Magnitude (dB)")
-
-    for lugre_key, gms_key in PAIRS:
-        difference = magnitudes[gms_key] - magnitudes[lugre_key]
-        ax_delta.semilogx(
-            frequencies, difference, color=CASES[gms_key]["color"],
-            linewidth=1.9, label=f"{lugre_key}/{gms_key}",
-        )
-        maximum_index = int(np.argmax(np.abs(difference)))
-        maximum = float(difference[maximum_index])
-        maximum_frequency = float(frequencies[maximum_index])
-        ax_delta.plot(maximum_frequency, maximum, "o", color=CASES[gms_key]["color"], ms=4)
-        ax_delta.annotate(
-            f"{abs(maximum):.2f} dB at {maximum_frequency:.0f} Hz",
-            xy=(maximum_frequency, maximum), xytext=(7, 7), textcoords="offset points",
-            fontsize=7.6, color=CASES[gms_key]["color"],
-        )
-    ax_delta.axhline(0.0, color="#888888", linewidth=0.7)
-    ax_delta.set_xlim(BODE_FOCUS_MIN_HZ, BODE_FOCUS_MAX_HZ)
-    ax_delta.set_ylim(-0.1, 1.2)
-    ax_delta.set_title("GMS minus LuGre magnitude")
-    ax_delta.set_xlabel("Frequency (Hz)")
-    ax_delta.set_ylabel("Difference (dB)")
-    ax_delta.legend(loc="upper left", fontsize=8)
-
-    for axis in (ax_full, ax_zoom, ax_delta):
-        axis.grid(True, which="major", color="#d1d1d1", linewidth=0.7)
-        axis.grid(True, which="minor", color="#eeeeee", linewidth=0.45)
-
-    fig.suptitle("Revision 3 response comparison", fontsize=15, fontweight="bold")
-    fig.text(
-        0.5, 0.012,
-        "Matched LuGre and GMS cases share presliding stiffness. Their visible Bode gap comes from tangent damping.",
-        ha="center", fontsize=8.4, color="#555555",
-    )
-    fig.subplots_adjust(left=0.075, right=0.98, bottom=0.08, top=0.91,
-                        hspace=0.34, wspace=0.26)
-    output = ASSET_DIR / "lugre_gms_pairwise_comparison.svg"
-    save_svg(fig, output)
-    plt.close(fig)
-    return output
+    fig_full.tight_layout()
+    full_output = ASSET_DIR / "bode_all_cases.svg"
+    save_svg(fig_full, full_output)
+    plt.close(fig_full)
+    return zoom_output, delta_output, full_output
 
 
 def plot_presliding_memory(experiment: dict[str, object], output_name: str) -> Path:
@@ -2585,14 +3335,19 @@ def plot_presliding_memory(experiment: dict[str, object], output_name: str) -> P
     site_title = "Guideway" if site == "g" else "Nut microslip"
     blocked_stage = bool(experiment["blocked_stage"])
     time_ms = times * 1e3
+    plateau_dwell = float(experiment["plateau_dwell"])
+    levels = np.asarray(experiment["levels"], dtype=float)
+    plateau_elapsed = times - PRESLIDING_START
+    plateau_phase = np.mod(np.maximum(plateau_elapsed, 0.0), plateau_dwell)
+    settled_display_mask = (
+        (plateau_elapsed >= 0.0)
+        & (times <= PRESLIDING_START + levels.size * plateau_dwell + 0.5e-9)
+        & (plateau_phase >= 0.040 - 0.5e-9)
+    )
 
     fig, axes = plt.subplots(2, 2, figsize=(12.0, 8.8))
     ax_motion, ax_error = axes[0]
     ax_loop_a, ax_loop_b = axes[1]
-
-    # The nut deviation panel saturates against a +-400 nm clip; the guideway
-    # panel does not need the tighter bound (Part 1.5 item 5).
-    deviation_limit = 300.0 if site == "n" else 400.0
 
     ax_motion.step(time_ms, command * 1e6, where="post", color="#111111",
                    linewidth=2.0, label="Command")
@@ -2605,19 +3360,20 @@ def plot_presliding_memory(experiment: dict[str, object], output_name: str) -> P
         peak_error_nm = max(peak_error_nm, float(np.max(np.abs(error_nm))))
         ax_motion.plot(time_ms, observed * 1e6, color=case["color"],
                        linestyle=case["ls"], linewidth=1.35, label=case["label"])
-        ax_error.plot(time_ms, np.clip(error_nm, -deviation_limit, deviation_limit),
-                      color=case["color"], linestyle=case["ls"], linewidth=1.15)
+        ax_error.plot(
+            time_ms, np.where(settled_display_mask, error_nm, np.nan),
+            color=case["color"], linestyle=case["ls"], linewidth=1.15,
+        )
 
     ax_motion.set_title("Nested command and drive coordinate; stage blocked"
                         if blocked_stage else "Nested command and stage motion")
     ax_motion.set_ylabel("Position (µm)")
     ax_motion.legend(loc="upper right", fontsize=7.7, ncol=2)
-    ax_error.set_title("Settled structure visible after clipping command-edge transients")
+    ax_error.set_title("Settled deviation, per-plateau transients masked")
     ax_error.set_ylabel(r"Modeled deviation $x_{cmd}-x_o$ (nm)")
-    ax_error.set_ylim(-deviation_limit, deviation_limit)
     ax_error.axhline(0.0, color="#777777", linewidth=0.8)
     ax_error.text(
-        0.02, 0.04, f"edge transients clipped; peak {peak_error_nm:.0f} nm",
+        0.02, 0.04, f"first 40 ms of each plateau masked; edge peak {peak_error_nm:.0f} nm",
         transform=ax_error.transAxes, fontsize=8.0, color="#555555",
         bbox={"boxstyle": "round,pad=0.22", "facecolor": "white",
               "edgecolor": "#c9cfd4", "alpha": 0.90})
@@ -2694,27 +3450,39 @@ def plot_presliding_memory(experiment: dict[str, object], output_name: str) -> P
         axis.axhline(0.0, color="#888888", linewidth=0.7)
         axis.axvline(0.0, color="#888888", linewidth=0.7)
 
-    if site == "g":
-        loop_panel(ax_loop_a, ("A", "A2"), "Law comparison: A versus A2")
-        loop_panel(ax_loop_b, ("A2", "G2"), "Drive-port ablation: A2 versus G2")
-    else:
-        # These are settled return-point maps, not literature presliding
-        # loops: 13 settled markers connected in plateau order over a
-        # dynamic trace dominated by post-edge ringing (Part 1.5). Markers
-        # are numbered instead of arrowed, connectors are dotted at low
-        # alpha instead of solid chords, and the background trace is split
-        # by branch instead of showing the full +-0.7 um run in both panels.
-        plateau_dwell = float(experiment["plateau_dwell"])
-        levels = np.asarray(experiment["levels"], dtype=float)
-        branch_boundary = levels.size // 2
-        positive_branch_mask = times <= PRESLIDING_START + (branch_boundary + 1) * plateau_dwell
-        negative_branch_mask = times >= PRESLIDING_START + branch_boundary * plateau_dwell
-        loop_panel(ax_loop_a, ("B", "B2"), "Positive branch return-point map",
-                   slice(0, 7), background_mask=positive_branch_mask,
-                   numbered=True, dotted_connector=True)
-        loop_panel(ax_loop_b, ("B", "B2"), "Negative branch return-point map",
-                   slice(7, 13), background_mask=negative_branch_mask,
-                   numbered=True, dotted_connector=True)
+    lugre_key, gms_key = keys[:2]
+    loop_panel(
+        ax_loop_a, (lugre_key, gms_key),
+        f"Law comparison: {lugre_key} versus {gms_key}",
+        numbered=site == "n", dotted_connector=site == "n",
+    )
+    r_hold_lugre = 100.0 * float(metrics[lugre_key]["r_hold"])
+    r_hold_gms = 100.0 * float(metrics[gms_key]["r_hold"])
+    ax_loop_a.text(
+        0.03, 0.96,
+        f"LuGre retains {r_hold_lugre:.1f}% of available elastic force at rest; "
+        f"GMS {r_hold_gms:.1f}%.",
+        transform=ax_loop_a.transAxes, va="top", fontsize=7.8, color="#3f4b53",
+        bbox={"boxstyle": "round,pad=0.22", "facecolor": "white",
+              "edgecolor": "#c9cfd4", "alpha": 0.92},
+    )
+
+    plateau_numbers = np.arange(1, levels.size + 1)
+    for key, marker in ((lugre_key, "o"), (gms_key, "s")):
+        ax_loop_b.plot(
+            plateau_numbers,
+            np.asarray(metrics[key]["endpoint_force_N"], dtype=float),
+            color=CASES[key]["color"], linestyle=CASES[key]["ls"],
+            linewidth=1.8, marker=marker, markersize=4.5,
+            markerfacecolor="white", label=key,
+        )
+    ax_loop_b.axhline(0.0, color="#888888", linewidth=0.7)
+    ax_loop_b.set_xlim(1, levels.size)
+    ax_loop_b.set_xticks(plateau_numbers)
+    ax_loop_b.set_title("Retention diagnostic: settled force versus plateau index")
+    ax_loop_b.set_xlabel("Plateau index")
+    ax_loop_b.set_ylabel(f"Settled {site_title.lower()} friction force (N)")
+    ax_loop_b.legend(loc="best", fontsize=8)
 
     for axis in (ax_motion, ax_error):
         axis.set_xlabel("Time (ms)")
@@ -2722,7 +3490,6 @@ def plot_presliding_memory(experiment: dict[str, object], output_name: str) -> P
         axis.grid(True, which="major", color="#d1d1d1", linewidth=0.7)
         axis.grid(True, which="minor", color="#eeeeee", linewidth=0.45)
 
-    lugre_key, gms_key = keys[:2]
     force_ratio = (float(metrics[gms_key]["return_force_mismatch_N"]) /
                    max(float(metrics[lugre_key]["return_force_mismatch_N"]), 1e-30))
     origin_ratio = (abs(float(metrics[gms_key]["final_mean_nm"])) /
@@ -2743,6 +3510,72 @@ def plot_presliding_memory(experiment: dict[str, object], output_name: str) -> P
     fig.text(0.5, 0.012, caption, ha="center", fontsize=8.5, color="#555555")
     fig.tight_layout(rect=(0.02, 0.055, 0.99, 0.95), h_pad=2.0, w_pad=1.5)
     output = ASSET_DIR / output_name
+    save_svg(fig, output)
+    plt.close(fig)
+    return output
+
+
+def plot_presliding_supplement(experiments: dict[str, dict[str, object]]) -> Path:
+    """Demote the guideway ablation and nut branch-split diagnostics from the
+    two main Section 9 figures without losing their audit value."""
+    fig, axes = plt.subplots(1, 3, figsize=(15.0, 4.8))
+
+    def add_endpoint_panel(axis: plt.Axes, experiment: dict[str, object],
+                           panel_keys: tuple[str, ...], title: str,
+                           point_slice: slice | None = None) -> None:
+        site = str(experiment["site"])
+        metrics = experiment["metrics"]
+        for index, key in enumerate(panel_keys):
+            x = np.asarray(metrics[key]["endpoint_coordinate_um"], dtype=float)
+            y = np.asarray(metrics[key]["endpoint_force_N"], dtype=float)
+            numbers = np.arange(1, x.size + 1)
+            if point_slice is not None:
+                x, y, numbers = x[point_slice], y[point_slice], numbers[point_slice]
+            axis.plot(
+                x, y, color=CASES[key]["color"], linestyle=CASES[key]["ls"],
+                linewidth=1.7, marker="o" if index == 0 else "s", markersize=4.3,
+                markerfacecolor="white", label=key,
+            )
+            for xi, yi, plateau in zip(x, y, numbers):
+                offset = (3, 3) if index == 0 else (3, -9)
+                axis.annotate(
+                    str(int(plateau)), xy=(xi, yi), xytext=offset,
+                    textcoords="offset points", fontsize=6.2,
+                    color=CASES[key]["color"],
+                )
+        axis.axhline(0.0, color="#888888", linewidth=0.7)
+        axis.axvline(0.0, color="#888888", linewidth=0.7)
+        axis.set_title(title)
+        axis.set_xlabel("Stage position (um)" if site == "g"
+                        else r"Nut-port deflection $x_d-x_s$ (um)")
+        axis.set_ylabel("Friction force (N)")
+        axis.grid(True, which="major", color="#d1d1d1", linewidth=0.7)
+        axis.grid(True, which="minor", color="#eeeeee", linewidth=0.45)
+        axis.legend(loc="best", fontsize=8)
+
+    guideway = experiments["guideway"]
+    nut = experiments["nut"]
+    add_endpoint_panel(
+        axes[0], guideway, ("A2", "G2"),
+        "Guideway drive-port ablation: A2 versus G2",
+    )
+    add_endpoint_panel(
+        axes[1], nut, ("B", "B2"),
+        "Nut positive branch", slice(0, 7),
+    )
+    add_endpoint_panel(
+        axes[2], nut, ("B", "B2"),
+        "Nut negative branch", slice(7, 13),
+    )
+    fig.suptitle("Supplementary memory diagnostics", fontsize=14, fontweight="bold")
+    fig.text(
+        0.5, 0.012,
+        "Plateau numbers show traversal order. These panels audit ablation and branch asymmetry; "
+        "the main Section 9 figures reserve their lower-right slot for direct force retention.",
+        ha="center", fontsize=8.2, color="#555555",
+    )
+    fig.tight_layout(rect=(0.01, 0.055, 0.995, 0.93), w_pad=1.4)
+    output = ASSET_DIR / "memory_diagnostic_supplement.svg"
     save_svg(fig, output)
     plt.close(fig)
     return output
@@ -4055,10 +4888,14 @@ def plot_position_dependence() -> Path:
     positions = np.array([0.0, 75.0, FULL["stage_travel"] * 1e3])
     free_lengths = (FULL["usable_screw_travel"] - FULL["stage_travel"]
                     + positions * 1e-3)
-    axial_rigidity = FULL["k_sha"] * 0.150
+    # Same modulus, root section and datum as the Section 2 entry table, so
+    # the sweep and the four executed stiffnesses cannot describe different
+    # screws.
+    component = component_parameters()
+    axial_rigidity = component["axial_rigidity"]
     k_sha = axial_rigidity / free_lengths
     constants = physical_constants()
-    fixed_compliance = 1.0 / constants["k_ax"] - 1.0 / FULL["k_sha"]
+    fixed_compliance = 1.0 / constants["k_ax"] - 1.0 / component["k_sha"]
     k_ax = 1.0 / (fixed_compliance + 1.0 / k_sha)
     mass = np.diag([constants["m_d"], constants["m_s"]])
     mode = []
@@ -4327,12 +5164,35 @@ def generated_reduction_convergence(verification: dict[str, object]) -> str:
         "",
         "### 7.3 Dwell consequence",
         "",
-        f"The ten-DOF upper mode now implies a 2% settling time of {full_settling * 1e3:.1f} ms, against {reduced_settling * 1e3:.1f} ms for the reduced plant. "
-        f"[Section 10](#10-friction-case-responses-and-generated-summary) runs its nonlinear campaign on a {dwell * 1e3:.0f} ms plateau dwell, set by the maximum of the 100 ms floor, the {constants['detent_settling_time_2pct'] * 1e3:.1f} ms detent-softened drive estimate, and the {constants['axial_settling_time_2pct'] * 1e3:.1f} ms reduced axial-mode estimate. "
-        + (f"That floor is adequate: it exceeds the axial-mode settling time by a factor of {dwell / full_settling:.1f}, so the settled-window statistics are collected after the 691 Hz mode has decayed. "
-           "The earlier finding that the dwell was short by a factor of six was a consequence of the understated interface loss factors and does not survive their correction."
-           if full_settling < dwell else
-           f"That floor is still short of the axial-mode settling time by a factor of {full_settling / dwell:.1f}, so the settled-window statistics are collected while the 691 Hz mode is still ringing."),
+        "**The dwell is conditional on an unresolved damping branch, so it now covers every branch.** "
+        f"The same retained mode carries three candidate damping ratios and they disagree by a factor of "
+        f"{constants['axial_zeta_executed'] / constants['axial_zeta_measured']:.0f}: "
+        f"the measured relative-mode value $\\zeta_2=$ {constants['axial_zeta_measured']:.4f}, still pending the "
+        f"[E.7](#e-7-measured-frf-identification) half-power re-extraction, implies a 2% settling time of "
+        f"{constants['measured_settling_time_2pct'] * 1e3:.0f} ms; the interface loss factors propagated in "
+        f"[E.5](#e-5-frequency-domain-complex-stiffness-reduction) give {constants['axial_zeta_interface']:.4f} and "
+        f"{constants['interface_settling_time_2pct'] * 1e3:.1f} ms; the executed link damper gives "
+        f"{constants['axial_zeta_executed']:.4f} and {constants['axial_settling_time_2pct'] * 1e3:.1f} ms. "
+        f"The ten-DOF plant settles in {full_settling * 1e3:.1f} ms and the reduced plant in {reduced_settling * 1e3:.1f} ms, "
+        "both on the loss-factor branch.",
+        "",
+        f"The previous rule took the maximum of the 100 ms floor, the detent-softened drive estimate and the reduced "
+        f"axial estimate, which omitted the two longest candidates and therefore silently selected the shortest branch. "
+        f"[Section 10](#10-friction-case-responses-and-generated-summary) now runs its nonlinear campaign on a "
+        f"{dwell * 1e3:.0f} ms plateau dwell, the maximum over the 100 ms floor, the "
+        f"{constants['detent_settling_time_2pct'] * 1e3:.1f} ms detent-softened drive estimate, the "
+        f"{constants['axial_settling_time_2pct'] * 1e3:.1f} ms executed reduced axial estimate, the "
+        f"{constants['interface_settling_time_2pct'] * 1e3:.1f} ms loss-factor estimate and the "
+        f"{constants['measured_settling_time_2pct'] * 1e3:.0f} ms measured estimate. "
+        f"It therefore exceeds the ten-DOF settling time by a factor of {dwell / full_settling:.1f} on the "
+        "assumption branch and closes on the measurement branch by construction, so no settled-window number in "
+        "Sections 9, 10 or 12 depends on which branch the extraction confirms. "
+        "**That is a cost, not a result:** the campaign is "
+        f"{dwell / 0.100:.1f}$\\times$ longer than the 100 ms floor purely because the damping is unresolved, and "
+        "[E.7](#e-7-measured-frf-identification) is the experiment that would shorten it. The earlier claim that "
+        "the loss-factor correction had settled the dwell question used the assumption branch as evidence against "
+        "the measurement, and the ten-DOF reference it appealed to is built from the same four assumed loss "
+        "factors, so it was not independent.",
         "",
         "### 7.4 Reading the trajectory",
         "",
@@ -4370,37 +5230,21 @@ def generated_summary(linear_metrics: dict[str, dict[str, float | np.ndarray]],
     local_low, local_high = detent_local_mode_band()
     lines = [
         "<!-- BEGIN GENERATED RESPONSE SUMMARY -->",
-        "| Case | Friction law | Global-linear modes (Hz) | Local friction-tangent gain $X_s/X_{cmd}$ | Smallest first-yield travel | First-step overshoot | Settled-window RMS deviation | Settled-window maximum | All-time peak deviation | Final-window RMS deviation |",
-        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| Case | Retained mode | Settled RMS deviation |",
+        "|---|---:|---:|",
     ]
-    for key, case in CASES.items():
+    for key in CASES:
         modes = linear_metrics[key]["modes"]
-        mode_text = f"{modes[0]:.1f}, {modes[1]:.1f}"
-        friction_label = {"none": "none", "lugre": "LuGre", "gms": "GMS"}[case["friction"]]
-        first_yield = float(linear_metrics[key]["first_yield_m"])
-        yield_text = "not applicable" if not np.isfinite(first_yield) else f"{first_yield * 1e6:.3f} µm"
         lines.append(
-            f"| {key} | {friction_label} | {mode_text} | {linear_metrics[key]['tangent_dc_gain']:.5f} | "
-            f"{yield_text} | "
-            f"{time_metrics[key]['first_overshoot_pct']:.1f}% | "
-            f"{time_metrics[key]['rms_settled_deviation_nm']:.1f} nm | "
-            f"{time_metrics[key]['max_settled_deviation_nm']:.1f} nm | "
-            f"{time_metrics[key]['max_abs_deviation_nm']:.1f} nm | "
-            f"{time_metrics[key]['rms_final_error_nm']:.1f} nm |"
+            f"| {key} | {float(modes[1]):.1f} Hz | "
+            f"{time_metrics[key]['rms_settled_deviation_nm']:.1f} nm |"
         )
     lines.extend([
         "",
-        "The displayed modes and gains are the global commutation linearization: periodic detent is deliberately excluded from the global stiffness matrix. The friction tangent is local and valid only below the listed first-yield travel. "
-        f"The nonlinear cases include periodic detent torque and use a {constants['plateau_dwell'] * 1e3:.0f} ms dwell: max(100 ms, {constants['detent_settling_time_2pct'] * 1e3:.1f} ms detent-softened drive, {constants['axial_settling_time_2pct'] * 1e3:.1f} ms reduced axial mode). "
-        f"Settled values collect the last {constants['metric_window'] * 1e3:.0f} ms of every plateau. All deviation columns use $d(t)=x_{{cmd}}(t)-x_s(t)$ and describe open-loop modeled plant behavior, not servo tracking performance. Case 0 remains frictionless.",
+        "This digest keeps the two values needed to compare topology and settled motion. "
+        "Appendix H contains the full ten-case metrics dump and the complete Bode overlay.",
         "",
-        f"**The first-yield travel column is an independent check on the ablation.** A/A2's smallest first-yield travel is "
-        f"{float(linear_metrics['A']['first_yield_m']) * 1e6:.3f} µm, the drive port's first element; G/G2's is "
-        f"{float(linear_metrics['G']['first_yield_m']) * 1e6:.3f} µm, the guideway's first element. The two travels "
-        "come from different ports because G/G2 removes the drive port, confirming that the ablation removes the "
-        "port it claims to remove.",
-        "",
-        "### 10.3 Generated reduction audit",
+        "### 10.4 Generated reduction audit",
         "",
         "| Quantity | Executed value |",
         "|---|---:|",
@@ -4408,8 +5252,10 @@ def generated_summary(linear_metrics: dict[str, dict[str, float | np.ndarray]],
         f"| Nut body mass retained at stage node | {constants['m_n']:.3f} kg |",
         f"| Derived retained stage-side mass | [[derived:reduced_stage_mass={constants['m_s']:.3f}]] kg |",
         f"| Upper-mode calibration target | {constants['axial_mode_target_hz']:.2f} Hz |",
-        f"| Modal-calibrated $k_{{ax}}$ | [[derived:reduced_axial_stiffness={constants['k_ax']:.6e}]] N/m |",
-        f"| Closure-derived $k_{{ball}}$ | [[derived:k_ball={verification['parameters']['k_ball']:.6e}]] N/m |",
+        f"| Modal-calibrated $k_{{ax}}$ | "
+        f"[[derived:reduced_axial_stiffness@mnm={constants['k_ax'] / 1.0e6:.3f}]] MN/m |",
+        f"| Closure-derived $k_{{ball}}$ | "
+        f"[[derived:k_ball@mnm={verification['parameters']['k_ball'] / 1.0e6:.3f}]] MN/m |",
         f"| Motor rotor inertia | {verification['parameters']['J_m']:.3e} kg m² |",
         f"| Coupling inertia | {verification['parameters']['J_c']:.3e} kg m² |",
         f"| 0.192 m screw inertia | {verification['parameters']['screw_inertia']:.3e} kg m² |",
@@ -4442,56 +5288,495 @@ def update_generated_summary(summary: str) -> None:
     DERIVATION_MD.write_text(pattern.sub(lambda _match: summary, source), encoding="utf-8")
 
 
-def generated_bode_comparison(frequencies: np.ndarray,
-                              responses: dict[str, np.ndarray],
-                              linear_metrics: dict[str, dict[str, float | np.ndarray]]) -> str:
-    magnitudes = {
-        key: 20.0 * np.log10(np.maximum(np.abs(response), 1e-15))
-        for key, response in responses.items()
+def calibration_branches(constants: dict[str, float],
+                         component: dict[str, float]) -> dict[str, object]:
+    """Both k_ax calibration branches and the k_ball closure band."""
+    frictionless = constants["k_ax"]
+    presliding = presliding_calibrated_axial_stiffness(
+        constants["m_d"], constants["m_s"], constants["K_m"],
+        constants["axial_mode_target_hz"])
+    band = ball_closure_band(frictionless, component["k_sha"], component["k_mnt"])
+    presliding_ball = closure_ball_stiffness(
+        presliding, component["k_brg"], component["k_sha"], component["k_mnt"])
+    unpowered = modal_calibrated_axial_stiffness(
+        constants["m_d"], constants["m_s"], 0.0, constants["axial_mode_target_hz"])
+    return {
+        "frictionless_k_ax": frictionless,
+        "presliding_k_ax": presliding,
+        "ratio": presliding / frictionless,
+        "frictionless_k_ball": constants["k_ball"],
+        "presliding_k_ball": presliding_ball,
+        "unpowered_k_ax": unpowered,
+        "unpowered_shift_pct": 100.0 * (unpowered - frictionless) / frictionless,
+        "sigma0_g": FRICTION["g"]["sigma0"],
+        "sigma0_n": FRICTION["n"]["sigma0"],
+        "singular_limit": band["singular_limit"],
+        "samples": band["samples"],
+        "k_brg": component["k_brg"],
     }
 
+
+def generated_calibration_branches(branches: dict[str, object],
+                                   constants: dict[str, float]) -> str:
+    """Build the Section 6.3 calibration-provenance block.
+
+    The measurement that sets k_ax is taken on the assembled axis at
+    micrometre amplitudes, which is inside the presliding regime, so the two
+    branches below bracket what the same measured pole implies.
+    """
+    lines = [
+        "<!-- BEGIN GENERATED CALIBRATION BRANCHES -->",
+        "**The calibration measurement contains the presliding tangents, and only one branch removes "
+        "them.** A hammer FRF at micrometre amplitudes never leaves the presliding regime: every rolling "
+        "contact behaves as a spring, so the measured pole already carries "
+        f"$\\sigma_{{0,g}}={branches['sigma0_g'] / 1e6:.2f}\\times10^6$ N/m and "
+        f"$\\sigma_{{0,n}}={branches['sigma0_n'] / 1e6:.2f}\\times10^6$ N/m. Solving for $k_{{ax}}$ on the "
+        "frictionless eigenproblem and then adding the friction ports back therefore counts that stiffness "
+        "twice, which is why [10.1](#10-1-presliding-stiffness-shifts-the-retained-mode) predicts an "
+        "operating mode above the measurement that set the calibration.",
+        "",
+        "| Calibration branch | $k_{ax}$ | $k_{ball}$ closure | Reproduces the measured pole with |",
+        "|---|---:|---:|---|",
+        f"| Frictionless (executed) | {branches['frictionless_k_ax'] / 1e6:.3f} MN/m | "
+        f"{branches['frictionless_k_ball'] / 1e6:.3f} MN/m | structure only |",
+        f"| Presliding-inclusive | {branches['presliding_k_ax'] / 1e6:.3f} MN/m | "
+        f"{branches['presliding_k_ball'] / 1e6:.3f} MN/m | structure plus $\\sigma_{{0,g}}$ and "
+        "$\\sigma_{0,n}$ |",
+        "",
+        f"The presliding-inclusive branch is a factor of {branches['ratio']:.3f} softer. Which branch is "
+        "correct is a question about the fixture, not about the algebra, and the fixture record below is "
+        "the missing evidence. Until it is filled in, every $k_{ax}$-dependent number in this document "
+        "carries that factor as an unquantified bias.",
+        "",
+        "| Calibration boundary condition | Recorded value |",
+        "|---|---|",
+        "| Screw coupled or decoupled from the motor | not recorded |",
+        "| Motor powered or unpowered during the impact | not recorded |",
+        "| Excitation amplitude at the stage | not recorded |",
+        "| Any GMS element beyond its yield distance during the impact | not recorded |",
+        "| Measurement point and direction | not recorded |",
+        "",
+        f"**One worry is cheap to remove.** The drive-side boundary condition barely matters: setting "
+        f"$K_m=0$, the unpowered-motor limit, moves $k_{{ax}}$ by "
+        f"{abs(branches['unpowered_shift_pct']):.3f}%, because $\\lambda m_d$ dominates $K_m$ in the "
+        "characteristic equation. Whether the motor was energized during the hammer test is therefore not "
+        "the open question; whether the friction ports were loaded is.",
+        "",
+        "**$k_{ball}$ is a closure residual, so it inherits the bearing assumption.** It absorbs whatever "
+        "axial compliance the other three elements leave over, and below a singular limit on $k_{brg}$ "
+        "there is nothing left to absorb:",
+        "",
+        "| $k_{brg}$ | Closure $k_{ball}$ |",
+        "|---:|---:|",
+    ]
+    for k_brg, k_ball in branches["samples"]:
+        marker = " (executed)" if np.isclose(k_brg, branches["k_brg"]) else ""
+        lines.append(f"| {k_brg / 1e6:.2f} MN/m{marker} | {k_ball / 1e6:.3f} MN/m |")
+    lines.extend([
+        "",
+        f"The singular limit is {branches['singular_limit'] / 1e6:.3f} MN/m and the executed "
+        f"{branches['k_brg'] / 1e6:.1f} MN/m sits a factor of "
+        f"{branches['k_brg'] / branches['singular_limit']:.2f} above it. The Barden duplex contact angle is "
+        "itself unresolved between 15° and 25°, which is a factor-of-two axial stiffness question, so "
+        "[E.7](#e-7-measured-frf-identification)'s instruction to compare the implied $k_{ball}$ with an "
+        "independent contact estimate has no discriminating power until $k_{brg}$ is fixed first.",
+        "",
+        "**The damping chain survives this uncertainty even though the stiffness does not.** Every joint "
+        "carries the same target loss factor, so the equivalent $\\eta$ at the retained mode is unchanged "
+        "across the admissible $k_{brg}$ band; only the reported $k_{ball}$ moves. The two conclusions are "
+        "therefore not coupled, and fixing $k_{brg}$ is a stiffness measurement, not a damping one.",
+        "<!-- END GENERATED CALIBRATION BRANCHES -->",
+    ])
+    return "\n".join(lines)
+
+
+def update_generated_calibration_branches(summary: str) -> None:
+    source = DERIVATION_MD.read_text(encoding="utf-8")
+    pattern = re.compile(
+        r"<!-- BEGIN GENERATED CALIBRATION BRANCHES -->.*?"
+        r"<!-- END GENERATED CALIBRATION BRANCHES -->",
+        flags=re.DOTALL,
+    )
+    if not pattern.search(source):
+        raise RuntimeError("Generated calibration-branch markers are missing from the derivation document")
+    DERIVATION_MD.write_text(pattern.sub(lambda _match: summary, source), encoding="utf-8")
+
+
+def generated_detent_ablation(study: dict[str, object],
+                              constants: dict[str, float]) -> str:
+    """Build the Section 10.3 detent decomposition that precedes the case table."""
+    rows = study["rows"]
+    detent_only = float(study["detent_only_nm"])
+    worst = max(rows.items(), key=lambda item: item[1]["detent_share_pct"])
+    lines = [
+        "<!-- BEGIN GENERATED DETENT ABLATION -->",
+        "**Every settled-window number below contains a detent term, and for most cases it is the larger "
+        "term.** Case 0 is frictionless but not force-free: the nonlinear campaign runs with the periodic "
+        f"detent torque enabled, so its {detent_only:.1f} nm settled deviation is a pure detent result. The "
+        "builder therefore reruns the identical command for every case with $\\hat T_{det}=0$ and reports both "
+        "numbers, so friction attribution rests on a measured pair rather than on a quadrature guess.",
+        "",
+        "| Case | Settled RMS, executed | Settled RMS, detent off | Detent share | Quadrature estimate |",
+        "|---|---:|---:|---:|---:|",
+    ]
+    for key, row in rows.items():
+        lines.append(
+            f"| {key} | {row['executed_nm']:.1f} nm | {row['detent_off_nm']:.1f} nm | "
+            f"{row['detent_share_pct']:.1f}% | {row['quadrature_nm']:.1f} nm |")
+    lines.extend([
+        "",
+        "The detent-off column is the friction-only contribution. The quadrature column is the estimate a "
+        f"reader can form without the ablation, $\\sqrt{{R^2-R_0^2}}$ against the {detent_only:.1f} nm case-0 "
+        "floor; the two agree closely enough to confirm the terms combine in power, and the ablation is the "
+        "one that is executed.",
+        "",
+        f"The detent share reaches {float(worst[1]['detent_share_pct']):.1f}% at case {worst[0]} and stays "
+        f"above {min(row['detent_share_pct'] for row in rows.values()):.1f}% everywhere. **No settled-window "
+        "difference between friction cases should be read as a friction result without its detent-off pair**, "
+        "and the pre-distortion argument in [Section 5](#5-stepper-input-nonlinear-law-linearization-and-bound) "
+        "is about the same term: detent is a position-periodic error the command grid cannot currently "
+        "correct.",
+        "<!-- END GENERATED DETENT ABLATION -->",
+    ])
+    return "\n".join(lines)
+
+
+def update_generated_detent_ablation(summary: str) -> None:
+    source = DERIVATION_MD.read_text(encoding="utf-8")
+    pattern = re.compile(
+        r"<!-- BEGIN GENERATED DETENT ABLATION -->.*?<!-- END GENERATED DETENT ABLATION -->",
+        flags=re.DOTALL,
+    )
+    if not pattern.search(source):
+        raise RuntimeError("Generated detent-ablation markers are missing from the derivation document")
+    DERIVATION_MD.write_text(pattern.sub(lambda _match: summary, source), encoding="utf-8")
+
+
+def generated_breakaway_sensitivity(study: dict[str, object]) -> str:
+    """Build the Section 12.4 guideway breakaway-force sensitivity block."""
+    rows = list(study["rows"])
+    low, high = study["likely_range"]
+    lines = [
+        "<!-- BEGIN GENERATED BREAKAWAY SENSITIVITY -->",
+        f"[8.3](#8-3-executed-provisional-friction-values) executes $F_{{s,g}}=$ {study['executed_F_s']:.1f} N "
+        f"while stating a likely range of {low:.1f} to {high:.1f} N. That is not a rounding difference: the four "
+        "GMS yield distances scale with $F_s$, so the command levels in "
+        "[G.1](#g-1-exact-1-16-microstep-commands) cross different thresholds at the two values. The variant is "
+        "therefore executed rather than described. $F_c$ scales with $F_s$ at the executed Stribeck ratio, "
+        "because holding $F_c$ fixed while lowering $F_s$ would invert the Stribeck curve instead of "
+        "modelling a weaker interface.",
+        "",
+        "| $F_{s,g}$ | $F_{c,g}$ | Element yields | Elements yielded at the "
+        f"{rows[0]['inner_level_um']:.3f} µm inner level | $F_{{ret}}$ (A2) | GMS/LuGre | $R_{{hold}}$ (A2) |",
+        "|---:|---:|---|---:|---:|---:|---:|",
+    ]
+    for row in rows:
+        yields = ", ".join(f"{value:.2f}" for value in row["yields_um"])
+        lines.append(
+            f"| {row['F_s']:.1f} N | {row['F_c']:.1f} N | {yields} µm | "
+            f"{row['elements_yielded_at_inner']} of 4 | "
+            f"{row['force_mismatch_gms_N']:.4f} N | {row['force_ratio']:.2f}× | "
+            f"{row['r_hold_gms_pct']:.1f}% |")
+    verdict = (
+        "**The command design is not portable across the stated range.** The inner level crosses a different "
+        "number of elements at the two forces, so the executed sequence tests a different partial-slip state "
+        "at the value the document itself calls likely."
+        if study["design_changes"] else
+        "The inner level crosses the same number of elements at both forces, so the sequence still probes "
+        "partial slip at the middle of the stated range; the metric values move but the design survives.")
+    lines.extend([
+        "",
+        verdict + " Either the guideway breakaway force is re-identified before the memory campaign is "
+        "executed on hardware, or the levels are recomputed at the identified value. This is the same "
+        "identification-order argument as [G.4](#g-4-detent-contamination-and-the-forced-identification-order), "
+        "applied to an amplitude rather than to a frequency.",
+        "<!-- END GENERATED BREAKAWAY SENSITIVITY -->",
+    ])
+    return "\n".join(lines)
+
+
+def update_generated_breakaway_sensitivity(summary: str) -> None:
+    source = DERIVATION_MD.read_text(encoding="utf-8")
+    pattern = re.compile(
+        r"<!-- BEGIN GENERATED BREAKAWAY SENSITIVITY -->.*?"
+        r"<!-- END GENERATED BREAKAWAY SENSITIVITY -->",
+        flags=re.DOTALL,
+    )
+    if not pattern.search(source):
+        raise RuntimeError("Generated breakaway-sensitivity markers are missing from the derivation document")
+    DERIVATION_MD.write_text(pattern.sub(lambda _match: summary, source), encoding="utf-8")
+
+
+def generated_full_response_summary(
+        linear_metrics: dict[str, dict[str, float | np.ndarray]],
+        time_metrics: dict[str, dict[str, float]],
+        detent_ablation: dict[str, object]) -> str:
+    """Build the Appendix H audit table kept out of Section 10's main line."""
+    constants = physical_constants()
+    lines = [
+        "<!-- BEGIN GENERATED FULL RESPONSE SUMMARY -->",
+        "| Case | Friction law | Global-linear modes (Hz) | Local tangent gain $X_s/X_{cmd}$ | Smallest first-yield travel | First-step overshoot | Settled RMS deviation | Settled RMS, detent off | Friction-only contribution | Settled maximum | All-time peak | Final-window RMS |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    ablation_rows = detent_ablation["rows"]
+    for key, case in CASES.items():
+        modes = linear_metrics[key]["modes"]
+        friction_label = {"none": "none", "lugre": "LuGre", "gms": "GMS"}[case["friction"]]
+        first_yield = float(linear_metrics[key]["first_yield_m"])
+        yield_text = ("not applicable" if not np.isfinite(first_yield)
+                      else f"{first_yield * 1e6:.3f} µm")
+        ablated = ablation_rows[key]
+        lines.append(
+            f"| {key} | {friction_label} | {float(modes[0]):.1f}, {float(modes[1]):.1f} | "
+            f"{linear_metrics[key]['tangent_dc_gain']:.5f} | {yield_text} | "
+            f"{time_metrics[key]['first_overshoot_pct']:.1f}% | "
+            f"{time_metrics[key]['rms_settled_deviation_nm']:.1f} nm | "
+            f"{ablated['detent_off_nm']:.1f} nm | "
+            f"{ablated['detent_share_pct']:.1f}% detent | "
+            f"{time_metrics[key]['max_settled_deviation_nm']:.1f} nm | "
+            f"{time_metrics[key]['max_abs_deviation_nm']:.1f} nm | "
+            f"{time_metrics[key]['rms_final_error_nm']:.1f} nm |"
+        )
+    lines.extend([
+        "",
+        "The displayed modes and gains are the global commutation linearization; periodic detent is "
+        "excluded from the global stiffness matrix. The friction tangent is local and valid only "
+        "below the listed first-yield travel. "
+        f"The nonlinear cases include periodic detent torque and use a "
+        f"{constants['plateau_dwell'] * 1e3:.0f} ms dwell. Settled values collect the last "
+        f"{constants['metric_window'] * 1e3:.0f} ms of every plateau. All deviation columns use "
+        "$d(t)=x_{cmd}(t)-x_s(t)$ and describe open-loop modeled plant behavior, not servo tracking.",
+        "",
+        f"The first-yield travel independently checks the ablation: A/A2 begins at "
+        f"{float(linear_metrics['A']['first_yield_m']) * 1e6:.3f} µm on the drive port, whereas "
+        f"G/G2 begins at {float(linear_metrics['G']['first_yield_m']) * 1e6:.3f} µm on the guideway "
+        "after the drive port is removed.",
+        "",
+        "The two detent columns are the paired ablation described in "
+        "[10.3](#10-3-generated-numerical-summary): the same command rerun with $\\hat T_{det}=0$. The "
+        "friction-only column reports how much of each settled window survives that removal, so a friction "
+        "comparison between two rows is only defensible on the detent-off column.",
+        "<!-- END GENERATED FULL RESPONSE SUMMARY -->",
+    ])
+    return "\n".join(lines)
+
+
+def update_generated_full_response_summary(summary: str) -> None:
+    source = DERIVATION_MD.read_text(encoding="utf-8")
+    pattern = re.compile(
+        r"<!-- BEGIN GENERATED FULL RESPONSE SUMMARY -->.*?"
+        r"<!-- END GENERATED FULL RESPONSE SUMMARY -->",
+        flags=re.DOTALL,
+    )
+    if not pattern.search(source):
+        raise RuntimeError("Generated full response-summary markers are missing from Appendix H")
+    DERIVATION_MD.write_text(
+        pattern.sub(lambda _match: summary, source), encoding="utf-8")
+
+
+def mode_shift_ladder(
+        linear_metrics: dict[str, dict[str, float | np.ndarray]]) -> list[dict[str, object]]:
+    """Return the active-port ladder shared by the 10.1 table and the shift figure.
+
+    Every case except 0 has the drive port active, so each label names it and
+    the guideway-only ablation G/G2 is a row rather than an Appendix H diff.
+    The displayed shift in hertz is the difference of the two displayed
+    frequencies, so the figure's own arithmetic closes; the percentage comes
+    from the unrounded eigenvalues, which is what the table has always used.
+    """
     def modes(key: str) -> tuple[float, float]:
         case_modes = linear_metrics[key]["modes"]
         return float(case_modes[0]), float(case_modes[1])
 
     baseline_low, baseline_high = modes("0")
-    # High mode reported here is the exact undamped eigenvalue used throughout
-    # Section 10.2, not a peak search on the plotted frequency grid: the two
-    # were previously up to 1 Hz apart on adjacent tables for the same
-    # quantity (Part 2.1). Reconciled to this single source.
+    ladder: list[dict[str, object]] = [{
+        "key": "0",
+        "label": "none (case 0)",
+        "figure_label": "0",
+        "low_hz": baseline_low,
+        "high_hz": baseline_high,
+        "low_text": f"{baseline_low:.1f}",
+        "high_text": f"{baseline_high:.1f}",
+        "shift_hz_text": None,
+        "shift_pct_text": None,
+    }]
+    for label, figure_label, key in (
+            ("guideway only (G/G2)", "G/G2", "G"),
+            ("drive + guideway (A/A2)", "A/A2", "A"),
+            ("drive + nut (B/B2)", "B/B2", "B"),
+            ("all three (C/C2)", "C/C2", "C")):
+        low, high = modes(key)
+        displayed_shift = round(high, 1) - round(baseline_high, 1)
+        ladder.append({
+            "key": key,
+            "label": label,
+            "figure_label": figure_label,
+            "low_hz": low,
+            "high_hz": high,
+            "low_text": f"{low:.1f}",
+            "high_text": f"{high:.1f}",
+            "shift_hz_text": f"{displayed_shift:+.1f}",
+            "shift_pct_text": f"{100.0 * (high - baseline_high) / baseline_high:+.1f}",
+        })
+    return ladder
+
+
+def generated_bode_comparison(frequencies: np.ndarray,
+                              responses: dict[str, np.ndarray],
+                              linear_metrics: dict[str, dict[str, float | np.ndarray]]) -> str:
+    constants = physical_constants()
+    ladder = mode_shift_ladder(linear_metrics)
     lines = [
         "<!-- BEGIN GENERATED BODE COMPARISON -->",
-        "| Topology | Low mode | High mode | Shift from Case 0 | Largest GMS/LuGre gap | Cause |",
-        "|---|---:|---:|---:|---:|---|",
-        f"| Case 0 | {baseline_low:.1f} Hz | {baseline_high:.1f} Hz | reference | not applicable | No friction tangent |",
+        "| Active ports | Low mode | Retained mode | Shift |",
+        "|---|---:|---:|---:|",
     ]
-    rows = (
-        ("A/A2", "A", "A2", "Guideway presliding stiffness acts against ground"),
-        ("G/G2", "G", "G2", "Guideway-only drive-port ablation on the same free-stage plant"),
-        ("B/B2", "B", "B2", "Nut microslip shifts the relative mode; the same lumped drive tangent is shared by every friction case"),
-        ("C/C2", "C", "C2", "All three identifiable friction tangents are active"),
-    )
-    for label, lugre_key, gms_key, cause in rows:
-        low, high = modes(gms_key)
-        shift = high - baseline_high
-        shift_percent = 100.0 * shift / baseline_high
-        difference = magnitudes[gms_key] - magnitudes[lugre_key]
-        maximum_index = int(np.argmax(np.abs(difference)))
-        maximum = abs(float(difference[maximum_index]))
-        maximum_frequency = float(frequencies[maximum_index])
+    for row in ladder:
+        shift = "—" if row["shift_pct_text"] is None else f"{row['shift_pct_text']}%"
         lines.append(
-            f"| {label} | {low:.1f} Hz | {high:.1f} Hz | +{shift:.1f} Hz, +{shift_percent:.1f}% | "
-            f"{maximum:.2f} dB at {maximum_frequency:.0f} Hz | {cause} |"
-        )
-    a1v_low, a1v_high = modes("A1v")
-    a1v_shift = a1v_high - baseline_high
-    a1v_shift_percent = 100.0 * a1v_shift / baseline_high
-    lines.append(
-        f"| A1v | {a1v_low:.1f} Hz | {a1v_high:.1f} Hz | +{a1v_shift:.1f} Hz, +{a1v_shift_percent:.1f}% | "
-        "not applicable (no GMS pair) | Micro-viscous sensitivity: former $\\sigma_1$ restored on the drive and guideway ports |"
-    )
-    lines.append("<!-- END GENERATED BODE COMPARISON -->")
+            f"| {row['label']} | {row['low_text']} Hz | {row['high_text']} Hz | {shift} |")
+    by_key = {str(row["key"]): row for row in ladder}
+    guideway_only, drive_guideway = by_key["G"], by_key["A"]
+    lines.extend([
+        "",
+        f"The drive port shifts only the low mode, from {guideway_only['low_text']} to "
+        f"{drive_guideway['low_text']} Hz, and leaves the retained mode at "
+        f"{drive_guideway['high_text']} Hz untouched. Its presliding stiffness acts on $x_d$, "
+        "which barely participates in the relative mode because "
+        f"$m_d/m_s\\approx{constants['m_d'] / constants['m_s']:.0f}$. That is the reflected-inertia "
+        "result of [Section 6](#6-reduction-from-ten-dofs-to-two) reappearing as a friction "
+        "measurement.",
+        "",
+        "The nut port shifts the mode nearly three times as much as the guideway despite carrying "
+        "roughly half the friction force, because $\\sigma_{0,n}=2.0\\times10^6$ N/m against the "
+        "guideway's $7.6\\times10^5$ N/m and because it acts on the relative coordinate, directly "
+        "in series with $k_{ax}$.",
+        "<!-- END GENERATED BODE COMPARISON -->",
+    ])
     return "\n".join(lines)
+
+
+def signed_value(value: float, digits: int) -> str:
+    """Format a signed delta without ever printing a negative zero.
+
+    A cell that rounds to zero carries no sign information, so `-0.0` is a
+    formatting artifact rather than a result.  Anything that rounds away is
+    printed as an unsigned zero at the same precision.
+    """
+    if round(value, digits) == 0.0:
+        return f"{0.0:.{digits}f}"
+    return f"{value:+.{digits}f}"
+
+
+def _latex_power(value: float, digits: int) -> str:
+    """Format one number as LaTeX mantissa times a power of ten."""
+    mantissa, exponent = f"{value:.{digits}e}".split("e")
+    return f"{mantissa}\\times10^{{{int(exponent)}}}"
+
+
+def micro_viscous_effect(frequencies: np.ndarray,
+                         responses: dict[str, np.ndarray],
+                         linear_metrics: dict[str, dict[str, float | np.ndarray]],
+                         time_metrics: dict[str, dict[str, float]]) -> dict[str, float]:
+    """Price the one non-degenerate tangent difference in the case set.
+
+    A1v restores $\\sigma_1$ at the same ports as A, so the pair isolates
+    micro-viscous bristle damping.  The peak drop is converted to an implied
+    modal-damping change and checked against the closed-form port damper
+    $\\Delta\\zeta=c/(2m_s\\omega)$; agreement is what shows the tangent
+    assembly puts the damper on the stage coordinate rather than the drive.
+    """
+    constants = physical_constants()
+    magnitudes = {
+        key: 20.0 * np.log10(np.maximum(np.abs(responses[key]), 1e-15))
+        for key in ("A", "A1v")
+    }
+    difference = magnitudes["A1v"] - magnitudes["A"]
+    extreme_index = int(np.argmax(np.abs(difference)))
+    peak_drop_db = float(-difference[extreme_index])
+    mode_hz = float(linear_metrics["A"]["modes"][1])
+    omega = 2.0 * np.pi * mode_hz
+    damped = {}
+    for key in ("A", "A1v"):
+        case = CASES[key]
+        mass, damping, stiffness, _input = linear_matrices(
+            case["sites"], case["friction"], bool(case.get("micro_viscous")))
+        damped[key] = _damped_modal_data(mass, damping, stiffness)[1][1]
+    magnitude_ratio = 10.0 ** (peak_drop_db / 20.0)
+    implied_delta_zeta = damped["A"] * (magnitude_ratio - 1.0)
+    predicted_delta_zeta = MICRO_VISCOUS_SIGMA1["g"] / (2.0 * constants["m_s"] * omega)
+    rms_a = float(time_metrics["A"]["rms_settled_deviation_nm"])
+    rms_a1v = float(time_metrics["A1v"]["rms_settled_deviation_nm"])
+    return {
+        "rms_a_nm": rms_a,
+        "rms_a1v_nm": rms_a1v,
+        "rms_shift_nm": abs(rms_a1v - rms_a),
+        "sigma1_g": MICRO_VISCOUS_SIGMA1["g"],
+        "peak_drop_db": peak_drop_db,
+        "peak_frequency_hz": float(frequencies[extreme_index]),
+        "mode_hz": mode_hz,
+        "magnitude_ratio": magnitude_ratio,
+        "zeta_a": damped["A"],
+        "zeta_a1v": damped["A1v"],
+        "implied_delta_zeta": implied_delta_zeta,
+        "eigenvalue_delta_zeta": damped["A1v"] - damped["A"],
+        "predicted_delta_zeta": predicted_delta_zeta,
+        "agreement_pct": 100.0 * abs(implied_delta_zeta - predicted_delta_zeta)
+        / implied_delta_zeta,
+        "m_s": constants["m_s"],
+    }
+
+
+def generated_micro_viscous(effect: dict[str, float]) -> str:
+    """Build the Section 10.2 block: the matched-pair claim plus its number."""
+    rms_a, rms_a1v = effect["rms_a_nm"], effect["rms_a1v_nm"]
+    return "\n".join([
+        "<!-- BEGIN GENERATED MICRO VISCOUS -->",
+        "Matched LuGre and GMS pairs are linearly identical by construction: with $\\sigma_1=0$ "
+        "both contribute the same $\\sigma_2$ tangent damping, and $\\sum k_i=\\sigma_0$ equalizes "
+        "presliding stiffness. Any difference in the nonlinear results of Section 9 is therefore "
+        "memory structure, not tangent. Every matched pair in the figure above is exactly "
+        "coincident for the same reason. A1v is the only case with $\\sigma_1$ restored, and its "
+        "difference against A is the isolated micro-viscous effect.",
+        "",
+        f"The effect is small and confined to the mode. Restoring $\\sigma_1={effect['sigma1_g']:.1f}$ "
+        f"N·s/m at the guideway lowers the {effect['mode_hz']:.0f} Hz peak by "
+        f"{effect['peak_drop_db']:.3f} dB and leaves the response unchanged everywhere else, which "
+        f"moves the settled RMS deviation from {rms_a:.1f} nm to {rms_a1v:.1f} nm. A "
+        f"{effect['rms_shift_nm']:.1f} nm change is the empirical justification for setting "
+        "$\\sigma_1=0$ in the matched comparisons.",
+        "",
+        "<details>",
+        "<summary>Cross-check: is the damper landing on the right coordinate?</summary>",
+        "",
+        f"A peak drop of {effect['peak_drop_db']:.3f} dB implies the modal damping rose by a factor "
+        f"of {effect['magnitude_ratio']:.3f}, so $\\Delta\\zeta="
+        f"{_latex_power(effect['implied_delta_zeta'], 2)}$ against case A's $\\zeta_2="
+        f"{_latex_power(effect['zeta_a'], 3)}$. The direct prediction for an added port damper is "
+        f"$\\Delta\\zeta=c/(2m_s\\omega)={effect['sigma1_g']:.1f}/(2\\times{effect['m_s']:.3f}"
+        f"\\times2\\pi\\times{effect['mode_hz']:.1f})={_latex_power(effect['predicted_delta_zeta'], 2)}$. "
+        f"Those agree to {effect['agreement_pct']:.1f}%, which confirms the tangent assembly is "
+        "placing the damper on the stage coordinate that carries the guideway port.",
+        "",
+        "The state-space eigenvalues say the same thing without the decibel step: $\\zeta_2$ moves "
+        f"from ${_latex_power(effect['zeta_a'], 3)}$ in A to "
+        f"${_latex_power(effect['zeta_a1v'], 3)}$ in A1v, a direct "
+        f"$\\Delta\\zeta={_latex_power(effect['eigenvalue_delta_zeta'], 2)}$.",
+        "",
+        "</details>",
+        "<!-- END GENERATED MICRO VISCOUS -->",
+    ])
+
+
+def update_generated_micro_viscous(summary: str) -> None:
+    source = DERIVATION_MD.read_text(encoding="utf-8")
+    pattern = re.compile(
+        r"<!-- BEGIN GENERATED MICRO VISCOUS -->.*?<!-- END GENERATED MICRO VISCOUS -->",
+        flags=re.DOTALL,
+    )
+    if not pattern.search(source):
+        raise RuntimeError("Generated micro-viscous markers are missing from the derivation document")
+    DERIVATION_MD.write_text(pattern.sub(lambda _match: summary, source), encoding="utf-8")
 
 
 def update_generated_bode_comparison(summary: str) -> None:
@@ -4622,7 +5907,8 @@ def generated_branch_census(study: dict[str, object],
         for key, record in enforced.items():
             lines.append(
                 f"| {key} | {record['baseline_rms_nm']:.3f} nm | {record['settled_rms_nm']:.3f} nm | "
-                f"{record['delta_nm']:+.3f} nm ({record['delta_pct']:+.2f}%) |"
+                f"{signed_value(float(record['delta_nm']), 3)} nm "
+                f"({signed_value(float(record['delta_pct']), 2)}%) |"
             )
         worst = max(abs(float(record["delta_pct"])) for record in enforced.values())
         lines.extend([
@@ -4633,7 +5919,7 @@ def generated_branch_census(study: dict[str, object],
             "",
             "The nut site records zero threshold flips in both B2 and C2. In steady motion the nut-port velocity $\\dot x_d-\\dot x_s$ "
             "is identically zero because the elastic deformation is constant, so every nut element is stuck and no branch decision is "
-            "ever contested. See [8.0](#8-0-how-the-friction-laws-attach-to-the-plant).",
+            "ever contested. See [8.1](#8-1-how-the-friction-laws-attach-to-the-plant).",
             "",
             "#### Memory-sequence branch census",
             "",
@@ -4750,7 +6036,7 @@ def update_generated_branch_census(summary: str) -> None:
 
 
 def branch_census_sentence(study: dict[str, object]) -> str:
-    """One-line census summary baked into the Section 8.3 live equation."""
+    """One-line census summary baked into the Section 8.4 live equation."""
     parts = [
         f"{row['case']}/{row['site']}: reversal {row['flips_reversal']:,}, "
         f"threshold {row['flips_threshold']:,}, evals {row['evals_total']:,}"
@@ -4791,7 +6077,7 @@ def rendered_branch_census_sentence() -> str:
 
 
 def friction_port_sentence() -> str:
-    """One-line port and integrated-state summary baked into Section 8.0."""
+    """One-line port and integrated-state summary baked into Section 8.1."""
     parts = []
     for key, case in CASES.items():
         sites = ",".join(case["sites"]) if case["sites"] else "none"
@@ -4806,12 +6092,36 @@ def friction_port_sentence() -> str:
             + f". The allocated RK4 vector is a fixed {STATE_SIZE} entries; inactive site blocks hold zero derivatives.")
 
 
-def generated_presliding_summary(experiments: dict[str, dict[str, object]]) -> str:
-    """Build the concise Section 9 result tables and interpretations."""
+def generated_presliding_summary(experiments: dict[str, dict[str, object]],
+                                 damping_sweep: dict[str, object],
+                                 true_loop_path: Path,
+                                 constants: dict[str, float]) -> str:
+    """Build the Section 9 results.
+
+    The continuous loop leads because it is the only discriminator that does
+    not depend on plateau settling, and the plateau maps follow labelled as
+    damping-conditional, which is what the sweep in 9.4 measures.
+    """
     lines = ["<!-- BEGIN GENERATED PRESLIDING SUMMARY -->"]
+    ratio_low, ratio_high = damping_sweep["ratio_range"]
+    lines.extend([
+        "### 9.1 Continuous presliding loop: the primary discriminator",
+        "",
+        f"![Continuous quasi-static presliding loop]({true_loop_path.relative_to(ROOT).as_posix()})",
+        "",
+        "A slow continuous triangular ramp-reversal at the guideway outer amplitude, with no plateaus. "
+        "This is the literature-comparable presliding $F$-$x$ loop and it is what a quasi-static Kistler "
+        "sweep actually produces. It leads the section because it is the one comparison that does not "
+        "depend on how fast post-edge ringing decays: there are no command edges to ring, so the "
+        f"{ratio_low:.1f}$\\times$ to {ratio_high:.1f}$\\times$ spread that "
+        "[9.4](#9-4-the-retention-gap-is-a-function-of-damping) measures across the disputed damping range "
+        "does not apply to it. The settled return-point maps below remain the richer diagnostic, but they "
+        "are conditional in a way this loop is not.",
+        "",
+    ])
     row_definitions = (
-        ("**Return-force mismatch $F_{ret}$**", "return_force_mismatch_N", "N", False),
-        ("**Final-origin magnitude**", "final_mean_nm", "nm", True),
+        ("Return-force mismatch $F_{ret}$", "return_force_mismatch_N", "N", False),
+        ("Final-origin magnitude", "final_mean_nm", "nm", True),
         ("Closed-loop energy $A_{loop}$", "loop_area_J", "µJ", False),
         ("Whole-sequence RMS deviation †", "whole_rms_nm", "nm", False),
         ("Peak absolute deviation †", "max_abs_deviation_nm", "nm", False),
@@ -4822,7 +6132,8 @@ def generated_presliding_summary(experiments: dict[str, dict[str, object]]) -> s
         keys = tuple(experiment["keys"])
         lugre_key, gms_key = keys[:2]
         guideway = experiment_name == "guideway"
-        section_title = "9.1 Guideway result" if guideway else "9.2 Nut microslip result"
+        section_title = ("9.2 Guideway plateau map, damping-conditional" if guideway
+                         else "9.3 Nut microslip plateau map, damping-conditional")
         image = ("rendered_assets/presliding_memory_comparison.svg" if guideway
                  else "rendered_assets/nut_memory_comparison.svg")
         alt = ("Guideway nested-return memory comparison"
@@ -4861,12 +6172,13 @@ def generated_presliding_summary(experiments: dict[str, dict[str, object]]) -> s
                     f"{gms:.{precision}f} {unit} | {ratio:.2f}× | "
                     f"{ablation_lugre:.{precision}f} {unit} | "
                     f"{ablation_gms:.{precision}f} {unit} | "
-                    f"{delta:+.{precision}f} {unit} ({delta_pct:+.1f}%) |")
+                    f"{signed_value(delta, precision)} {unit} "
+                    f"({signed_value(delta_pct, 1)}%) |")
             else:
                 lines.append(
                     f"| {label} | {lugre:.{precision}f} {unit} | "
                     f"{gms:.{precision}f} {unit} | {ratio:.2f}× | "
-                    f"{gms - lugre:+.{precision}f} {unit} |")
+                    f"{signed_value(gms - lugre, precision)} {unit} |")
         r_hold_lugre = 100.0 * float(metrics[lugre_key]["r_hold"])
         r_hold_gms = 100.0 * float(metrics[gms_key]["r_hold"])
         r_hold_ratio = r_hold_gms / max(r_hold_lugre, 1.0e-9)
@@ -4875,14 +6187,17 @@ def generated_presliding_summary(experiments: dict[str, dict[str, object]]) -> s
             r_hold_ablation_gms = 100.0 * float(metrics[keys[3]]["r_hold"])
             r_hold_delta = r_hold_gms - r_hold_ablation_gms
             r_hold_delta_pct = 100.0 * r_hold_delta / max(r_hold_ablation_gms, 1.0e-9)
+            # Two decimals: the ablation gap is a few hundredths of a point,
+            # which at one decimal printed as a signless -0.0 against a
+            # non-zero percentage change.
             lines.append(
-                f"| **Retention $R_{{hold}}$ ‡** | {r_hold_lugre:.1f}% | {r_hold_gms:.1f}% | "
+                f"| Retention $R_{{hold}}$ ‡ | {r_hold_lugre:.1f}% | {r_hold_gms:.1f}% | "
                 f"{r_hold_ratio:.2f}× | {r_hold_ablation_lugre:.1f}% | {r_hold_ablation_gms:.1f}% | "
-                f"{r_hold_delta:+.1f} pp ({r_hold_delta_pct:+.1f}%) |")
+                f"{signed_value(r_hold_delta, 2)} pp ({signed_value(r_hold_delta_pct, 1)}%) |")
         else:
             lines.append(
-                f"| **Retention $R_{{hold}}$ ‡** | {r_hold_lugre:.1f}% | {r_hold_gms:.1f}% | "
-                f"{r_hold_ratio:.2f}× | {r_hold_gms - r_hold_lugre:+.1f} pp |")
+                f"| Retention $R_{{hold}}$ ‡ | {r_hold_lugre:.1f}% | {r_hold_gms:.1f}% | "
+                f"{r_hold_ratio:.2f}× | {signed_value(r_hold_gms - r_hold_lugre, 2)} pp |")
         lines.extend([
             "",
             "† Edge-dominated response descriptor; included for context, not as a memory discriminator.",
@@ -4941,8 +6256,8 @@ def generated_presliding_summary(experiments: dict[str, dict[str, object]]) -> s
                 "same ringing far better. See [Appendix G.5](#g-5-settled-force-retention-diagnostic) "
                 "for the per-plateau diagnostic and a high-damping confirmation run.",
                 "",
-                f"**Ablating the drive port moves every guideway metric by under 10%, and "
-                f"$F_{{ret}}$, the metric the comparison rests on, by {fret_change:.1f}%.** "
+                f"Ablating the drive port moves every guideway metric by under 10%, and "
+                f"$F_{{ret}}$, the metric the comparison rests on, by {fret_change:.1f}%. "
                 "A/A2 is therefore a serviceable proxy for the guideway law comparison despite "
                 "not being a physical uncoupled fixture. This supersedes the pre-1/16 estimate "
                 "of a 27 to 32% drive-port contribution, computed on the finer command grid, "
@@ -4965,23 +6280,56 @@ def generated_presliding_summary(experiments: dict[str, dict[str, object]]) -> s
             ])
 
     lines.extend([
-        "### 9.3 What this means for identification",
+        "### 9.4 The retention gap is a function of damping",
+        "",
+        "**The headline retention gap is not a constitutive result on its own.** Both plateau maps "
+        "measure what each law still holds after post-edge ringing has acted on it, and how much "
+        "ringing there is depends on the retained-mode damping that "
+        "[7.3](#7-3-dwell-consequence) cannot currently resolve. The same experiment is therefore "
+        "rerun across the whole disputed range, from the measured relative-mode value to the "
+        "high-damping confirmation point of [G.5](#g-5-settled-force-retention-diagnostic).",
+        "",
+        "| Target $\\zeta_2$ | 2% settling | $c$ multiplier | $R_{hold}$ LuGre | $R_{hold}$ GMS | "
+        "GMS / LuGre | $F_{ret}$ GMS / LuGre |",
+        "|---:|---:|---:|---:|---:|---:|---:|",
+    ])
+    for row in damping_sweep["rows"]:
+        lines.append(
+            f"| {row['target_zeta']:.4f} | {row['settling_2pct_s'] * 1e3:.1f} ms | "
+            f"{row['multiplier']:.2f}× | {row['r_hold_lugre_pct']:.1f}% | "
+            f"{row['r_hold_gms_pct']:.1f}% | {row['r_hold_ratio']:.2f}× | "
+            f"{row['force_ratio']:.2f}× |")
+    window = damping_sweep["discriminating_zeta"]
+    lines.extend([
+        "",
+        f"The retention ratio spans {ratio_low:.2f}$\\times$ to {ratio_high:.2f}$\\times$ across the "
+        f"range, against a baseline executed damping of {damping_sweep['baseline_zeta']:.4f}. "
+        + (f"Retention separates the two laws by at least a factor of two over "
+           f"$\\zeta_2\\in[{window[0]:.4f},\\ {window[1]:.4f}]$ and collapses outside it, so that "
+           "interval is the window the fixture has to sit in."
+           if window is not None else
+           "No point in the swept range separates the two laws by a factor of two, so the plateau "
+           "map is not a discriminator on this plant at any damping in the range.")
+        + " **This is a fixture design requirement, not a result**: the physical Kistler experiment "
+        "must be run at a damping inside the discriminating window, and the "
+        "[E.7](#e-7-measured-frf-identification) extraction is what determines whether the installed "
+        "axis already is.",
+        "",
+        "### 9.5 What this means for identification",
         "",
         "Return-point force non-closure, not edge-dominated displacement, is the discriminating "
-        "observable. The comparison does not assume that GMS is better; measured force loops must "
-        "select and fit the constitutive law. Appendix G records the exact commands, yield-window "
-        "rationale, memory mechanism, and forced identification order.",
+        "observable, and the continuous loop of [9.1](#9-1-continuous-presliding-loop-the-primary-discriminator) "
+        "is the form of it that survives the damping question. The comparison does not assume that "
+        "GMS is better; measured force loops must select and fit the constitutive law. Appendix G "
+        "records the exact commands, yield-window rationale, memory mechanism, and forced "
+        "identification order.",
         "",
-        "**Drift under a zero-mean or oscillating velocity is a documented deficiency of the "
-        "single-state LuGre bristle, not a defect introduced here.** Averaging the Stribeck-scaled "
-        "relaxation term over any nonzero dither leaves a nonzero mean bleed rate, so any ringing, "
-        "vibration, or dither superimposed on a nominally stationary contact drains $z$ even though "
-        "the mean commanded velocity is zero. This is one of the reasons the literature moved to "
-        "multi-state Maxwell-slip constructions such as GMS, whose stuck elements obey $\\dot F_i=k_iv$, "
-        "odd in $v$, so a symmetric dither produces no net drift. The retention gap measured in "
-        "[Appendix G.5](#g-5-settled-force-retention-diagnostic) is that known property showing up on "
-        "this plant's post-edge ringing, and it supports the GMS/Maxwell-slip model choice for "
-        "identification work rather than counting against either law.",
+        "Drift under a zero-mean or oscillating velocity is a documented deficiency of the "
+        "single-state LuGre bristle, not a defect introduced here, and it is one of the reasons the "
+        "literature moved to multi-state Maxwell-slip constructions. The retention gap measured in "
+        "[9.2](#9-2-guideway-plateau-map-damping-conditional) is that known property appearing on "
+        "this plant's post-edge ringing; see [Appendix G.5](#g-5-settled-force-retention-diagnostic) "
+        "for the per-plateau diagnostic and the high-damping confirmation run.",
         "<!-- END GENERATED PRESLIDING SUMMARY -->",
     ])
     return "\n".join(lines)
@@ -4998,9 +6346,28 @@ def update_generated_presliding_summary(summary: str) -> None:
     DERIVATION_MD.write_text(pattern.sub(lambda _match: summary, source), encoding="utf-8")
 
 
+def _first_positive_branch_sign_flip(levels: np.ndarray,
+                                     forces: np.ndarray) -> tuple[int, int] | None:
+    """Locate the first settled-force sign change made at positive commands.
+
+    Both plateaus must be commanded positive, so the reversal belongs to the
+    element stack and not to the command.  This is the nested-return signature
+    stated in G.3 appearing directly in the plateau table.
+    """
+    levels = np.asarray(levels, dtype=float)
+    forces = np.asarray(forces, dtype=float)
+    for index in range(forces.size - 1):
+        if levels[index] <= 0.0 or levels[index + 1] <= 0.0:
+            continue
+        if forces[index] > 0.0 > forces[index + 1]:
+            return index, index + 1
+    return None
+
+
 def generated_retention_diagnostic(memory_experiments: dict[str, dict[str, object]],
                                    confirmation: dict[str, object],
-                                   true_loop_path: Path) -> str:
+                                   true_loop_path: Path,
+                                   supplement_path: Path) -> str:
     """Build Appendix G.5: the settled-force-versus-plateau diagnostic, the
     high-damping confirmation run, and the continuous presliding loop
     (Part 1.3-1.5 of the LuGre settled-force-degeneracy patch)."""
@@ -5017,6 +6384,7 @@ def generated_retention_diagnostic(memory_experiments: dict[str, dict[str, objec
     def level_um(experiment: dict[str, object], level: float) -> float:
         return float(level) * float(experiment["microstep"]) * 1e6
 
+    mechanism_stated = False
     for experiment_name, keys, heading in (
         ("guideway", ("A", "A2"), "Guideway (A, A2)"),
         ("nut", ("B", "B2"), "Blocked nut (B, B2)"),
@@ -5034,8 +6402,42 @@ def generated_retention_diagnostic(memory_experiments: dict[str, dict[str, objec
         ])
         for index, level in enumerate(levels):
             lines.append(
-                f"| {index + 1} | {level_um(experiment, level):+.4f} µm | "
-                f"{lugre_force[index]:+.4f} N | {gms_force[index]:+.4f} N |")
+                f"| {index + 1} | {signed_value(level_um(experiment, level), 4)} µm | "
+                f"{signed_value(float(lugre_force[index]), 4)} N | "
+                f"{signed_value(float(gms_force[index]), 4)} N |")
+        lines.append("")
+        flip = _first_positive_branch_sign_flip(levels, gms_force)
+        if flip is not None:
+            first, second = flip
+            plateau_text = (
+                f"Plateau {first + 1} holds {signed_value(float(gms_force[first]), 3)} N at "
+                f"{signed_value(level_um(experiment, levels[first]), 4)} µm, and plateau "
+                f"{second + 1} holds {signed_value(float(gms_force[second]), 3)} N at "
+                f"{signed_value(level_um(experiment, levels[second]), 4)} µm, both at positive "
+                "commanded levels.")
+            lugre_bound = float(np.max(np.abs(lugre_force)))
+            lugre_flip = _first_positive_branch_sign_flip(levels, lugre_force)
+            if mechanism_stated:
+                lines.append(
+                    f"**{keys[1]} shows the same sign change on this fixture.** {plateau_text} "
+                    "The mechanism is the one stated under the guideway table.")
+            else:
+                lines.append(
+                    f"**{keys[1]}'s settled force changes sign inside the positive branch.** "
+                    f"{plateau_text} That is the nested-return signature in raw digits: on the "
+                    "inner return the elements that yielded on the way out are reloaded in the "
+                    "opposite direction, so the stack unloads past zero while the command is "
+                    "still positive. "
+                    + (f"LuGre {keys[0]} changes sign at the same pair, but its whole column stays "
+                       f"within {lugre_bound:.3f} N of zero, so that sign is the post-edge "
+                       "relaxation residue of a single bristle rather than a held return-point "
+                       "state; the retention gap in "
+                       "[9.2](#9-2-guideway-plateau-map-damping-conditional) is the same "
+                       "observation stated as a fraction."
+                       if lugre_flip is not None else
+                       f"{keys[0]} keeps its sign across the same pair and its whole column "
+                       f"stays within {lugre_bound:.3f} N of zero."))
+            mechanism_stated = True
         lines.extend(["", ""])
 
     guideway_metrics = memory_experiments["guideway"]["metrics"]
@@ -5049,6 +6451,14 @@ def generated_retention_diagnostic(memory_experiments: dict[str, dict[str, objec
         f"plateau at both sites, while GMS's column tracks the commanded deflection up to "
         f"{max(guideway_gms_max, nut_gms_max):.3f} N. **The mechanism is confirmed**: this is not a "
         "plotting artifact, LuGre's column genuinely holds almost nothing.",
+        "",
+        "#### Demoted ablation and branch diagnostics",
+        "",
+        f"![Guideway ablation and nut branch diagnostics]({supplement_path.relative_to(ROOT).as_posix()})",
+        "",
+        "The A2/G2 ablation and the nut positive/negative branch split remain available here as "
+        "confirmation diagnostics. The parallel main figures use the freed panel for the direct "
+        "settled-force retention comparison.",
         "",
         "#### High-damping confirmation run",
         "",
@@ -5084,9 +6494,10 @@ def generated_retention_diagnostic(memory_experiments: dict[str, dict[str, objec
     ])
     for index, level in enumerate(raised_levels):
         lines.append(
-            f"| {index + 1} | {level_um(raised_experiment, level):+.4f} µm | "
-            f"{baseline_lugre_force[index]:+.4f} N | {raised_lugre_force[index]:+.4f} N | "
-            f"{raised_gms_force[index]:+.4f} N |")
+            f"| {index + 1} | {signed_value(level_um(raised_experiment, level), 4)} µm | "
+            f"{signed_value(float(baseline_lugre_force[index]), 4)} N | "
+            f"{signed_value(float(raised_lugre_force[index]), 4)} N | "
+            f"{signed_value(float(raised_gms_force[index]), 4)} N |")
     nonzero_mask = raised_levels != 0.0
     baseline_nonzero = np.abs(baseline_lugre_force[nonzero_mask])
     raised_nonzero = np.abs(raised_lugre_force[nonzero_mask])
@@ -5101,11 +6512,10 @@ def generated_retention_diagnostic(memory_experiments: dict[str, dict[str, objec
         "",
         "#### Continuous presliding loop",
         "",
-        f"![Continuous quasi-static presliding loop]({true_loop_path.relative_to(ROOT).as_posix()})",
-        "",
-        "A slow continuous triangular ramp-reversal, no plateaus, at the guideway outer amplitude. Unlike "
-        "the settled return-point maps in 9.1, this is a literature-comparable presliding $F$-$x$ loop "
-        "and is the signal a quasi-static Kistler identification sweep will actually produce.",
+        "The continuous quasi-static loop was promoted out of this appendix and now opens "
+        "[Section 9](#9-1-continuous-presliding-loop-the-primary-discriminator). It is the only "
+        "discriminator in the chapter that does not depend on plateau settling, which is exactly the "
+        "quantity this appendix shows the plateau maps are sensitive to.",
         "<!-- END GENERATED RETENTION DIAGNOSTIC -->",
     ])
     return "\n".join(lines)
@@ -5238,6 +6648,39 @@ def takeaway_derived_values(verification: dict[str, object],
     }
 
 
+def document_frequency_tokens(constants: dict[str, float],
+                              linear_metrics: dict[str, dict[str, float | np.ndarray]],
+                              branches: dict[str, object]) -> dict[str, float]:
+    """Every frequency, band edge and requirement quoted in prose.
+
+    Prose numbers that were typed by hand drifted from the generated ones:
+    three different detent bands, two Craig-Bampton pairs and four values for
+    the same axial feature.  Each of these now has exactly one source.
+    """
+    low, high = detent_local_mode_band()
+    operating_hz = float(linear_metrics["C"]["modes"][1])
+    baseline_hz = float(linear_metrics["0"]["modes"][1])
+    fixed_interface_hz = multi_route_reduction_metrics()["first_fixed_interface_hz"]
+    return {
+        "detent_band_low_hz": low,
+        "detent_band_high_hz": high,
+        "operating_mode_hz": operating_hz,
+        "operating_fixed_interface_separation": (operating_hz / fixed_interface_hz)**2,
+        "operating_fixed_interface_ratio": fixed_interface_hz / operating_hz,
+        "baseline_fixed_interface_ratio": fixed_interface_hz / baseline_hz,
+        "presliding_k_ax_mn": float(branches["presliding_k_ax"]) / 1.0e6,
+        "closure_singular_limit_mn": float(branches["singular_limit"]) / 1.0e6,
+        "measured_settling_ms": constants["measured_settling_time_2pct"] * 1.0e3,
+        "interface_settling_ms": constants["interface_settling_time_2pct"] * 1.0e3,
+        "executed_settling_ms": constants["axial_settling_time_2pct"] * 1.0e3,
+        "detent_equilibrium_error_nm": constants["detent_equilibrium_error"] * 1.0e9,
+        "predistortion_resolution_nm": constants["predistortion_resolution"] * 1.0e9,
+        "required_microstep_divisor": constants["required_microstep_divisor"],
+        "predistortion_levels_executed": (constants["detent_equilibrium_error"]
+                                          / constants["command_step"]),
+    }
+
+
 def guideway_retention_tokens(experiments: dict[str, dict[str, object]]) -> dict[str, float]:
     """Live tokens backing the restated Section 9 takeaway (Part 1.4b)."""
     guideway_metrics = experiments["guideway"]["metrics"]
@@ -5247,10 +6690,6 @@ def guideway_retention_tokens(experiments: dict[str, dict[str, object]]) -> dict
         "guideway_r_hold_lugre_pct": lugre_r_hold,
         "guideway_r_hold_gms_pct": gms_r_hold,
         "guideway_r_hold_ratio": gms_r_hold / max(lugre_r_hold, 1.0e-9),
-        "guideway_return_force_ratio": (
-            float(guideway_metrics["A2"]["return_force_mismatch_N"]) /
-            float(guideway_metrics["A"]["return_force_mismatch_N"])
-        ),
     }
 
 
@@ -5279,9 +6718,16 @@ def _format_default_like(value: object, template: str) -> str:
     return f"{numeric:.12g}"
 
 
-def _format_derived_value(key: str, value: object, template: str) -> str:
+def _format_derived_value(key: str, value: object, template: str,
+                          display: str | None = None) -> str:
     """Mirror the browser's display-unit formatting for initial HTML output."""
     numeric = float(value)
+    if display == "mnm":
+        return f"{numeric / 1.0e6:.3f}"
+    if display == "mm":
+        return f"{numeric * 1.0e3:.1f}"
+    if display:
+        raise ValueError(f"Derived token {key} requests unknown display format {display!r}")
     if re.search(r"loop_area|A_loop|a_loop", key, flags=re.IGNORECASE):
         return f"{numeric * 1.0e6:.2f}"
     if key in {"detent_settling_time_2pct", "axial_settling_time_2pct", "plateau_dwell"}:
@@ -5353,16 +6799,24 @@ def browser_parameter_defaults() -> dict[str, object]:
         # BOM value for the installed screw.  The earlier IT1 entry was wrong.
         "lead_accuracy_class": "IT3",
         "screw_diameter": p["screw_diameter"],
+        "screw_root_diameter": p["screw_root_diameter"],
         "screw_density": p["screw_density"],
+        "youngs_modulus": p["youngs_modulus"],
+        "shear_modulus": p["shear_modulus"],
+        "nut_axial_datum": p["nut_axial_datum"],
         "nut_mass": p["m_n"],
         "stage_mass": p["m_stage"],
         "k_c_series": p["k_c_series"],
-        "k_theta_a": p["k_theta_a"],
-        "k_theta_b": p["k_theta_b"],
         "k_brg": p["k_brg"],
-        "k_sha": p["k_sha"],
-        "k_shb": p["k_shb"],
         "k_mnt": p["k_mnt"],
+        "eta_steel": INTERFACE_LOSS_FACTORS["zeta_steel"],
+        "eta_bearing": INTERFACE_LOSS_FACTORS["zeta_bearing"],
+        "eta_ball_nut": INTERFACE_LOSS_FACTORS["zeta_ball_nut"],
+        "eta_nut_mount": INTERFACE_LOSS_FACTORS["zeta_nut_mount"],
+        "measured_axial_band_low_hz": MODEL["measured_axial_band_low_hz"],
+        "measured_axial_band_high_hz": MODEL["measured_axial_band_high_hz"],
+        "detent_enabled": MODEL["detent_enabled"],
+        "predistortion_levels": MODEL["predistortion_levels"],
         "zeta_steel": p["zeta_steel"],
         "zeta_bearing": p["zeta_bearing"],
         "zeta_ball_nut": p["zeta_ball_nut"],
@@ -5423,6 +6877,14 @@ def browser_derived_defaults() -> dict[str, float]:
         "reduced_axial_stiffness": constants["k_ax"],
         "interface_axial_damping": constants["c_ax_interface"],
         "k_ball": constants["k_ball"],
+        "k_theta_a": component["k_theta_a"],
+        "k_theta_b": component["k_theta_b"],
+        "k_sha": component["k_sha"],
+        "k_shb": component["k_shb"],
+        "screw_length_a": component["screw_length_a"],
+        "screw_length_b": component["screw_length_b"],
+        "screw_inertia_nominal": component["screw_inertia_nominal"],
+        "predistortion_levels": float(MODEL["predistortion_levels"]),
         "full_step_pitch": constants["full_step"],
         "quarter_step_bound": constants["quarter_step"],
         "command_step": constants["command_step"],
@@ -5453,7 +6915,7 @@ def friction_provenance_metrics() -> dict[str, float]:
             (values["F_s"] - values["F_c"]) / values["C_gms"])
     # Drive-port breakaway estimated from screw efficiency.  This feeds the
     # provenance cell only.  The transformer stays power conserving; see the
-    # standing constraint in Section 8.0.
+    # standing constraint in Section 8.1.
     metrics["d_Fs_efficiency_estimate"] = float(
         MODEL["F_preload_nut"] * (1.0 / MODEL["eta_screw"] - 1.0))
     metrics["d_Fs_torque_equivalent"] = float(FRICTION["d"]["F_s"] * constants["r"])
@@ -5509,17 +6971,24 @@ def render_inline(text: str) -> str:
     text = re.sub(r"\[\[(input|assumed):([A-Za-z0-9_]+)=([^\]]+)\]\]", parameter_input, text)
 
     def derived_output(match: re.Match[str]) -> str:
-        key, value = match.group(1), match.group(2)
+        key, display, value = match.group(1), match.group(2), match.group(3)
         escaped_key = html.escape(key, quote=True)
         authoritative = browser_derived_defaults().get(key, value.strip())
-        formatted = _format_derived_value(key, authoritative, value)
+        formatted = _format_derived_value(key, authoritative, value, display)
         escaped_value = html.escape(formatted)
+        # An optional @display suffix lets one derived quantity appear in the
+        # unit its section uses.  The browser reads the same attribute, so a
+        # live recalculation cannot silently change the printed unit.
+        display_attribute = (f' data-derived-format="{html.escape(display, quote=True)}"'
+                             if display else "")
         return keep(
-            f'<output class="derived-output" data-derived="{escaped_key}" '
+            f'<output class="derived-output" data-derived="{escaped_key}"'
+            f'{display_attribute} '
             f'aria-label="Derived value {escaped_key}">{escaped_value}</output>'
         )
 
-    text = re.sub(r"\[\[derived:([A-Za-z0-9_]+)=([^\]]+)\]\]", derived_output, text)
+    text = re.sub(r"\[\[derived:([A-Za-z0-9_]+)(?:@([a-z_]+))?=([^\]]+)\]\]",
+                  derived_output, text)
     text = re.sub(r"`([^`]+)`", lambda m: keep(f"<code>{html.escape(m.group(1))}</code>"), text)
     text = re.sub(r"\$([^$\n]+)\$", lambda m: keep(f"\\({m.group(1)}\\)"), text)
     text = re.sub(
@@ -5601,7 +7070,7 @@ def markdown_to_html(source: str) -> tuple[str, list[tuple[int, str, str]]]:
             output.append(
                 f'<h{level} id="{section_id}"{class_attribute}>{render_inline(title)}</h{level}>'
             )
-            if level in (2, 3):
+            if level in (2, 3) and not title.startswith("Key equation "):
                 toc.append((level, re.sub(r"[*`$]", "", title), section_id))
             i += 1
             continue
@@ -5641,7 +7110,10 @@ def markdown_to_html(source: str) -> tuple[str, list[tuple[int, str, str]]]:
             while i < len(lines) and lines[i].strip().startswith("|"):
                 row_cells = split_table_row(lines[i])
                 row_class = ' class="metric-primary"' if (
-                    row_cells and row_cells[0].startswith("**")) else ""
+                    row_cells and (
+                        row_cells[0].startswith("Return-force mismatch")
+                        or row_cells[0].startswith("Retention $R_{hold}$")
+                    )) else ""
                 table.append(f"<tr{row_class}>")
                 for j, cell in enumerate(row_cells):
                     align = aligns[j] if j < len(aligns) else "left"
@@ -5742,7 +7214,8 @@ h3 {{ margin-top:2.2rem; color:var(--accent); }}
 p {{ margin:.85rem 0; }} a {{ color:var(--accent); }} strong {{ color:var(--text); }} hr {{ border:0; border-top:1px solid var(--line); margin:2rem 0; }}
 blockquote {{ margin:1.2rem 0; padding:.75rem 1rem; background:var(--soft); border-left:4px solid var(--accent); border-radius:0 8px 8px 0; color:var(--muted); }}
 .table-wrap {{ overflow-x:auto; margin:1.2rem 0; }} table {{ width:100%; border-collapse:collapse; font-size:.92rem; }} th,td {{ border:1px solid var(--line); padding:.55rem .65rem; vertical-align:top; }} th {{ background:var(--soft); }}
-tr.metric-primary td {{ font-weight:750; background:color-mix(in srgb,var(--accent) 9%,var(--card)); border-top-width:2px; border-bottom-width:2px; }}
+tr.metric-primary td {{ background:color-mix(in srgb,var(--accent) 7%,var(--card)); }}
+tr.metric-primary td:first-child {{ border-left:4px solid var(--accent); }}
 .parameter-input {{ width:100%; min-width:7rem; padding:.38rem .48rem; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:5px; font:inherit; font-variant-numeric:tabular-nums; }}
 .parameter-input:focus {{ outline:2px solid var(--accent); outline-offset:1px; }}
 .assumed-input {{ background:var(--assumed); border-color:var(--assumed-line); font-weight:700; }}
@@ -5852,7 +7325,7 @@ async function saveParameterFile() {{
     build_id: '{BUILD_ID}',
     parameters: currentParameterValues()
   }};
-  const source = JSON.stringify(payload, null, 2) + '\n';
+  const source = JSON.stringify(payload, null, 2) + '\\n';
   const suggestedName = 'model_parameters.json';
   if ('showSaveFilePicker' in window) {{
     try {{
@@ -5913,12 +7386,15 @@ function liveTransferData() {{
   const usableScrewTravel = parameterNumber('usable_screw_travel', 0.170);
   const stageTravel = parameterNumber('stage_travel', 0.150);
   const screwDiameter = parameterNumber('screw_diameter', 8.0e-3);
+  const screwRootDiameter = parameterNumber('screw_root_diameter', 6.8e-3);
   const screwDensity = parameterNumber('screw_density', 7850.0);
+  const youngsModulus = parameterNumber('youngs_modulus', 210.0e9);
+  const shearModulus = parameterNumber('shear_modulus', 80.8e9);
+  const nutAxialDatum = parameterNumber('nut_axial_datum', 0.158);
   const tmax = parameterNumber('holding_torque', 0.060);
   const tdet = parameterNumber('detent_torque', 0.005);
   const detentPhase = parameterNumber('detent_phase', 0.0);
   const couplingSeries = parameterNumber('k_c_series', 68.7549);
-  const kthetaA = parameterNumber('k_theta_a', 211.0);
   const mStage = parameterNumber('stage_mass', 0.355);
   const mNut = parameterNumber('nut_mass', 0.050);
   const ms = mStage + mNut;
@@ -5926,28 +7402,41 @@ function liveTransferData() {{
   const mEffMeasured = parameterNumber('m_eff_measured', 0.600);
   const zetaRelativeMeasured = parameterNumber('zeta_relative_measured', 0.0014);
   const kbrg = parameterNumber('k_brg', 25.0e6);
-  const ksha = parameterNumber('k_sha', 67.0e6);
   const kmnt = parameterNumber('k_mnt', 100.0e6);
   const cax = parameterNumber('axial_damping', 55.0);
   const zeta = parameterNumber('electromagnetic_zeta', 0.10);
-  const zetaSteel = parameterNumber('zeta_steel', 5.0e-4);
-  const zetaBearing = parameterNumber('zeta_bearing', 1.0e-2);
-  const zetaBallNut = parameterNumber('zeta_ball_nut', 1.15e-2);
-  const zetaNutMount = parameterNumber('zeta_nut_mount', 5.0e-3);
+  const etaSteel = parameterNumber('eta_steel', {INTERFACE_LOSS_FACTORS['zeta_steel']});
+  const etaBearing = parameterNumber('eta_bearing', {INTERFACE_LOSS_FACTORS['zeta_bearing']});
+  const etaBallNut = parameterNumber('eta_ball_nut', {INTERFACE_LOSS_FACTORS['zeta_ball_nut']});
+  const etaNutMount = parameterNumber('eta_nut_mount', {INTERFACE_LOSS_FACTORS['zeta_nut_mount']});
   const microstepDivisor = parameterNumber('microstep_divisor', 16);
   if (!(lead>0 && teeth>0 && jm>0 && jc>=0 && screwLength>0 && usableScrewTravel>0 &&
         stageTravel>0 && stageTravel<=usableScrewTravel && usableScrewTravel<=screwLength && screwDiameter>0 &&
-        screwDensity>0 && tmax>0 && tdet>=0 && couplingSeries>0 && kthetaA>0 &&
+        screwRootDiameter>0 && screwRootDiameter<=screwDiameter &&
+        youngsModulus>0 && shearModulus>0 &&
+        nutAxialDatum>0 && nutAxialDatum<screwLength &&
+        screwDensity>0 && tmax>0 && tdet>=0 && couplingSeries>0 &&
         mStage>0 && mNut>=0 &&
         axialModeTarget>0 && mEffMeasured>0 && zetaRelativeMeasured>0 &&
-        kbrg>0 && ksha>0 && kmnt>0 &&
-        cax>=0 && zeta>=0 && zetaSteel>=0 && zetaBearing>=0 && zetaBallNut>=0 &&
-        zetaNutMount>=0 && microstepDivisor>=1))
-    throw new Error('Geometry, masses, torque, and stiffness must be positive; damping and detent torque cannot be negative.');
+        kbrg>0 && kmnt>0 &&
+        cax>=0 && zeta>=0 && microstepDivisor>=1))
+    throw new Error('Geometry, masses, torque, and stiffness must be positive; the nut datum must lie inside the screw; damping and detent torque cannot be negative.');
   const r = lead/(2*Math.PI);
   const screwRadius = screwDiameter/2;
+  const rootRadius = screwRootDiameter/2;
+  const rootArea = Math.PI*rootRadius*rootRadius;
+  const rootPolar = 0.5*Math.PI*Math.pow(rootRadius,4);
+  const screwLengthA = nutAxialDatum;
+  const screwLengthB = screwLength-nutAxialDatum;
+  // Both screw segment pairs come from one section and one nut datum, so the
+  // torsional and axial ratios are the same length ratio by construction.
+  const kthetaA = shearModulus*rootPolar/screwLengthA;
+  const kthetaB = shearModulus*rootPolar/screwLengthB;
+  const ksha = youngsModulus*rootArea/screwLengthA;
+  const kshb = youngsModulus*rootArea/screwLengthB;
   const screwMass = screwDensity*Math.PI*screwRadius*screwRadius*screwLength;
-  const screwInertia = 0.5*screwMass*screwRadius*screwRadius;
+  // Mass follows the nominal diameter, polar inertia the root section.
+  const screwInertia = 0.5*Math.PI*Math.pow(rootRadius,4)*screwDensity*screwLength;
   const jTotal = jm+jc+screwInertia;
   const md = jTotal/(r*r);
   const km = teeth*tmax/(r*r);
@@ -5962,6 +7451,19 @@ function liveTransferData() {{
   if (!(remainingBallCompliance>0))
     throw new Error('The current axial inputs leave no positive compliance for k_ball.');
   const kBall = 1/remainingBallCompliance;
+  // Interface damping ratios are derived, never entered: a dashpot delivers
+  // eta_j(w) = 2*zeta_j*w/w_j, so the ratio that realizes a target loss factor
+  // at the retained mode is zeta_j = eta_j*f_j/(2*f_2).  Same equation as
+  // interface_damping_ratios() in the builder.
+  const segMass = screwMass/3, segInertia = screwInertia/3;
+  const massPair = (a,b) => a*b/(a+b);
+  const elementHz = (k,m) => Math.sqrt(k/m)/(2*Math.PI);
+  const ballMass = 1/(r*r/segInertia + 1/segMass + 1/mNut);
+  const ratioFor = (eta,k,m) => eta*elementHz(k,m)/(2*axialModeTarget);
+  const zetaBearing = ratioFor(etaBearing, kbrg, segMass);
+  const zetaSteel = ratioFor(etaSteel, ksha, massPair(segMass,segMass));
+  const zetaBallNut = ratioFor(etaBallNut, kBall, ballMass);
+  const zetaNutMount = ratioFor(etaNutMount, kmnt, massPair(mNut,mStage));
   // Multi-route reduction comparison.  Route F deliberately uses the same
   // adjacent/reduced masses as full_linear_matrices(), not one shared m_s.
   const kc1 = 2*couplingSeries, kc2 = 2*couplingSeries;
@@ -6084,7 +7586,9 @@ function liveTransferData() {{
     cax, zeta, lead, teeth, r, jm, jc, screwLength, screwDiameter,
     screwDensity, screwMass, screwInertia, jTotal, tmax, tdet, detentPhase,
     usableScrewTravel, stageTravel,
-    couplingSeries, couplingHalf:2*couplingSeries, kthetaA, kappa:teeth/r,
+    couplingSeries, couplingHalf:2*couplingSeries, kthetaA, kthetaB, kshb,
+    screwRootDiameter, youngsModulus, shearModulus, nutAxialDatum,
+    screwLengthA, screwLengthB, kappa:teeth/r,
     fullStep:lead/(4*teeth), quarterStep:lead/(16*teeth),
     commandStep:lead/(4*teeth*microstepDivisor),
     microstepDivisor, fmax:tmax/r, cm, detentPeriod:lead/(4*teeth),
@@ -6104,7 +7608,9 @@ function liveTransferData() {{
     routeCSettling:settling(routeCZeta,routeCF2)
   }};
 }}
-function formatDerivedValue(key, value) {{
+function formatDerivedValue(key, value, display) {{
+  if (display === 'mnm') return (value/1e6).toFixed(3);
+  if (display === 'mm') return (value*1e3).toFixed(1);
   const scientific = new Set([
     'transmission_ratio','magnetic_stiffness','detent_stiffness','screw_inertia',
     'screw_segment_inertia','full_step_pitch','quarter_step_bound',
@@ -6129,6 +7635,7 @@ function formatDerivedValue(key, value) {{
   if (/^route_[psbfcm]_f[12]$/.test(key)) return value.toFixed(2);
   if (/^route_[psbfcm]_settling$/.test(key) || key==='full_model_settling')
     return (value*1e3).toFixed(1);
+  if (/^zeta_(steel|bearing|ball_nut|nut_mount)$/.test(key)) return value.toExponential(5);
   if (key==='torsional_share') return (100*value).toFixed(3);
   if (key==='mass_ratio') return value.toFixed(2);
   if (key==='reduced_mu') return value.toFixed(4);
@@ -6167,6 +7674,16 @@ function refreshDerivedOutputs(data) {{
     screw_mass:data.screwMass,
     screw_segment_mass:data.screwMass/3,
     k_c_half:data.couplingHalf,
+    k_theta_a:data.kthetaA,
+    k_theta_b:data.kthetaB,
+    k_sha:data.ksha,
+    k_shb:data.kshb,
+    zeta_steel:data.zetaSteel,
+    zeta_bearing:data.zetaBearing,
+    zeta_ball_nut:data.zetaBallNut,
+    zeta_nut_mount:data.zetaNutMount,
+    screw_length_a:data.screwLengthA,
+    screw_length_b:data.screwLengthB,
     mode_1_hz:data.modes[0],
     mode_2_hz:data.modes[1],
     drive_stiffness:data.km,
@@ -6234,7 +7751,7 @@ function refreshDerivedOutputs(data) {{
   }};
   document.querySelectorAll('[data-derived]').forEach(output => {{
     const key=output.dataset.derived;
-    if (Object.prototype.hasOwnProperty.call(values,key)) output.textContent=formatDerivedValue(key,values[key]);
+    if (Object.prototype.hasOwnProperty.call(values,key)) output.textContent=formatDerivedValue(key,values[key],output.dataset.derivedFormat);
   }});
 }}
 function refreshLiveEquations(data) {{
@@ -6414,17 +7931,26 @@ def main() -> None:
     ASSET_DIR.mkdir(exist_ok=True)
     ensure_parameter_file()
     gms_audit = validate_gms_partition()
+    screw_audit = validate_screw_geometry()
     loss_audit = validate_interface_loss_factors()
     validate_parameter_registry()
+    validate_prose_frequencies()
+    breakaway_audit = validate_breakaway_forces()
     validate_case_topology()
     constants = physical_constants()
+    component = component_parameters()
+    closure_audit = validate_closure_band(constants, component)
+    branches = calibration_branches(constants, component)
+    predistortion_audit = validate_predistortion_authority(constants)
     command_audit = validate_command_design(constants)
     frequencies, bode, linear_metrics = frequency_responses()
     branch_censuses: dict[str, GmsBranchCensus] = {}
     executor = ProcessPoolExecutor(max_workers=args.jobs) if args.jobs > 1 else None
     try:
         build_progress(
-            2, 8, f"SIMULATING main 1510 ms nonlinear campaign with {args.jobs} workers")
+            2, 8,
+            f"SIMULATING main {main_duration(constants) * 1e3:.0f} ms nonlinear "
+            f"campaign with {args.jobs} workers")
         times, command, time_data, time_metrics = time_responses(
             constants, branch_censuses, executor)
         build_progress(
@@ -6462,18 +7988,30 @@ def main() -> None:
     finally:
         if executor is not None:
             executor.shutdown()
-    build_progress(4, 8, "PRICING memory-branch departures")
+    build_progress(4, 8, "PRICING memory-branch departures, detent ablation, "
+                         "damping sweep, and breakaway sensitivity")
     branch_departure = memory_branch_departure(constants, memory_experiments)
     retention_confirmation = high_damping_confirmation_run(constants)
     true_loop = true_presliding_loop(constants)
+    ablation_executor = ProcessPoolExecutor(max_workers=args.jobs) if args.jobs > 1 else None
+    try:
+        detent_ablation = detent_ablation_study(constants, time_metrics, ablation_executor)
+        damping_sweep = retention_damping_sweep(constants, ablation_executor)
+        breakaway = breakaway_sensitivity(constants, ablation_executor)
+    finally:
+        if ablation_executor is not None:
+            ablation_executor.shutdown()
     build_progress(5, 8, "RENDERING publication SVG figures")
+    micro_viscous = micro_viscous_effect(frequencies, bode, linear_metrics, time_metrics)
     case_response_paths = plot_case_responses(
         frequencies, bode, times, command, time_data, constants, time_metrics)
-    comparison_path = plot_case_response_overlay(frequencies, bode)
+    comparison_paths = plot_case_response_overlay(
+        frequencies, bode, linear_metrics, micro_viscous)
     guide_memory_path = plot_presliding_memory(
         memory_experiments["guideway"], "presliding_memory_comparison.svg")
     nut_memory_path = plot_presliding_memory(
         memory_experiments["nut"], "nut_memory_comparison.svg")
+    memory_supplement_path = plot_presliding_supplement(memory_experiments)
     true_loop_path = plot_true_presliding_loop(true_loop)
     diagram_paths = plot_kinematic_diagram()
     flowchart_a_path = plot_flowchart_provenance_structure()
@@ -6483,7 +8021,8 @@ def main() -> None:
     position_path = plot_position_dependence()
     resonance_path = plot_stepper_resonance_visibility()
     rotor_stage_path = plot_rotor_stage_transfer_functions(frequencies)
-    for obsolete_name in ("bode_all_cases.svg", "step_tracking_all_cases.svg",
+    for obsolete_name in ("lugre_gms_pairwise_comparison.svg",
+                          "step_tracking_all_cases.svg",
                           "full_reduced_single_edge_diagnostic.svg"):
         obsolete_path = ASSET_DIR / obsolete_name
         if obsolete_path.exists():
@@ -6492,12 +8031,23 @@ def main() -> None:
         build_progress(6, 8, "UPDATING generated Markdown tables, takeaways, and limitations")
         update_generated_bode_comparison(
             generated_bode_comparison(frequencies, bode, linear_metrics))
+        update_generated_micro_viscous(generated_micro_viscous(micro_viscous))
         update_generated_reduction_convergence(
             generated_reduction_convergence(verification))
         update_generated_summary(generated_summary(linear_metrics, time_metrics, verification))
-        update_generated_presliding_summary(generated_presliding_summary(memory_experiments))
+        update_generated_calibration_branches(
+            generated_calibration_branches(branches, constants))
+        update_generated_detent_ablation(
+            generated_detent_ablation(detent_ablation, constants))
+        update_generated_full_response_summary(
+            generated_full_response_summary(linear_metrics, time_metrics, detent_ablation))
+        update_generated_presliding_summary(generated_presliding_summary(
+            memory_experiments, damping_sweep, true_loop_path, constants))
+        update_generated_breakaway_sensitivity(
+            generated_breakaway_sensitivity(breakaway))
         update_generated_retention_diagnostic(generated_retention_diagnostic(
-            memory_experiments, retention_confirmation, true_loop_path))
+            memory_experiments, retention_confirmation, true_loop_path,
+            memory_supplement_path))
         update_generated_convergence_summary(generated_convergence_summary(convergence))
         update_generated_branch_census(
             generated_branch_census(branch_census, branch_departure, memory_experiments))
@@ -6505,14 +8055,21 @@ def main() -> None:
         takeaway_values = takeaway_derived_values(verification, memory_experiments)
         takeaway_values["a2_convergence_order"] = float(
             convergence["A2"]["observed_order"])
+        takeaway_values.update(
+            document_frequency_tokens(constants, linear_metrics, branches))
+        ratio_low, ratio_high = damping_sweep["ratio_range"]
+        takeaway_values["retention_ratio_low"] = float(ratio_low)
+        takeaway_values["retention_ratio_high"] = float(ratio_high)
         update_derived_token_fallbacks(takeaway_values)
     build_progress(7, 8, "RENDERING HTML from the synchronized Markdown sources")
     description_html = render_document(DESCRIPTION_MD)
     derivation_html = render_document(DERIVATION_MD)
-    print(f"Built {comparison_path.relative_to(ROOT)}")
+    for comparison_path in comparison_paths:
+        print(f"Built {comparison_path.relative_to(ROOT)}")
     print(f"Built {len(case_response_paths)} per-case response figures")
     print(f"Built {guide_memory_path.relative_to(ROOT)}")
     print(f"Built {nut_memory_path.relative_to(ROOT)}")
+    print(f"Built {memory_supplement_path.relative_to(ROOT)}")
     print(f"Built {true_loop_path.relative_to(ROOT)}")
     for diagram_path in diagram_paths:
         print(f"Built {diagram_path.relative_to(ROOT)}")
@@ -6544,6 +8101,61 @@ def main() -> None:
               f"sequence RMS deviation={time_metrics[key]['rms_sequence_deviation_nm']:.2f} nm; "
               f"peak deviation={time_metrics[key]['max_abs_deviation_nm']:.2f} nm; "
               f"final-window RMS deviation={time_metrics[key]['rms_final_error_nm']:.2f} nm")
+    print("Screw geometry: "
+          f"L_a={screw_audit['screw_length_a'] * 1e3:.1f} mm + "
+          f"L_b={screw_audit['screw_length_b'] * 1e3:.1f} mm = "
+          f"{FULL['screw_length'] * 1e3:.1f} mm; "
+          f"k_theta {screw_audit['k_theta_a']:.1f}/{screw_audit['k_theta_b']:.1f} N m/rad; "
+          f"k_sh {screw_audit['k_sha'] / 1e6:.2f}/{screw_audit['k_shb'] / 1e6:.2f} MN/m")
+    print("Closure band: "
+          f"k_brg={closure_audit['k_brg'] / 1e6:.1f} MN/m is "
+          f"{closure_audit['margin']:.2f}x the "
+          f"{closure_audit['singular_limit'] / 1e6:.3f} MN/m singular limit; "
+          f"k_ball={closure_audit['k_ball'] / 1e6:.3f} MN/m")
+    print("Calibration branches: "
+          f"k_ax frictionless={branches['frictionless_k_ax'] / 1e6:.3f} MN/m vs "
+          f"presliding-inclusive={branches['presliding_k_ax'] / 1e6:.3f} MN/m "
+          f"(x{branches['ratio']:.3f}); K_m=0 moves k_ax by "
+          f"{branches['unpowered_shift_pct']:+.3f}%")
+    print("Dwell candidates (ms): "
+          f"floor=100.0, detent={constants['detent_settling_time_2pct'] * 1e3:.1f}, "
+          f"axial={constants['axial_settling_time_2pct'] * 1e3:.1f}, "
+          f"interface={constants['interface_settling_time_2pct'] * 1e3:.1f}, "
+          f"measured={constants['measured_settling_time_2pct'] * 1e3:.1f} -> "
+          f"executed {constants['plateau_dwell'] * 1e3:.1f}")
+    print("Pre-distortion authority: "
+          f"quantum={predistortion_audit['command_step'] * 1e9:.1f} nm vs required "
+          f"{predistortion_audit['required_resolution'] * 1e9:.1f} nm; "
+          f"n_mu {predistortion_audit['executed_divisor']:.0f} vs required "
+          f"{predistortion_audit['required_divisor']:.1f} "
+          f"(short by {predistortion_audit['shortfall']:.1f}x); "
+          f"{'SATISFIED' if predistortion_audit['satisfied'] else 'NOT SATISFIED'}")
+    print("Breakaway range check: " + "; ".join(
+        f"{site}: F_s={record['F_s']:.2f} N vs stated {record['low']:.1f}-{record['high']:.1f} N"
+        + ("" if record["inside"] else
+           f"  WARNING: {record['factor_above']:.1f}x above the stated range, "
+           "see Section 12.4")
+        for site, record in breakaway_audit.items()))
+    print("Detent ablation: "
+          + "; ".join(
+              f"{key} {row['executed_nm']:.1f}->{row['detent_off_nm']:.1f} nm "
+              f"({row['detent_share_pct']:.0f}% detent)"
+              for key, row in detent_ablation["rows"].items()))
+    print("Retention vs damping: " + "; ".join(
+        f"zeta={row['target_zeta']:.4f}: ratio {row['r_hold_ratio']:.2f}x"
+        for row in damping_sweep["rows"]))
+    print("Breakaway sensitivity: " + "; ".join(
+        f"F_s={row['F_s']:.1f} N -> {row['elements_yielded_at_inner']}/4 elements at "
+        f"the inner level, F_ret {row['force_mismatch_gms_N']:.4f} N"
+        for row in breakaway["rows"])
+        + ("; DESIGN CHANGES" if breakaway["design_changes"] else "; design stable"))
+    print("Micro-viscous A1v vs A: "
+          f"peak reduced {micro_viscous['peak_drop_db']:.3f} dB at "
+          f"{micro_viscous['peak_frequency_hz']:.1f} Hz; "
+          f"implied dzeta={micro_viscous['implied_delta_zeta']:.3e} vs "
+          f"predicted {micro_viscous['predicted_delta_zeta']:.3e} "
+          f"({micro_viscous['agreement_pct']:.1f}% apart); settled RMS "
+          f"{micro_viscous['rms_a_nm']:.1f} -> {micro_viscous['rms_a1v_nm']:.1f} nm")
     print("Interface loss factors at f_2: " + "; ".join(
         f"{key.replace('zeta_', '')}: eta={record['eta']:.5f}, zeta={record['zeta']:.6f}, "
         f"c={record['damping']:.2f} N s/m"
