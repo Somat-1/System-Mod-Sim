@@ -32,51 +32,78 @@ ASSET_DIR = ROOT / "rendered_assets"
 DESCRIPTION_MD = ROOT / "ball_screw_stage_dynamic_derivation_v3.md"
 DERIVATION_MD = ROOT / "Analytical_derivation_and_responses_v3.md"
 MICROSTEP_DATA_DIR = ROOT.parent / "Microstepping Test Data"
-IDS_MICROSTEP_FILE = MICROSTEP_DATA_DIR / "IDSdata.txt"
-BUILD_ID = "rev3-section13-readability-20260813"
+PARAMETER_FILE = ROOT / "model_parameters.json"
+BUILD_ID = "rev3-section9-final-20260813"
+
+
+def _load_parameter_file() -> dict[str, object]:
+    """Load browser-saved overrides before executable defaults are assembled."""
+    if not PARAMETER_FILE.exists():
+        return {}
+    payload = json.loads(PARAMETER_FILE.read_text(encoding="utf-8"))
+    values = payload.get("parameters", payload)
+    if not isinstance(values, dict):
+        raise TypeError(f"{PARAMETER_FILE.name} must contain a parameter object")
+    return values
+
+
+_PARAMETER_OVERRIDES = _load_parameter_file()
+
+
+def configured(key: str, default: object) -> object:
+    """Return one typed parameter-file value or its in-code default."""
+    value = _PARAMETER_OVERRIDES.get(key, default)
+    if isinstance(default, str):
+        return str(value)
+    if isinstance(default, int) and not isinstance(default, bool):
+        numeric = float(value)
+        if not numeric.is_integer():
+            raise ValueError(f"Parameter {key} must be an integer, got {value!r}")
+        return int(numeric)
+    return float(value)
 
 
 # Executable defaults for the Revision 3 two-DOF reduction.
 MODEL = {
-    "lead": 1.0e-3,
-    "rotor_teeth": 50,
+    "lead": configured("lead", 1.0e-3),
+    "rotor_teeth": configured("rotor_teeth", 50),
     # Rated-current holding torque for the lower-current motor variant.
-    "T_max": 0.060,
+    "T_max": configured("holding_torque", 0.060),
     # Published detent torque.  It is executed as a periodic nonlinear torque;
     # its tangent is reported separately and is never used as a global spring.
-    "T_det": 0.005,
-    "detent_phase": 0.0,
+    "T_det": configured("detent_torque", 0.005),
+    "detent_phase": configured("detent_phase", 0.0),
     # Measured upper axial mode used to calibrate the reduced axial chain.
     # Stage and nut masses live in FULL; m_s, k_ax, and k_ball are derived.
-    "axial_mode_target_hz": 695.82,
+    "axial_mode_target_hz": configured("axial_mode_target_hz", 695.82),
     # Effective mass and relative-mode damping from the modal campaign.  The
     # damping value remains provisional until the half-power extraction is
     # repeated from the source FRF.
-    "m_eff_measured": 0.600,
-    "zeta_relative_measured": 0.0014,
+    "m_eff_measured": configured("m_eff_measured", 0.600),
+    "zeta_relative_measured": configured("zeta_relative_measured", 0.0014),
     # Existing provisional reduced-link damper.  It remains an explicit
     # sensitivity input so it can be compared with interface propagation and
     # measured-FRF identification rather than being mistaken for either one.
-    "c_ax": 55.0,
+    "c_ax": configured("axial_damping", 55.0),
     # Provisional open-loop drive damping ratio.  Driver mode and tuning are
     # not recorded.  The requested baseline is 10% of critical damping and a
     # sensitivity sweep is retained rather than presenting it as identified.
-    "zeta_m": 0.10,
+    "zeta_m": configured("electromagnetic_zeta", 0.10),
     # Production Stepper-Board STEP/DIR setting.  Position commands therefore
     # land on a 312.5 nm grid; pulse timing remains independently controllable.
-    "microstep_divisor": 16,
+    "microstep_divisor": configured("microstep_divisor", 16),
     # Stribeck exponent.  It appears in every s(v) evaluation but was never
     # exposed; 2.0 is the conventional Gaussian form.  Fixed, not identified.
-    "stribeck_delta": 2.0,
+    "stribeck_delta": configured("stribeck_delta", 2.0),
     # Shared Stribeck relaxation time.  Each site's GMS attractor rate is
     # C_alpha = (F_s - F_c)/tau_C, so one time constant replaces three
     # unanchored N/s values.  Provisional: in the source GMS work C is
     # identified from measured hysteresis loops, never assumed.
-    "tau_C": 2.0e-4,
+    "tau_C": configured("tau_C", 2.0e-4),
     # Provenance inputs for the drive-port breakaway estimate only.  They are
     # never applied to the transformer; see the standing constraint in 8.0.
-    "eta_screw": 0.90,
-    "F_preload_nut": 100.0,
+    "eta_screw": configured("eta_screw", 0.90),
+    "F_preload_nut": configured("F_preload_nut", 100.0),
 }
 
 
@@ -86,27 +113,27 @@ MODEL = {
 # are surfaced as highlighted assumptions in the Markdown documents.
 FULL = {
     # Component values.  Screw inertia and axial masses are derived below.
-    "J_m": 9.00e-7,
-    "J_c": 1.18e-6,
-    "screw_length": 0.192,
-    "usable_screw_travel": 0.170,
-    "stage_travel": 0.150,
-    "screw_diameter": 8.00e-3,
-    "screw_density": 7850.0,
-    "m_n": 0.050,
+    "J_m": configured("J_m", 9.00e-7),
+    "J_c": configured("J_c", 1.18e-6),
+    "screw_length": configured("screw_length", 0.192),
+    "usable_screw_travel": configured("usable_screw_travel", 0.170),
+    "stage_travel": configured("stage_travel", 0.150),
+    "screw_diameter": configured("screw_diameter", 8.00e-3),
+    "screw_density": configured("screw_density", 7850.0),
+    "m_n": configured("nut_mass", 0.050),
     # Measured stage body mass.  The retained stage-side mass also includes
     # the nut body after the internal nut coordinate is collapsed.
-    "m_stage": 0.355,
+    "m_stage": configured("stage_mass", 0.355),
     # Datasheet series stiffness is 1.2 N m/deg = 68.7549 N m/rad.
     # Two equal half-springs must each be twice the series value.
-    "k_c_series": 1.2 * 180.0 / np.pi,
-    "k_theta_a": 211.0,
-    "k_theta_b": 211.0,
+    "k_c_series": configured("k_c_series", 1.2 * 180.0 / np.pi),
+    "k_theta_a": configured("k_theta_a", 211.0),
+    "k_theta_b": configured("k_theta_b", 211.0),
     # 25 N/um is the closure-consistent bearing assumption discussed in Rev 3.
-    "k_brg": 25.0e6,
-    "k_sha": 67.0e6,
-    "k_shb": 200.0e6,
-    "k_mnt": 100.0e6,
+    "k_brg": configured("k_brg", 25.0e6),
+    "k_sha": configured("k_sha", 67.0e6),
+    "k_shb": configured("k_shb", 200.0e6),
+    "k_mnt": configured("k_mnt", 100.0e6),
     # Interface damping ratios that realize the target loss factors below.
     #
     # The Revision 3 values were converted with the light-damping identity
@@ -119,10 +146,10 @@ FULL = {
     #
     # so the EXECUTED loss factor at the retained mode equals the target.
     # validate_interface_loss_factors() fails the build if the two drift apart.
-    "zeta_steel": 0.004165392,
-    "zeta_bearing": 0.107950521,
-    "zeta_ball_nut": 0.104178265,
-    "zeta_nut_mount": 0.163886363,
+    "zeta_steel": configured("zeta_steel", 0.004165392),
+    "zeta_bearing": configured("zeta_bearing", 0.107950521),
+    "zeta_ball_nut": configured("zeta_ball_nut", 0.104178265),
+    "zeta_nut_mount": configured("zeta_nut_mount", 0.163886363),
 }
 
 # Target loss factors at the retained upper mode.  Joints are bolted,
@@ -144,18 +171,27 @@ FULL_DOF_LABELS = (
 # sigma0_g is the estimate already quoted in the description; all other values
 # below need experimental identification before quantitative use.
 FRICTION = {
-    "g": {"sigma0": 7.60e5, "sigma1": 0.0, "sigma2": 0.40,
-          "F_s": 3.0, "F_c": 2.4, "v_s": 2.5e-4},
+    "g": {"sigma0": configured("g_sigma0", 7.60e5),
+          "sigma1": configured("g_sigma1", 0.0),
+          "sigma2": configured("g_sigma2", 0.40),
+          "F_s": configured("g_Fs", 3.0), "F_c": configured("g_Fc", 2.4),
+          "v_s": configured("g_vs", 2.5e-4)},
     # Differential nut-contact microslip.  Its first GMS element yields at
     # 0.25*F_s/sigma0 = 0.20 um, so this port can express actual partial slip.
-    "n": {"sigma0": 2.00e6, "sigma1": 0.0, "sigma2": 0.25,
-          "F_s": 1.6, "F_c": 1.2, "v_s": 2.0e-4},
+    "n": {"sigma0": configured("n_sigma0", 2.00e6),
+          "sigma1": configured("n_sigma1", 0.0),
+          "sigma2": configured("n_sigma2", 0.25),
+          "F_s": configured("n_Fs", 1.6), "F_c": configured("n_Fc", 1.2),
+          "v_s": configured("n_vs", 2.0e-4)},
     # Identifiable drive-side lump.  Motor/support-bearing drag and gross nut
     # rolling were formerly two laws on the same H=[1,0] port.  Their force,
     # tangent, and damping budgets are combined here; the aggregate still
     # requires identification from a drive-side measurement.
-    "d": {"sigma0": 3.00e6, "sigma1": 0.0, "sigma2": 0.45,
-          "F_s": 7.0, "F_c": 5.5, "v_s": 2.3e-4},
+    "d": {"sigma0": configured("d_sigma0", 3.00e6),
+          "sigma1": configured("d_sigma1", 0.0),
+          "sigma2": configured("d_sigma2", 0.45),
+          "F_s": configured("d_Fs", 7.0), "F_c": configured("d_Fc", 5.5),
+          "v_s": configured("d_vs", 2.3e-4)},
 }
 
 # sigma_1 is zero in the executed A/B/C comparison so that LuGre and GMS
@@ -176,9 +212,19 @@ for _site_key, _site_values in FRICTION.items():
 # Four GMS stop elements share each site's aggregate sigma0 and Stribeck
 # force.  Opposing stiffness/force fractions create distinct yield distances
 # and therefore non-local reversal memory while retaining the LuGre aggregate.
-GMS_WEIGHTS = np.array([0.10, 0.20, 0.30, 0.40])
+GMS_WEIGHTS = np.array([
+    configured(f"gms_nu{index}", default)
+    for index, default in enumerate((0.10, 0.20, 0.30, 0.40), start=1)
+])
 GMS_STIFFNESS_FRACTIONS = np.array([0.40, 0.30, 0.20, 0.10])
 GMS_N = GMS_WEIGHTS.size
+GMS_STIFFNESS_BY_SITE = {
+    site: np.array([
+        configured(f"{site}_k{index}", fraction * values["sigma0"])
+        for index, fraction in enumerate(GMS_STIFFNESS_FRACTIONS, start=1)
+    ])
+    for site, values in FRICTION.items()
+}
 # Filled in by main() before rendering.  A document rendered without a rebuilt
 # census says so rather than printing stale counts.
 BRANCH_CENSUS_SENTENCE: str | None = None
@@ -193,13 +239,6 @@ VERIFICATION_DT = 2.5e-6
 VERIFICATION_CONVERGENCE_DTS = (25.0e-6, 12.5e-6, 6.25e-6, VERIFICATION_DT)
 VERIFICATION_EDGES = (0.005, 0.025, 0.045, 0.065)
 SETTLING_2PCT_FACTOR = 4.0
-# The IDS records are sampled at approximately 88 ms.  A dedicated 100 us
-# integration is sufficient for their settled plateau comparison: a 50 us
-# repeat changed the representative C2 settled response by 0.18 nm RMS.
-IDS_COMPARISON_DT = 1.0e-4
-IDS_COMPARISON_PRESTEP = 0.50
-IDS_COMPARISON_INTERVALS = 6
-IDS_MICROSTEP_SIZES = (1, 2, 4, 8, 16)
 BODE_FOCUS_MIN_HZ = 100.0
 BODE_FOCUS_MAX_HZ = 3000.0
 # The main response uses the production 1/16 grid and deliberately spans the
@@ -569,7 +608,7 @@ for _key, _dependencies, _section in (
     ("lugre_states_per_site", ("friction_state_definition",), "8-1-constitutive-laws"),
     ("structural_identifiability_result_count", ("identifiability_analysis",), "8-3-implementation-choices"),
     ("project_adev_floor_nm", ("metrology_campaign",), "9-force-instrumented-partial-slip-memory-experiment"),
-    ("a2_convergence_order", ("g_sigma0", "g_Fs", "g_Fc", "tau_C", "command_step"), "13-1-gms-step-halving-convergence"),
+    ("a2_convergence_order", ("g_sigma0", "g_Fs", "g_Fc", "tau_C", "command_step"), "12-1-gms-step-halving-convergence"),
 ):
     PARAMETER_REGISTRY[_key] = {
         "category": "output", "dependencies": _dependencies, "section": _section,
@@ -690,17 +729,19 @@ def validate_interface_loss_factors() -> dict[str, dict[str, float]]:
 
 def validate_gms_partition() -> dict[str, object]:
     """Fail the build unless every executed GMS partition closes exactly."""
-    if GMS_WEIGHTS.size != GMS_STIFFNESS_FRACTIONS.size:
-        raise ValueError("GMS force weights and stiffness fractions must have equal length")
-    if np.any(GMS_WEIGHTS <= 0.0) or np.any(GMS_STIFFNESS_FRACTIONS <= 0.0):
-        raise ValueError("Every GMS force weight and stiffness fraction must be positive")
+    if any(GMS_WEIGHTS.size != stiffness.size
+           for stiffness in GMS_STIFFNESS_BY_SITE.values()):
+        raise ValueError("GMS force weights and per-site stiffness vectors must have equal length")
+    if np.any(GMS_WEIGHTS <= 0.0) or any(
+            np.any(stiffness <= 0.0) for stiffness in GMS_STIFFNESS_BY_SITE.values()):
+        raise ValueError("Every GMS force weight and element stiffness must be positive")
     weight_sum = float(np.sum(GMS_WEIGHTS))
     if not np.isclose(weight_sum, 1.0, rtol=0.0, atol=1.0e-12):
         raise ValueError(f"GMS force weights must satisfy sum(nu_i)=1; got {weight_sum:.16g}")
 
     stiffness_sums: dict[str, float] = {}
     for site, parameters in FRICTION.items():
-        element_stiffness = GMS_STIFFNESS_FRACTIONS * parameters["sigma0"]
+        element_stiffness = GMS_STIFFNESS_BY_SITE[site]
         stiffness_sum = float(np.sum(element_stiffness))
         if not np.isclose(stiffness_sum, parameters["sigma0"],
                           rtol=1.0e-12, atol=1.0e-9):
@@ -743,7 +784,7 @@ def validate_case_topology() -> None:
                 f"Site {site} executes C={values['C_gms']:.6g} N/s but tau_C implies {executed:.6g}")
     nut_first_yield = float(np.min(
         GMS_WEIGHTS * FRICTION["n"]["F_s"] /
-        (GMS_STIFFNESS_FRACTIONS * FRICTION["n"]["sigma0"])
+        GMS_STIFFNESS_BY_SITE["n"]
     ))
     if not np.isclose(nut_first_yield, 0.20e-6, rtol=0.0, atol=1.0e-12):
         raise ValueError(f"Nut microslip first yield is {nut_first_yield:.6g} m, expected 0.20 um")
@@ -765,8 +806,7 @@ def validate_command_design(constants: dict[str, float]) -> dict[str, float]:
 
     def yields(site: str) -> np.ndarray:
         values = FRICTION[site]
-        return (GMS_WEIGHTS * values["F_s"] /
-                (GMS_STIFFNESS_FRACTIONS * values["sigma0"]))
+        return GMS_WEIGHTS * values["F_s"] / GMS_STIFFNESS_BY_SITE[site]
 
     guideway_yields = yields("g")
     nut_yields = yields("n")
@@ -1549,7 +1589,7 @@ def frequency_responses() -> tuple[np.ndarray, dict[str, np.ndarray], dict[str, 
         tangent_dc_gain = float((np.linalg.solve(stiffness, input_vector))[1])
         first_yield = min(
             (float(np.min(GMS_WEIGHTS * FRICTION[site]["F_s"] /
-                          (GMS_STIFFNESS_FRACTIONS * FRICTION[site]["sigma0"])))
+                          GMS_STIFFNESS_BY_SITE[site]))
              for site in case["sites"]),
             default=np.inf,
         )
@@ -1600,8 +1640,9 @@ def site_parameters(case: dict[str, object], site: str) -> dict[str, float]:
     the controlled A/B/C comparison sets to zero.
     """
     if case.get("micro_viscous"):
-        return {**FRICTION[site], "sigma1": MICRO_VISCOUS_SIGMA1[site]}
-    return FRICTION[site]
+        return {**FRICTION[site], "sigma1": MICRO_VISCOUS_SIGMA1[site],
+                "gms_stiffness": GMS_STIFFNESS_BY_SITE[site]}
+    return {**FRICTION[site], "gms_stiffness": GMS_STIFFNESS_BY_SITE[site]}
 
 
 def stribeck(velocity: float, p: dict[str, float]) -> float:
@@ -1630,10 +1671,10 @@ def gms_site(velocity: float, element_forces: np.ndarray,
     executed stateless test runs unchanged.  When a boolean array is supplied
     it carries a persistent per-element slip flag, so an element that has
     yielded keeps slipping until a reversal instead of being reclassified by a
-    rising threshold.  Section 13.2 uses it to price that departure.
+    rising threshold.  Section 12.2 uses it to price that departure.
     """
     threshold = np.maximum(GMS_WEIGHTS * stribeck(velocity, p), 1e-12)
-    stiffness = GMS_STIFFNESS_FRACTIONS * p["sigma0"]
+    stiffness = np.asarray(p["gms_stiffness"], dtype=float)
     derivatives = np.zeros(GMS_N)
     if abs(velocity) > 1e-14:
         direction = np.sign(velocity)
@@ -2060,7 +2101,7 @@ def gms_branch_census_study(constants: dict[str, float], times: np.ndarray,
 
 
 # Memory-sequence metrics that the branch departure can actually reach.  The
-# Section 11 settled window samples one plateau at rest; these compare repeated
+# Section 10 settled window samples one plateau at rest; these compare repeated
 # returns to the same level, so they depend on every intervening deceleration.
 LOOP_METRIC_LABELS = (
     ("return_error_mismatch_nm", "$E_{ret}$", "nm", 2),
@@ -2075,7 +2116,7 @@ def memory_branch_departure(constants: dict[str, float],
                             ) -> dict[str, object]:
     """Price the stateless branch test against the Section 9.4 loop metrics.
 
-    The Section 11 settled window is sampled at rest on a single plateau; the
+    The Section 10 settled window is sampled at rest on a single plateau; the
     departure lives in deceleration.  Repeated-return and loop-area metrics
     depend on the whole history, so they are the ones that can see it.
     """
@@ -2162,203 +2203,6 @@ def tau_c_sensitivity(constants: dict[str, float],
         "mode_period_ms": provenance["retained_mode_period"] * 1e3,
         "mode_ratio": provenance["tau_C_mode_ratio"],
     }
-
-
-def _rolling_median(values: np.ndarray, width: int = 5) -> np.ndarray:
-    """Small dependency-free median filter used only for IDS edge detection."""
-    radius = width // 2
-    return np.array([
-        np.median(values[max(0, i - radius):min(values.size, i + radius + 1)])
-        for i in range(values.size)
-    ])
-
-
-def _two_level_edges(times: np.ndarray, values: np.ndarray,
-                     start_time: float = 2.0,
-                     minimum_separation: float = 0.5) -> tuple[np.ndarray, float, float]:
-    """Return robust square-wave transition times and its two measured levels."""
-    smooth = _rolling_median(values)
-    active = times >= start_time
-    if np.count_nonzero(active) < 20:
-        raise ValueError("IDS record is too short for two-level edge detection")
-    low = float(np.percentile(smooth[active], 20.0))
-    high = float(np.percentile(smooth[active], 80.0))
-    state = smooth > 0.5 * (low + high)
-    candidates = np.flatnonzero(state[1:] != state[:-1]) + 1
-    edges: list[float] = []
-    for index in candidates:
-        edge = float(times[index])
-        if edge < start_time:
-            continue
-        if not edges or edge - edges[-1] >= minimum_separation:
-            edges.append(edge)
-    return np.asarray(edges), low, high
-
-
-def _square_command(time: float | np.ndarray, edges: np.ndarray,
-                    amplitude: float) -> float | np.ndarray:
-    """Two-level command: zero before edge 0, amplitude after odd edge counts."""
-    edge_count = np.searchsorted(edges, time, side="right")
-    if np.isscalar(time):
-        return float(amplitude if int(edge_count) % 2 else 0.0)
-    return np.where(edge_count % 2 == 1, amplitude, 0.0)
-
-
-def _settled_square_amplitude(times: np.ndarray, values: np.ndarray,
-                              edges: np.ndarray, dwell: float) -> tuple[float, float]:
-    """Return median high-minus-low amplitude and low-level return residual."""
-    amplitudes: list[float] = []
-    low_levels: list[float] = []
-
-    def level(start: float, stop: float) -> float:
-        width = stop - start
-        mask = ((times >= start + 0.55 * width)
-                & (times <= stop - 0.10 * width))
-        if not np.any(mask):
-            mask = (times >= start) & (times < stop)
-        return float(np.median(values[mask]))
-
-    for high_index in range(0, min(edges.size, 20), 2):
-        if high_index + 1 >= edges.size:
-            break
-        high_start = float(edges[high_index])
-        high_stop = float(edges[high_index + 1])
-        low_start = high_stop
-        low_stop = (float(edges[high_index + 2])
-                    if high_index + 2 < edges.size else low_start + dwell)
-        if low_stop <= low_start:
-            continue
-        high_level = level(high_start, high_stop)
-        low_level = level(low_start, low_stop)
-        amplitudes.append(high_level - low_level)
-        low_levels.append(low_level)
-    if not amplitudes:
-        raise ValueError("No complete high/low IDS plateau pair was found")
-    return float(np.median(amplitudes)), float(np.median(low_levels))
-
-
-def load_ids_microstepping_records() -> OrderedDict[int, dict[str, object]]:
-    """Parse the five appended IDS Axis-1 records and infer their square timing."""
-    if not IDS_MICROSTEP_FILE.exists():
-        raise FileNotFoundError(f"Missing IDS microstepping file: {IDS_MICROSTEP_FILE}")
-    records: OrderedDict[int, dict[str, object]] = OrderedDict()
-    current: dict[str, object] | None = None
-    for line in IDS_MICROSTEP_FILE.read_text(encoding="utf-8-sig").splitlines():
-        if line.startswith("Date:"):
-            match = re.search(r"Step [Ss]ize\s+(\d+)", line)
-            if not match:
-                continue
-            size = int(match.group(1))
-            current = {"size": size, "header": line, "times": [], "axis1": []}
-            records[size] = current
-            continue
-        if current is None or not line or not line[0].isdigit():
-            continue
-        parts = line.split("\t")
-        if len(parts) < 2:
-            continue
-        try:
-            current["times"].append(float(parts[0]) * 1e-3)
-            current["axis1"].append(float(parts[1].replace(",", ".")) * 1e-12)
-        except ValueError:
-            continue
-
-    constants = physical_constants()
-    if tuple(records) != IDS_MICROSTEP_SIZES:
-        raise ValueError(
-            f"Expected IDS step sizes {IDS_MICROSTEP_SIZES}, found {tuple(records)}")
-    for size, record in records.items():
-        times = np.asarray(record["times"], dtype=float)
-        raw = np.asarray(record["axis1"], dtype=float)
-        if times.size < 50 or raw.size != times.size:
-            raise ValueError(f"IDS step-size-{size} record is incomplete")
-        initial = times < min(2.0, 0.20 * times[-1])
-        initial_center = float(np.median(raw[initial]))
-        later = times >= 2.0
-        negative_excursion = initial_center - float(np.percentile(raw[later], 10.0))
-        positive_excursion = float(np.percentile(raw[later], 90.0)) - initial_center
-        orientation = -1.0 if negative_excursion > positive_excursion else 1.0
-        position = orientation * (raw - initial_center)
-        edges, low, high = _two_level_edges(times, position)
-        if edges.size < IDS_COMPARISON_INTERVALS:
-            raise ValueError(f"IDS step-size-{size} record has too few reversals")
-        # Re-zero on the complete quiet segment immediately preceding motion.
-        quiet = times < max(0.1, float(edges[0]) - 0.20)
-        baseline = float(np.median(raw[quiet]))
-        position = orientation * (raw - baseline)
-        edges, low, high = _two_level_edges(times, position)
-        # Ensure the first detected transition enters the active/high state.
-        probe = min(float(edges[0]) + 0.20, times[-1])
-        probe_value = float(np.interp(probe, times, _rolling_median(position)))
-        if probe_value < 0.5 * (low + high):
-            orientation *= -1.0
-            position *= -1.0
-            edges, low, high = _two_level_edges(times, position)
-        dwell = float(np.median(np.diff(edges[:min(edges.size, 21)])))
-        measured_amplitude, return_level = _settled_square_amplitude(
-            times, position, edges, dwell)
-        quiet_position = position[quiet]
-        quiet_median = float(np.median(quiet_position))
-        quiet_noise = float(1.4826 * np.median(np.abs(quiet_position - quiet_median)))
-        nominal_amplitude = constants["full_step"] / size
-        record.update({
-            "times": times,
-            "raw_axis1": raw,
-            "position": position,
-            "orientation": orientation,
-            "edges": edges,
-            "first_edge": float(edges[0]),
-            "dwell": dwell,
-            "sample_interval": float(np.median(np.diff(times))),
-            "nominal_amplitude": nominal_amplitude,
-            "measured_amplitude": measured_amplitude,
-            "return_level": return_level,
-            "quiet_noise": quiet_noise,
-        })
-    return records
-
-
-def ids_microstepping_simulations(
-        records: OrderedDict[int, dict[str, object]],
-        constants: dict[str, float]) -> OrderedDict[int, dict[str, object]]:
-    """Run matched C/C2 predictions for the first three measured cycles."""
-    comparison: OrderedDict[int, dict[str, object]] = OrderedDict()
-    for size, record in records.items():
-        measured_edges = np.asarray(record["edges"], dtype=float)
-        relative_edges = measured_edges - float(record["first_edge"])
-        relative_edges = relative_edges[:IDS_COMPARISON_INTERVALS]
-        model_edges = IDS_COMPARISON_PRESTEP + relative_edges
-        dwell = float(record["dwell"])
-        duration = float(model_edges[-1] + dwell + 0.25)
-        amplitude = float(record["nominal_amplitude"])
-        command_function = lambda t, e=model_edges, a=amplitude: _square_command(t, e, a)
-        case_states: dict[str, np.ndarray] = {}
-        case_metrics: dict[str, dict[str, float]] = {}
-        model_times: np.ndarray | None = None
-        for key in ("C", "C2"):
-            model_times, states = rk4_case_with_command(
-                CASES[key], constants, command_function,
-                duration=duration, dt=IDS_COMPARISON_DT)
-            case_states[key] = states
-            plateau, return_level = _settled_square_amplitude(
-                model_times, states[:, 1], model_edges, dwell)
-            case_metrics[key] = {
-                "plateau_amplitude": plateau,
-                "return_level": return_level,
-                "command_deviation": amplitude - plateau,
-            }
-        assert model_times is not None
-        comparison[size] = {
-            "times": model_times,
-            "aligned_times": model_times - IDS_COMPARISON_PRESTEP,
-            "edges": model_edges,
-            "aligned_edges": model_edges - IDS_COMPARISON_PRESTEP,
-            "command": _square_command(model_times, model_edges, amplitude),
-            "states": case_states,
-            "metrics": case_metrics,
-            "duration": duration,
-        }
-    return comparison
 
 
 def _convergence_rms_job(key: str, constants: dict[str, float], dt: float
@@ -2608,98 +2452,112 @@ def plot_case_response_overlay(frequencies: np.ndarray,
 
 
 def plot_presliding_memory(experiment: dict[str, object], output_name: str) -> Path:
-    """Visualize nested-reversal command following and friction return-point memory."""
-    times = experiment["times"]
-    command = experiment["command"]
+    """Show motion and two readable, settled-return friction-loop comparisons."""
+    times = np.asarray(experiment["times"], dtype=float)
+    command = np.asarray(experiment["command"], dtype=float)
     results = experiment["results"]
     forces = experiment["forces"]
     metrics = experiment["metrics"]
-    keys = experiment["keys"]
-    site = experiment["site"]
+    keys = tuple(experiment["keys"])
+    site = str(experiment["site"])
     site_title = "Guideway" if site == "g" else "Nut microslip"
-    blocked_stage = experiment["blocked_stage"]
+    blocked_stage = bool(experiment["blocked_stage"])
     time_ms = times * 1e3
 
     fig, axes = plt.subplots(2, 2, figsize=(12.0, 8.8))
     ax_motion, ax_error = axes[0]
-    ax_memory, ax_metrics = axes[1]
+    ax_loop_a, ax_loop_b = axes[1]
 
     ax_motion.step(time_ms, command * 1e6, where="post", color="#111111",
                    linewidth=2.0, label="Command")
+    peak_error_nm = 0.0
     for key in keys:
         case = CASES[key]
         stage = results[key][:, 1]
-        observed_coordinate = results[key][:, 0] if blocked_stage else stage
-        site_coordinate = stage if site == "g" else results[key][:, 0] - stage
-        ax_motion.plot(time_ms, observed_coordinate * 1e6, color=case["color"],
-                       linestyle=case["ls"], linewidth=1.5, label=case["label"])
-        ax_error.plot(time_ms, (command - observed_coordinate) * 1e9, color=case["color"],
-                      linestyle=case["ls"], linewidth=1.35, label=case["label"])
-        ax_memory.plot(site_coordinate * 1e6, forces[key], color=case["color"],
-                       linestyle=case["ls"], linewidth=0.7, alpha=0.20,
-                       label=case["label"])
-        ax_memory.plot(metrics[key]["endpoint_coordinate_um"],
-                       metrics[key]["endpoint_force_N"], color=case["color"],
-                       linestyle=case["ls"], linewidth=1.5,
-                       marker="o" if key == keys[0] else "s",
-                       markersize=4.0, markerfacecolor="white")
+        observed = results[key][:, 0] if blocked_stage else stage
+        error_nm = (command - observed) * 1e9
+        peak_error_nm = max(peak_error_nm, float(np.max(np.abs(error_nm))))
+        ax_motion.plot(time_ms, observed * 1e6, color=case["color"],
+                       linestyle=case["ls"], linewidth=1.35, label=case["label"])
+        ax_error.plot(time_ms, np.clip(error_nm, -400.0, 400.0),
+                      color=case["color"], linestyle=case["ls"], linewidth=1.15)
 
     ax_motion.set_title("Nested command and drive coordinate; stage blocked"
-                        if blocked_stage else "Nested microstep command and actual stage motion")
-    ax_motion.set_ylabel("Position (um)")
-    ax_motion.legend(loc="upper right", fontsize=8)
-    ax_error.set_title("Modeled command-drive deviation over the same reversal history"
-                       if blocked_stage else "Modeled command-stage deviation over the same reversal history")
-    ax_error.set_ylabel(r"Modeled deviation $x_{cmd}-x_d$ (nm)" if blocked_stage
-                        else r"Modeled deviation $x_{cmd}-x_s$ (nm)")
+                        if blocked_stage else "Nested command and stage motion")
+    ax_motion.set_ylabel("Position (µm)")
+    ax_motion.legend(loc="upper right", fontsize=7.7, ncol=2)
+    ax_error.set_title("Settled structure visible after clipping command-edge transients")
+    ax_error.set_ylabel(r"Modeled deviation $x_{cmd}-x_o$ (nm)")
+    ax_error.set_ylim(-400.0, 400.0)
     ax_error.axhline(0.0, color="#777777", linewidth=0.8)
-    ax_error.legend(loc="upper right", fontsize=8)
-    ax_memory.set_title(f"{site_title} friction memory loops")
-    ax_memory.set_xlabel("Stage position (um)" if site == "g" else r"Nut-port deflection $x_d-x_s$ (um)")
-    ax_memory.set_ylabel(f"{site_title} friction force (N)")
-    ax_memory.axhline(0.0, color="#888888", linewidth=0.7)
-    ax_memory.axvline(0.0, color="#888888", linewidth=0.7)
-    ax_memory.legend(loc="best", fontsize=8)
+    ax_error.text(
+        0.02, 0.04, f"edge transients clipped; peak {peak_error_nm:.0f} nm",
+        transform=ax_error.transAxes, fontsize=8.0, color="#555555",
+        bbox={"boxstyle": "round,pad=0.22", "facecolor": "white",
+              "edgecolor": "#c9cfd4", "alpha": 0.90})
 
-    categories = ("Whole-sequence\nRMS", "Peak absolute\ndeviation",
-                  "Return-point\nmismatch", "Final-origin\nabsolute deviation")
-    x_positions = np.arange(len(categories), dtype=float)
-    width = 0.34
-    lugre_values = np.array([
-        metrics[keys[0]]["whole_rms_nm"],
-        metrics[keys[0]]["max_abs_deviation_nm"],
-        metrics[keys[0]]["return_error_mismatch_nm"],
-        abs(metrics[keys[0]]["final_mean_nm"]),
-    ])
-    gms_values = np.array([
-        metrics[keys[1]]["whole_rms_nm"],
-        metrics[keys[1]]["max_abs_deviation_nm"],
-        metrics[keys[1]]["return_error_mismatch_nm"],
-        abs(metrics[keys[1]]["final_mean_nm"]),
-    ])
-    bars_a = ax_metrics.bar(x_positions - width / 2.0, lugre_values, width,
-                            color=CASES[keys[0]]["color"], label=f"LuGre {keys[0]}")
-    bars_a2 = ax_metrics.bar(x_positions + width / 2.0, gms_values, width,
-                             color=CASES[keys[1]]["color"], label=f"GMS {keys[1]}")
-    ax_metrics.set_yscale("log")
-    ax_metrics.set_xticks(x_positions, categories)
-    ax_metrics.set_ylabel("Command-output deviation metric (nm, log scale)")
-    ax_metrics.set_title("Open-loop response: global and memory-sensitive metrics")
-    ax_metrics.legend(loc="upper right", fontsize=8)
-    ax_metrics.text(
-        0.02, 0.03,
-        f"Primary force metric: return mismatch "
-        f"{metrics[keys[0]]['return_force_mismatch_N']:.4f} N LuGre, "
-        f"{metrics[keys[1]]['return_force_mismatch_N']:.4f} N GMS",
-        transform=ax_metrics.transAxes, fontsize=7.6, color="#555555",
-        bbox={"boxstyle": "round,pad=0.24", "facecolor": "white", "edgecolor": "#c9cfd4"},
-    )
-    for bars in (bars_a, bars_a2):
-        for bar in bars:
-            value = bar.get_height()
-            ax_metrics.text(bar.get_x() + bar.get_width() / 2.0, value * 1.08,
-                            f"{value:.2f}", ha="center", va="bottom", fontsize=7.4,
-                            rotation=90)
+    def coordinates(key: str) -> np.ndarray:
+        stage = results[key][:, 1]
+        return stage if site == "g" else results[key][:, 0] - stage
+
+    def add_direction_arrows(axis: plt.Axes, x: np.ndarray, y: np.ndarray,
+                             color: str) -> None:
+        for index in range(1, len(x), 3):
+            start = max(0, index - 1)
+            axis.annotate(
+                "", xy=(x[index], y[index]), xytext=(x[start], y[start]),
+                arrowprops={"arrowstyle": "-|>", "color": color,
+                            "linewidth": 0.8, "mutation_scale": 8},
+                zorder=5)
+
+    def loop_panel(axis: plt.Axes, panel_keys: tuple[str, ...],
+                   title: str, point_slice: slice | None = None) -> None:
+        dynamic_key = panel_keys[-1]
+        axis.plot(
+            coordinates(dynamic_key) * 1e6, forces[dynamic_key],
+            color="#9ba3aa", linewidth=0.75, alpha=0.28,
+            label=f"{dynamic_key} full dynamic trace")
+        for index, key in enumerate(panel_keys):
+            x = np.asarray(metrics[key]["endpoint_coordinate_um"], dtype=float)
+            y = np.asarray(metrics[key]["endpoint_force_N"], dtype=float)
+            if point_slice is not None:
+                x, y = x[point_slice], y[point_slice]
+            axis.plot(
+                x, y, color=CASES[key]["color"], linestyle=CASES[key]["ls"],
+                linewidth=1.8, marker="o" if index == 0 else "s",
+                markersize=4.5, markerfacecolor="white", label=key)
+            add_direction_arrows(axis, x, y, CASES[key]["color"])
+        all_coordinates = np.concatenate([
+            np.asarray(metrics[key]["endpoint_coordinate_um"], dtype=float)
+            if point_slice is None else
+            np.asarray(metrics[key]["endpoint_coordinate_um"], dtype=float)[point_slice]
+            for key in panel_keys])
+        all_forces = np.concatenate([
+            np.asarray(metrics[key]["endpoint_force_N"], dtype=float)
+            if point_slice is None else
+            np.asarray(metrics[key]["endpoint_force_N"], dtype=float)[point_slice]
+            for key in panel_keys])
+        x_extent = max(float(np.max(np.abs(all_coordinates))) * 1.10, 0.35)
+        y_extent = max(float(np.max(np.abs(all_forces))) * 1.12, 0.25)
+        if site == "g":
+            x_extent, y_extent = min(max(x_extent, 4.0), 4.2), min(max(y_extent, 2.5), 2.7)
+        axis.set_xlim(-x_extent, x_extent)
+        axis.set_ylim(-y_extent, y_extent)
+        axis.set_title(title)
+        axis.set_xlabel("Stage position (µm)" if site == "g"
+                        else r"Nut-port deflection $x_d-x_s$ (µm)")
+        axis.set_ylabel(f"{site_title} friction force (N)")
+        axis.axhline(0.0, color="#888888", linewidth=0.7)
+        axis.axvline(0.0, color="#888888", linewidth=0.7)
+
+    if site == "g":
+        loop_panel(ax_loop_a, ("A", "A2"), "Law comparison: A versus A2")
+        loop_panel(ax_loop_b, ("A2", "G2"), "Drive-port ablation: A2 versus G2")
+    else:
+        loop_panel(ax_loop_a, ("B", "B2"), "Positive nested-return loop",
+                   slice(0, 7))
+        loop_panel(ax_loop_b, ("B", "B2"), "Negative nested-return loop",
+                   slice(7, 13))
 
     for axis in (ax_motion, ax_error):
         axis.set_xlabel("Time (ms)")
@@ -2707,19 +2565,26 @@ def plot_presliding_memory(experiment: dict[str, object], output_name: str) -> P
         axis.grid(True, which="major", color="#d1d1d1", linewidth=0.7)
         axis.grid(True, which="minor", color="#eeeeee", linewidth=0.45)
 
-    max_force = max(metrics[key]["max_force_N"] for key in keys)
-    macro_fraction = 100.0 * max_force / FRICTION[site]["F_s"]
-    fig.suptitle(f"{site_title} partial-slip experiment: LuGre versus GMS",
+    lugre_key, gms_key = keys[:2]
+    force_ratio = (float(metrics[gms_key]["return_force_mismatch_N"]) /
+                   max(float(metrics[lugre_key]["return_force_mismatch_N"]), 1e-30))
+    origin_ratio = (abs(float(metrics[gms_key]["final_mean_nm"])) /
+                    max(abs(float(metrics[lugre_key]["final_mean_nm"])), 1e-30))
+    fig.suptitle(f"{site_title} partial-slip memory experiment",
                  fontsize=15, fontweight="bold")
-    fig.text(
-        0.5, 0.012,
-        f"1 STEP/DIR quantum = {experiment['microstep'] * 1e9:.2f} nm = 1/{MODEL['microstep_divisor']} full step; "
-        f"peak friction = {max_force:.3f} N ({macro_fraction:.1f}% of macro breakaway). "
-        f"Each plateau is {experiment['plateau_dwell'] * 1e3:.0f} ms; markers are "
-        f"{min(20.0, 0.2 * experiment['plateau_dwell'] * 1e3):.0f} ms settled-window means.",
-        ha="center", fontsize=8.4, color="#555555",
-    )
-    fig.tight_layout(rect=(0.02, 0.045, 0.99, 0.95), h_pad=2.0, w_pad=1.5)
+    if site == "g":
+        caption = (
+            f"GMS fails to return to the same friction force by {force_ratio:.2f}× more "
+            f"than LuGre and leaves {origin_ratio:.0f}× more residual error at the origin. "
+            "That non-closure is the nonlocal memory. Both laws produce nearly identical "
+            "stage motion, which is why force rather than displacement is the discriminator.")
+    else:
+        caption = (
+            f"The blocked nut fixture exposes the same non-closure signature: GMS has "
+            f"{force_ratio:.2f}× the LuGre return-force mismatch. Force reveals memory that "
+            "the nearly co-moving free-stage coordinates would hide.")
+    fig.text(0.5, 0.012, caption, ha="center", fontsize=8.5, color="#555555")
+    fig.tight_layout(rect=(0.02, 0.055, 0.99, 0.95), h_pad=2.0, w_pad=1.5)
     output = ASSET_DIR / output_name
     save_svg(fig, output)
     plt.close(fig)
@@ -2766,7 +2631,6 @@ def plot_kinematic_diagram() -> tuple[Path, Path, Path]:
     ground_color = "#7b858c"
     annotation_color = "#59636d"
     detent_color = "#c08a00"
-    detent_fill = "#fff2c7"
     TITLE_FS = 15.5
     BOX_FS = 10.5
     ANNO_FS = 8.2
@@ -2909,17 +2773,6 @@ def plot_kinematic_diagram() -> tuple[Path, Path, Path]:
         ax.text(x, y1 + 0.29, label, ha="center", va="bottom",
                 fontsize=ANNO_FS, color="#5b437c", fontweight="bold")
 
-    def sensor(ax: plt.Axes, x: float, y: float) -> None:
-        circle = Circle((x, y), 0.18, facecolor="white",
-                        edgecolor="#277da1", linewidth=1.3, zorder=6)
-        ax.add_patch(circle)
-        ax.plot([x - 0.09, x + 0.08], [y - 0.08, y + 0.09],
-                color="#277da1", linewidth=1.2, zorder=7)
-        ax.add_patch(FancyArrowPatch(
-            (x - 0.09, y - 0.08), (x + 0.08, y + 0.09),
-            arrowstyle="-|>", mutation_scale=7, color="#277da1",
-            linewidth=1.0, zorder=7))
-
     # ------------------------------------------------------------------
     # Figure 1: full ten-coordinate topology.
     # ------------------------------------------------------------------
@@ -2983,12 +2836,6 @@ def plot_kinematic_diagram() -> tuple[Path, Path, Path]:
         (columns["motor"] - 0.56, y_torsion), color=detent_color)
     ax1.text(1.48, y_torsion + 0.24, r"$K_m$", ha="center",
              fontsize=ANNO_FS, color="#8a6200")
-    ax1.plot(1.47, y_torsion - 0.23, marker="D", markersize=6.0,
-             markerfacecolor=detent_fill, markeredgecolor=detent_color,
-             zorder=5)
-    ax1.text(1.47, y_torsion - 0.48,
-             r"$K_{det}$: periodic conservative tangent",
-             ha="center", fontsize=ANNO_FS, color="#8a6200")
 
     rotational_nodes = (
         ("motor", r"$\theta_m$", "q1"),
@@ -3151,14 +2998,6 @@ def plot_kinematic_diagram() -> tuple[Path, Path, Path]:
     grounded_friction(
         ax1, terminal_x, y_axial,
         y_axial_ground, 3.38, r"$F_{f,g}$")
-    sensor_x, sensor_y = columns["stage"] + 0.82, y_axial + 0.62
-    ax1.plot(
-        [columns["stage"] + 0.56, sensor_x - 0.18],
-        [y_axial + 0.20, sensor_y], color="#277da1",
-        linewidth=1.2, solid_capstyle="round", zorder=4)
-    sensor(ax1, sensor_x, sensor_y)
-
-
     fig1.subplots_adjust(left=0.02, right=0.985, top=0.985, bottom=0.02)
     topology_output = ASSET_DIR / "kinematic_diagram.svg"
     save_svg(fig1, topology_output)
@@ -3234,19 +3073,6 @@ def plot_kinematic_diagram() -> tuple[Path, Path, Path]:
     grounded_friction(
         ax2, x_stage, y_mass - mass_height / 2.0,
         y_ground, 2.15, r"$F_{f,g}$")
-    sensor_x, sensor_y = x_stage + 1.28, y_mass + 0.72
-    ax2.plot(
-        [x_stage + mass_width / 2.0, sensor_x - 0.18],
-        [y_mass + 0.30, sensor_y], color="#277da1",
-        linewidth=1.2, solid_capstyle="round", zorder=4)
-    sensor(ax2, sensor_x, sensor_y)
-
-    # The diamond is defined once in the shared legend.
-    detent_x, detent_y = x_drive + 0.55, y_mass + mass_height / 2.0
-    ax2.plot(detent_x, detent_y, marker="D", markersize=6.5,
-             markerfacecolor=detent_fill, markeredgecolor=detent_color,
-             zorder=7)
-
     fig2.subplots_adjust(left=0.025, right=0.985, top=0.985, bottom=0.025)
     reduced_output = ASSET_DIR / "kinematic_diagram_reduced.svg"
     save_svg(fig2, reduced_output)
@@ -3291,14 +3117,6 @@ def plot_kinematic_diagram() -> tuple[Path, Path, Path]:
              fontsize=ANNO_FS, color="#8d2936")
     moving_wall(ax3, 5.45, 1.93, r"$x_{cmd}$", height=0.62)
     ground_baseline(ax3, 6.10, 7.25, 1.93, "fixed datum")
-    sensor(ax3, 7.78, 1.93)
-    ax3.text(7.78, 1.66, "sensor", ha="center",
-             fontsize=ANNO_FS, color="#277da1")
-    ax3.plot(8.42, 1.93, marker="D", markersize=6.5,
-             markerfacecolor=detent_fill, markeredgecolor=detent_color)
-    ax3.text(8.62, 1.93, r"periodic $F_{det}$",
-             ha="left", va="center", fontsize=ANNO_FS, color="#8a6200")
-
     ax3.text(0.35, 0.96, "Drive-side reduction",
              fontsize=BOX_FS, fontweight="bold", color="#425b6b")
     ax3.text(
@@ -3358,12 +3176,6 @@ def plot_kinematic_diagram() -> tuple[Path, Path, Path]:
                 facecolor=friction_color if enabled else "white",
                 edgecolor=friction_color if enabled else "#aeb6bc",
                 linewidth=0.85))
-    ax3.plot(9.62, 0.56, marker="D", markersize=6.0,
-             markerfacecolor=detent_fill, markeredgecolor=detent_color)
-    ax3.text(9.84, 0.56,
-             r"$F_{det}$ is conservative and excluded from the matrix",
-             ha="left", va="center", fontsize=ANNO_FS, color="#8a6200")
-
     fig3.subplots_adjust(left=0.02, right=0.985, top=0.98, bottom=0.04)
     legend_output = ASSET_DIR / "kinematic_diagram_legend.svg"
     save_svg(fig3, legend_output)
@@ -4193,170 +4005,6 @@ def plot_rotor_stage_transfer_functions(frequencies: np.ndarray) -> Path:
     return output
 
 
-def plot_ids_microstepping_overview(
-        records: OrderedDict[int, dict[str, object]]) -> Path:
-    """Plot every complete IDS record with its reconstructed nominal command."""
-    fig, axes = plt.subplots(len(records), 1, figsize=(10.2, 11.2), sharex=True)
-    measured_color = "#355c7d"
-    for axis, (size, record) in zip(axes, records.items()):
-        times = np.asarray(record["times"], dtype=float)
-        aligned = times - float(record["first_edge"])
-        position_um = np.asarray(record["position"], dtype=float) * 1e6
-        edges = np.asarray(record["edges"], dtype=float)
-        command_um = _square_command(
-            times, edges, float(record["nominal_amplitude"])) * 1e6
-        axis.step(aligned, command_um, where="post", color="#202020",
-                  linewidth=1.3, label="Nominal command")
-        axis.plot(aligned, position_um, color=measured_color, linewidth=1.0,
-                  marker="o", markersize=1.8, markevery=2, alpha=0.88,
-                  label="IDS Axis 1")
-        axis.axhline(0.0, color="#888888", linewidth=0.6)
-        axis.grid(True, alpha=0.28)
-        nominal_um = float(record["nominal_amplitude"]) * 1e6
-        measured_um = float(record["measured_amplitude"]) * 1e6
-        axis.set_ylabel("µm")
-        axis.set_title(
-            f"Step-size label {size}: nominal {nominal_um:.4g} µm; "
-            f"measured plateau {measured_um:.4g} µm; "
-            f"dwell {float(record['dwell']):.3f} s",
-            loc="left", fontsize=10.0)
-    axes[0].legend(loc="upper right", ncol=2, fontsize=8.5)
-    axes[-1].set_xlabel("Time from first detected move (s)")
-    fig.suptitle("IDS microstepping records — complete back-and-forth tests",
-                 fontsize=14.5, fontweight="bold")
-    fig.text(
-        0.5, 0.014,
-        "Axis-1 polarity is normalized so the first move is positive; only the pre-motion baseline is removed. "
-        "The black trajectory uses the nominal 5 µm full-step pitch divided by the file label.",
-        ha="center", fontsize=8.5, color="#555555")
-    fig.tight_layout(rect=(0.02, 0.045, 0.99, 0.95))
-    output = MICROSTEP_DATA_DIR / "ids_microstepping_measured_overview.svg"
-    save_svg(fig, output)
-    plt.close(fig)
-    return output
-
-
-def plot_ids_microstepping_model_overlay(
-        records: OrderedDict[int, dict[str, object]],
-        comparison: OrderedDict[int, dict[str, object]]) -> Path:
-    """Overlay measured IDS motion with matched full-port LuGre/GMS predictions."""
-    fig, axes = plt.subplots(len(records), 1, figsize=(10.4, 12.0), sharex=True)
-    measured_color = "#355c7d"
-    maximum_time = 0.0
-    for axis, (size, record) in zip(axes, records.items()):
-        simulation = comparison[size]
-        model_time = np.asarray(simulation["aligned_times"], dtype=float)
-        maximum_time = max(maximum_time, float(model_time[-1]))
-        command_um = np.asarray(simulation["command"], dtype=float) * 1e6
-        axis.step(model_time, command_um, where="post", color="#202020",
-                  linewidth=1.35, label="Nominal command")
-        measurement_time = (
-            np.asarray(record["times"], dtype=float) - float(record["first_edge"]))
-        measurement_um = np.asarray(record["position"], dtype=float) * 1e6
-        visible = ((measurement_time >= -IDS_COMPARISON_PRESTEP)
-                   & (measurement_time <= model_time[-1]))
-        axis.plot(
-            measurement_time[visible], measurement_um[visible],
-            color=measured_color, linewidth=1.0, marker="o", markersize=3.0,
-            label="IDS measurement", zorder=5)
-        for key in ("C", "C2"):
-            stage_um = np.asarray(simulation["states"][key])[:, 1] * 1e6
-            axis.plot(model_time, stage_um, color=CASES[key]["color"],
-                      linestyle=CASES[key]["ls"], linewidth=1.15,
-                      label=f"{key} {CASES[key]['friction'].upper()}")
-        nominal_um = float(record["nominal_amplitude"]) * 1e6
-        measured_um = float(record["measured_amplitude"]) * 1e6
-        c_um = float(simulation["metrics"]["C"]["plateau_amplitude"]) * 1e6
-        c2_um = float(simulation["metrics"]["C2"]["plateau_amplitude"]) * 1e6
-        axis.text(
-            0.992, 0.94,
-            f"nominal {nominal_um:.4g} µm | IDS {measured_um:.4g} µm | "
-            f"C {c_um:.4g} µm | C2 {c2_um:.4g} µm",
-            transform=axis.transAxes, ha="right", va="top", fontsize=8.0,
-            bbox={"boxstyle": "round,pad=0.22", "facecolor": "white",
-                  "edgecolor": "#cccccc", "alpha": 0.88})
-        axis.set_title(f"Step-size label {size}", loc="left", fontsize=10.3)
-        axis.set_ylabel("µm")
-        axis.grid(True, alpha=0.28)
-        axis.axhline(0.0, color="#888888", linewidth=0.6)
-    axes[0].legend(loc="upper left", ncol=4, fontsize=8.0)
-    axes[-1].set_xlabel("Time from first command edge (s)")
-    axes[-1].set_xlim(-IDS_COMPARISON_PRESTEP, maximum_time)
-    fig.suptitle(
-        "IDS measurement versus unfitted Revision 3 full-port predictions",
-        fontsize=14.5, fontweight="bold")
-    fig.text(
-        0.5, 0.014,
-        "C = LuGre at all identifiable ports; C2 = GMS at all identifiable ports. "
-        "The simulations use nominal amplitudes and the detected IDS reversal timing. "
-        "IDS sampling (~88 ms) cannot resolve the modeled 168/696 Hz edge transients.",
-        ha="center", fontsize=8.3, color="#555555")
-    fig.tight_layout(rect=(0.02, 0.05, 0.99, 0.95))
-    output = MICROSTEP_DATA_DIR / "ids_microstepping_model_overlay.svg"
-    save_svg(fig, output)
-    plt.close(fig)
-    return output
-
-
-def generated_ids_microstepping_summary(
-        records: OrderedDict[int, dict[str, object]],
-        comparison: OrderedDict[int, dict[str, object]]) -> str:
-    """Build the reproducible IDS plateau-comparison table and audit notes."""
-    lines = [
-        "<!-- BEGIN GENERATED IDS MICROSTEPPING SUMMARY -->",
-        "| Step-size label | Nominal command | IDS plateau | IDS minus nominal | IDS / nominal | Case C plateau | Case C2 plateau | Median dwell |",
-        "|---:|---:|---:|---:|---:|---:|---:|---:|",
-    ]
-    for size, record in records.items():
-        nominal = float(record["nominal_amplitude"])
-        measured = float(record["measured_amplitude"])
-        c_value = float(comparison[size]["metrics"]["C"]["plateau_amplitude"])
-        c2_value = float(comparison[size]["metrics"]["C2"]["plateau_amplitude"])
-        lines.append(
-            f"| {size} | {nominal * 1e6:.4f} µm | {measured * 1e6:.4f} µm | "
-            f"{(measured - nominal) * 1e9:+.1f} nm | "
-            f"{100.0 * measured / nominal:.1f}% | "
-            f"{c_value * 1e6:.4f} µm | {c2_value * 1e6:.4f} µm | "
-            f"{float(record['dwell']):.3f} s |"
-        )
-    underpredicted = [
-        str(size) for size, record in records.items()
-        if max(
-            float(comparison[size]["metrics"]["C"]["plateau_amplitude"]),
-            float(comparison[size]["metrics"]["C2"]["plateau_amplitude"]),
-        ) < float(record["measured_amplitude"])
-    ]
-    lines.extend([
-        "",
-        "The file label is interpreted as the microstep divisor, so the nominal command is the 5 µm full-step pitch divided by 1, 2, 4, 8, or 16. "
-        "Axis-1 polarity is normalized so the first move is positive, and only the pre-motion offset is removed; the measured amplitude is not scaled or fitted to the model. "
-        "The step-size-8 record reaches nearly twice its nominal 0.625 µm command, and step-size 16 is also high. "
-        "The supplied files contain IDS and encoder-counter positions but no independent commanded-position channel. The controller counters corroborate the same two-level timing and relative motion for labels 1, 2, 8, and 16, but they cannot by themselves distinguish a microstep-configuration/label error from an unexpected plant response. These discrepancies are therefore retained rather than normalized away.",
-        "",
-        "Cases C and C2 are forward predictions using the same provisional full-port LuGre and GMS parameters as the rest of Revision 3. They are not fits to these IDS data. "
-        f"Both current predictions fall below the measured settled motion for label(s) {', '.join(underpredicted)}. "
-        "The increasing small-command shortfall points to provisional presliding friction/detent parameters or an incorrect nominal-command interpretation; this dataset alone cannot select between those explanations or establish that LuGre or GMS is the better law. "
-        "The IDS median sample interval is approximately 88 ms (about 11.4 Hz), so these records compare plateau amplitude, drift, and reversal repeatability; they cannot validate the modeled 168 Hz or 696 Hz edge transients. "
-        "The comparison-only solver uses 100 µs; halving it to 50 µs changed a representative settled C2 trajectory by 0.18 nm RMS.",
-        "<!-- END GENERATED IDS MICROSTEPPING SUMMARY -->",
-    ])
-    return "\n".join(lines)
-
-
-def update_generated_ids_microstepping_summary(summary: str) -> None:
-    source = DERIVATION_MD.read_text(encoding="utf-8")
-    pattern = re.compile(
-        r"<!-- BEGIN GENERATED IDS MICROSTEPPING SUMMARY -->.*?"
-        r"<!-- END GENERATED IDS MICROSTEPPING SUMMARY -->",
-        flags=re.DOTALL,
-    )
-    if not pattern.search(source):
-        raise RuntimeError(
-            "Generated IDS microstepping markers are missing from the derivation document")
-    DERIVATION_MD.write_text(
-        pattern.sub(lambda _match: summary, source), encoding="utf-8")
-
-
 def generated_reduction_convergence(verification: dict[str, object]) -> str:
     """Build the Chapter 7 solver audit and physical interpretation."""
     discarded_frequency, discarded_zeta = verification["first_discarded_damped_mode"]
@@ -4491,7 +4139,7 @@ def generated_reduction_convergence(verification: dict[str, object]) -> str:
         "### 7.3 Dwell consequence",
         "",
         f"The ten-DOF upper mode now implies a 2% settling time of {full_settling * 1e3:.1f} ms, against {reduced_settling * 1e3:.1f} ms for the reduced plant. "
-        f"[Section 11](#11-generated-numerical-summary) runs its nonlinear campaign on a {dwell * 1e3:.0f} ms plateau dwell, set by the maximum of the 100 ms floor, the {constants['detent_settling_time_2pct'] * 1e3:.1f} ms detent-softened drive estimate, and the {constants['axial_settling_time_2pct'] * 1e3:.1f} ms reduced axial-mode estimate. "
+        f"[Section 10](#10-generated-numerical-summary-and-friction-case-responses) runs its nonlinear campaign on a {dwell * 1e3:.0f} ms plateau dwell, set by the maximum of the 100 ms floor, the {constants['detent_settling_time_2pct'] * 1e3:.1f} ms detent-softened drive estimate, and the {constants['axial_settling_time_2pct'] * 1e3:.1f} ms reduced axial-mode estimate. "
         + (f"That floor is adequate: it exceeds the axial-mode settling time by a factor of {dwell / full_settling:.1f}, so the settled-window statistics are collected after the 691 Hz mode has decayed. "
            "The earlier finding that the dwell was short by a factor of six was a consequence of the understated interface loss factors and does not survive their correction."
            if full_settling < dwell else
@@ -4656,7 +4304,7 @@ SITE_TITLES = {"g": "Guideway $g$", "n": "Nut microslip $n$", "d": "Drive side $
 
 
 def generated_tau_c_sensitivity(study: dict[str, object]) -> str:
-    """Build the Section 13.3 Stribeck-relaxation-time sensitivity block."""
+    """Build the Section 12.3 Stribeck-relaxation-time sensitivity block."""
     rows = list(study["rows"])
     force_spread = float(study["force_spread_N"])
     loop_spread = float(study["loop_spread_J"])
@@ -4715,7 +4363,7 @@ def update_generated_tau_c_sensitivity(summary: str) -> None:
 def generated_branch_census(study: dict[str, object],
                             departure: dict[str, object],
                             memory_experiments: dict[str, dict[str, object]]) -> str:
-    """Build the Section 13.2 branch-selection census and its verdict."""
+    """Build the Section 12.2 branch-selection census and its verdict."""
     rows = list(study["rows"])
     threshold_total = int(study["threshold_total"])
     reversal_total = int(study["reversal_total"])
@@ -4899,7 +4547,7 @@ def branch_census_sentence(study: dict[str, object]) -> str:
     verdict = ("departure inert for these trajectories"
                if int(study["threshold_total"]) == 0
                else f"{int(study['threshold_total']):,} threshold flips total; "
-                    "see Section 13.2 for the priced counterfactual")
+                    "see Section 12.2 for the priced counterfactual")
     return "GMS branch census - " + "; ".join(parts) + ". " + verdict + "."
 
 
@@ -4925,7 +4573,7 @@ def rendered_branch_census_sentence() -> str:
                               for _case, _site, _reversal, threshold, _evaluations in rows)
         verdict = ("departure inert for these trajectories"
                    if threshold_total == 0 else
-                   f"{threshold_total:,} threshold flips total; see Section 13.2 for the priced counterfactual")
+                   f"{threshold_total:,} threshold flips total; see Section 12.2 for the priced counterfactual")
         return "GMS branch census - " + "; ".join(parts) + ". " + verdict + "."
     return "GMS branch census - not rebuilt in this render; rerun the Python builder to refresh the counts."
 
@@ -4947,110 +4595,133 @@ def friction_port_sentence() -> str:
 
 
 def generated_presliding_summary(experiments: dict[str, dict[str, object]]) -> str:
-    lines = [
-        "<!-- BEGIN GENERATED PRESLIDING SUMMARY -->",
-    ]
-    rows = (
-        ("Whole-sequence RMS command-output deviation", "whole_rms_nm", "nm", False),
-        ("Peak absolute command-output deviation", "max_abs_deviation_nm", "nm", False),
-        ("Mean repeated-return deviation mismatch", "return_error_mismatch_nm", "nm", False),
-        ("Mean repeated-return friction-force mismatch", "return_force_mismatch_N", "N", False),
-        ("Absolute mean error after final return to zero", "final_mean_nm", "nm", True),
-        ("Dissipated energy of the closed loop $A_{loop}$", "loop_area_J", "µJ", False),
+    """Build the concise Section 9 result tables and interpretations."""
+    lines = ["<!-- BEGIN GENERATED PRESLIDING SUMMARY -->"]
+    row_definitions = (
+        ("**Return-force mismatch $F_{ret}$**", "return_force_mismatch_N", "N", False),
+        ("**Final-origin magnitude**", "final_mean_nm", "nm", True),
+        ("Closed-loop energy $A_{loop}$", "loop_area_J", "µJ", False),
+        ("Whole-sequence RMS deviation †", "whole_rms_nm", "nm", False),
+        ("Peak absolute deviation †", "max_abs_deviation_nm", "nm", False),
     )
+
     for experiment_name, experiment in experiments.items():
         metrics = experiment["metrics"]
         keys = tuple(experiment["keys"])
         lugre_key, gms_key = keys[:2]
-        site = experiment["site"]
-        site_title = "Guideway" if site == "g" else "Nut microslip"
-        boundary_note = (
-            "Normal free-stage plant; the observed output is the stage coordinate."
-            if not experiment["blocked_stage"] else
-            "Dedicated blocked-stage identification boundary, $x_s=0$; the observed output is the drive coordinate."
-        )
+        guideway = experiment_name == "guideway"
+        section_title = "9.1 Guideway result" if guideway else "9.2 Nut microslip result"
+        image = ("rendered_assets/presliding_memory_comparison.svg" if guideway
+                 else "rendered_assets/nut_memory_comparison.svg")
+        alt = ("Guideway nested-return memory comparison"
+               if guideway else "Blocked nut nested-return memory comparison")
         lines.extend([
-            f"### {site_title}: {lugre_key}/{gms_key}",
+            f"### {section_title}",
             "",
-            boundary_note,
+            f"![{alt}]({image})",
             "",
             (f"| Executed metric | LuGre {lugre_key} | GMS {gms_key} | "
-             f"LuGre {keys[2]} | GMS {keys[3]} | {gms_key} minus {keys[3]} (% vs {keys[3]}) | GMS minus LuGre |"
-             if len(keys) == 4 else
-             f"| Executed metric | LuGre {lugre_key} | GMS {gms_key} | GMS minus LuGre |"),
+             f"GMS / LuGre | LuGre {keys[2]} | GMS {keys[3]} | "
+             f"{gms_key} minus {keys[3]} (% vs {keys[3]}) |"
+             if guideway else
+             f"| Executed metric | LuGre {lugre_key} | GMS {gms_key} | "
+             "GMS / LuGre | GMS minus LuGre |"),
             ("|---|---:|---:|---:|---:|---:|---:|"
-             if len(keys) == 4 else "|---|---:|---:|---:|"),
+             if guideway else "|---|---:|---:|---:|---:|"),
         ])
-        for label, key, unit, use_absolute in rows:
+        for label, metric_key, unit, use_absolute in row_definitions:
             scale = 1.0e6 if unit == "µJ" else 1.0
-            lugre = scale * float(metrics[lugre_key][key])
-            gms = scale * float(metrics[gms_key][key])
+            lugre = scale * float(metrics[lugre_key][metric_key])
+            gms = scale * float(metrics[gms_key][metric_key])
             if use_absolute:
                 lugre, gms = abs(lugre), abs(gms)
             precision = 4 if unit == "N" else 2
-            if len(keys) == 4:
-                ablation_lugre = scale * float(metrics[keys[2]][key])
-                ablation_gms = scale * float(metrics[keys[3]][key])
+            ratio = gms / max(abs(lugre), 1.0e-30)
+            if guideway:
+                ablation_lugre = scale * float(metrics[keys[2]][metric_key])
+                ablation_gms = scale * float(metrics[keys[3]][metric_key])
                 if use_absolute:
                     ablation_lugre, ablation_gms = abs(ablation_lugre), abs(ablation_gms)
-                ablation_delta = gms - ablation_gms
-                ablation_delta_pct = 100.0 * ablation_delta / max(abs(ablation_gms), 1.0e-30)
+                delta = gms - ablation_gms
+                delta_pct = 100.0 * delta / max(abs(ablation_gms), 1.0e-30)
                 lines.append(
-                    f"| {label} | {lugre:.{precision}f} {unit} | {gms:.{precision}f} {unit} | "
-                    f"{ablation_lugre:.{precision}f} {unit} | {ablation_gms:.{precision}f} {unit} | "
-                    f"{ablation_delta:+.{precision}f} {unit} ({ablation_delta_pct:+.1f}%) | "
-                    f"{gms - lugre:+.{precision}f} {unit} |"
-                )
+                    f"| {label} | {lugre:.{precision}f} {unit} | "
+                    f"{gms:.{precision}f} {unit} | {ratio:.2f}× | "
+                    f"{ablation_lugre:.{precision}f} {unit} | "
+                    f"{ablation_gms:.{precision}f} {unit} | "
+                    f"{delta:+.{precision}f} {unit} ({delta_pct:+.1f}%) |")
             else:
                 lines.append(
-                    f"| {label} | {lugre:.{precision}f} {unit} | {gms:.{precision}f} {unit} | "
-                    f"{gms - lugre:+.{precision}f} {unit} |"
-                )
-        if site == "g" and len(keys) == 4:
+                    f"| {label} | {lugre:.{precision}f} {unit} | "
+                    f"{gms:.{precision}f} {unit} | {ratio:.2f}× | "
+                    f"{gms - lugre:+.{precision}f} {unit} |")
+        lines.extend([
+            "",
+            "† Edge-dominated response descriptor; included for context, not as a memory discriminator.",
+            "",
+        ])
+
+        whole_change = 100.0 * abs(
+            float(metrics[gms_key]["whole_rms_nm"])
+            - float(metrics[lugre_key]["whole_rms_nm"])
+        ) / float(metrics[lugre_key]["whole_rms_nm"])
+        peak_change = 100.0 * abs(
+            float(metrics[gms_key]["max_abs_deviation_nm"])
+            - float(metrics[lugre_key]["max_abs_deviation_nm"])
+        ) / float(metrics[lugre_key]["max_abs_deviation_nm"])
+        force_ratio = (float(metrics[gms_key]["return_force_mismatch_N"]) /
+                       float(metrics[lugre_key]["return_force_mismatch_N"]))
+        energy_ratio = (100.0 * float(metrics[gms_key]["loop_area_J"]) /
+                        float(metrics[lugre_key]["loop_area_J"]))
+        if guideway:
+            origin_ratio = (abs(float(metrics[gms_key]["final_mean_nm"])) /
+                            max(abs(float(metrics[lugre_key]["final_mean_nm"])), 1e-30))
             guide_changes = []
-            for _label, metric_key, _unit, use_absolute in rows:
+            for _label, metric_key, _unit, use_absolute in row_definitions:
                 coupled = float(metrics[gms_key][metric_key])
                 ablated = float(metrics[keys[3]][metric_key])
                 if use_absolute:
                     coupled, ablated = abs(coupled), abs(ablated)
                 guide_changes.append(
-                    abs(100.0 * (coupled - ablated) / max(abs(ablated), 1.0e-30)))
+                    abs(100.0 * (coupled - ablated) / max(abs(ablated), 1e-30)))
             fret_change = abs(100.0 * (
                 float(metrics[gms_key]["return_force_mismatch_N"])
                 - float(metrics[keys[3]]["return_force_mismatch_N"])
-            ) / max(abs(float(metrics[keys[3]]["return_force_mismatch_N"])), 1.0e-30))
-            if max(guide_changes) < 10.0:
-                lines.extend([
-                    "",
-                    f"**Ablating the drive port moves every guide metric by less than 10%; "
-                    f"$F_{{ret}}$ moves by {fret_change:.1f}%.** A/A2 is therefore a serviceable "
-                    "guideway-memory proxy, though not an uncoupled fixture. This supersedes the "
-                    "pre-1/16 estimate of a 27–32% drive-port effect.",
-                ])
-        max_force = max(float(metrics[key]["max_force_N"]) for key in keys)
-        lines.extend([
-            "",
-            f"Maximum executed {site_title.lower()} friction is **{max_force:.3f} N** "
-            f"({100.0 * max_force / FRICTION[site]['F_s']:.1f}% of the provisional "
-            f"{FRICTION[site]['F_s']:.1f} N macro breakaway level).",
-            "",
-        ])
-    first_experiment = next(iter(experiments.values()))
-    guide = experiments["guideway"]["metrics"]
-    nut = experiments["nut"]["metrics"]
-    guide_energy_ratio = 100.0 * float(guide["A2"]["loop_area_J"]) / float(guide["A"]["loop_area_J"])
-    nut_energy_ratio = 100.0 * float(nut["B2"]["loop_area_J"]) / float(nut["B"]["loop_area_J"])
-    guide_force_ratio = float(guide["A2"]["return_force_mismatch_N"]) / float(guide["A"]["return_force_mismatch_N"])
-    nut_force_ratio = float(nut["B2"]["return_force_mismatch_N"]) / float(nut["B"]["return_force_mismatch_N"])
-    guide_final_origin = abs(float(guide["A2"]["final_mean_nm"]))
+            ) / float(metrics[keys[3]]["return_force_mismatch_N"]))
+            lines.extend([
+                f"The two laws produce almost the same stage motion: whole-sequence RMS differs "
+                f"by {whole_change:.1f}% and peak deviation by {peak_change:.1f}%. They differ "
+                f"sharply in what the interface remembers. GMS's return-force mismatch is "
+                f"{force_ratio:.2f}× LuGre's and its residual error at the origin is "
+                f"{origin_ratio:.0f}× larger. GMS also dissipates only {energy_ratio:.1f}% of "
+                "the LuGre loop energy, which is consistent rather than contradictory: elements "
+                "below yield store elastic energy instead of burning it, and that same partial "
+                "yielding is what prevents return-point closure.",
+                "",
+                f"**Ablating the drive port moves every guideway metric by under 10%, and "
+                f"$F_{{ret}}$, the metric the comparison rests on, by {fret_change:.1f}%.** "
+                "A/A2 is therefore a serviceable proxy for the guideway law comparison despite "
+                "not being a physical uncoupled fixture. This supersedes the pre-1/16 estimate "
+                "of a 27 to 32% drive-port contribution, computed on the finer command grid, "
+                "which no longer holds.",
+                "",
+            ])
+        else:
+            lines.extend([
+                f"The nut port shows the same signature at {force_ratio:.2f}× on $F_{{ret}}$ "
+                f"and {energy_ratio:.1f}% relative loop energy, on a command 4× smaller. The "
+                "blocked fixture is what makes this visible: on a free stage the drive and stage "
+                "move together, the port sees almost no relative travel, and no element yields.",
+                "",
+            ])
+
     lines.extend([
-        f"Every plateau is held for **{first_experiment['plateau_dwell'] * 1e3:.0f} ms**. "
-        "The B/B2 boundary applies the finite-amplitude correlation-breaking rationale stated above; it is not used for normal plant-response plots, and the Step 1 fixture has no exact simulation twin.",
+        "### 9.3 What this means for identification",
         "",
-        f"For the rebuilt loops, GMS dissipates [[derived:guideway_loop_energy_ratio_pct={guide_energy_ratio:.1f}]]% of LuGre energy at the guideway and [[derived:nut_loop_energy_ratio_pct={nut_energy_ratio:.1f}]]% at the nut. "
-        f"Its return-force mismatch is [[derived:guideway_return_force_ratio={guide_force_ratio:.2f}]]× the guideway LuGre value and [[derived:nut_return_force_ratio={nut_force_ratio:.2f}]]× the nut LuGre value. These ratios describe the provisional executed loops, not a general ranking of the laws.",
-        "",
-        f"The closed path is observed in the physical coordinate, not inferred from the command: A2 returns to [[derived:guideway_a2_final_origin_nm={guide_final_origin:.2f}]] nm from the origin, about {100.0 * guide_final_origin / 3750.0:.2f}% of the 3.75 µm outer excursion.",
+        "Return-point force non-closure, not edge-dominated displacement, is the discriminating "
+        "observable. The comparison does not assume that GMS is better; measured force loops must "
+        "select and fit the constitutive law. Appendix G records the exact commands, yield-window "
+        "rationale, memory mechanism, and forced identification order.",
         "<!-- END GENERATED PRESLIDING SUMMARY -->",
     ])
     return "\n".join(lines)
@@ -5306,11 +4977,31 @@ def browser_parameter_defaults() -> dict[str, object]:
             f"{site}_vs": values["v_s"],
             f"{site}_C": values["C_gms"],
         })
-        for index, fraction in enumerate(GMS_STIFFNESS_FRACTIONS, start=1):
-            defaults[f"{site}_k{index}"] = fraction * values["sigma0"]
+        for index, stiffness in enumerate(GMS_STIFFNESS_BY_SITE[site], start=1):
+            defaults[f"{site}_k{index}"] = float(stiffness)
     for index, weight in enumerate(GMS_WEIGHTS, start=1):
         defaults[f"gms_nu{index}"] = weight
     return defaults
+
+
+def ensure_parameter_file() -> None:
+    """Create the builder/browser handoff file once without overwriting edits."""
+    if PARAMETER_FILE.exists():
+        return
+    parameters = browser_parameter_defaults()
+    parameters["lead_accuracy_class"] = configured("lead_accuracy_class", "IT3")
+    serializable = {
+        key: value.item() if isinstance(value, np.generic) else value
+        for key, value in parameters.items()
+    }
+    PARAMETER_FILE.write_text(
+        json.dumps({
+            "schema": "rev3-model-parameters-v1",
+            "build_id": BUILD_ID,
+            "parameters": serializable,
+        }, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 @lru_cache(maxsize=1)
@@ -5382,7 +5073,7 @@ def friction_yield_metrics() -> dict[str, float]:
     """Per-element yield distances that make the GMS parameter table readable."""
     metrics: dict[str, float] = {}
     for site, values in FRICTION.items():
-        stiffness = GMS_STIFFNESS_FRACTIONS * values["sigma0"]
+        stiffness = GMS_STIFFNESS_BY_SITE[site]
         for level, force in (("fs", values["F_s"]), ("fc", values["F_c"])):
             distances = GMS_WEIGHTS * force / stiffness
             for index, distance in enumerate(distances, start=1):
@@ -5547,8 +5238,11 @@ def markdown_to_html(source: str) -> tuple[str, list[tuple[int, str, str]]]:
             table.append("</tr></thead><tbody>")
             i += 2
             while i < len(lines) and lines[i].strip().startswith("|"):
-                table.append("<tr>")
-                for j, cell in enumerate(split_table_row(lines[i])):
+                row_cells = split_table_row(lines[i])
+                row_class = ' class="metric-primary"' if (
+                    row_cells and row_cells[0].startswith("**")) else ""
+                table.append(f"<tr{row_class}>")
+                for j, cell in enumerate(row_cells):
                     align = aligns[j] if j < len(aligns) else "left"
                     table.append(f'<td style="text-align:{align}">{render_inline(cell)}</td>')
                 table.append("</tr>")
@@ -5647,6 +5341,7 @@ h3 {{ margin-top:2.2rem; color:var(--accent); }}
 p {{ margin:.85rem 0; }} a {{ color:var(--accent); }} strong {{ color:var(--text); }} hr {{ border:0; border-top:1px solid var(--line); margin:2rem 0; }}
 blockquote {{ margin:1.2rem 0; padding:.75rem 1rem; background:var(--soft); border-left:4px solid var(--accent); border-radius:0 8px 8px 0; color:var(--muted); }}
 .table-wrap {{ overflow-x:auto; margin:1.2rem 0; }} table {{ width:100%; border-collapse:collapse; font-size:.92rem; }} th,td {{ border:1px solid var(--line); padding:.55rem .65rem; vertical-align:top; }} th {{ background:var(--soft); }}
+tr.metric-primary td {{ font-weight:750; background:color-mix(in srgb,var(--accent) 9%,var(--card)); border-top-width:2px; border-bottom-width:2px; }}
 .parameter-input {{ width:100%; min-width:7rem; padding:.38rem .48rem; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:5px; font:inherit; font-variant-numeric:tabular-nums; }}
 .parameter-input:focus {{ outline:2px solid var(--accent); outline-offset:1px; }}
 .assumed-input {{ background:var(--assumed); border-color:var(--assumed-line); font-weight:700; }}
@@ -5686,8 +5381,8 @@ body.lightbox-open {{ overflow:hidden; }}
 </style>
 </head>
 <body>
-<div class="topbar"><span class="name">{html.escape(title)}</span><button id="outline-toggle" type="button" aria-expanded="true" aria-controls="report-outline" onclick="toggleOutline()">Hide outline</button><button onclick="setDetails(true)">Expand derivations</button><button onclick="setDetails(false)">Collapse</button><button onclick="saveParameterInputs()">Save in browser</button><button onclick="saveEditedHtml()">Save HTML copy</button><button onclick="resetParameterInputs()">Reset inputs</button><button class="hide-small" onclick="toggleTheme()">Theme</button><button class="hide-small" onclick="window.print()">Print</button></div>
-<div class="layout"><nav id="report-outline"><div class="caption">On this page</div>{''.join(toc_html)}</nav><article><div class="edit-note"><span class="assumed-swatch"></span>Amber inputs are unidentified assumptions. “Save in browser” stores overrides only in this browser and the page URL; it does not rewrite the workspace file. “Save HTML copy” embeds them in a chosen file. Dependent scalar values, live equations, and the live Bode panel recalculate immediately. Publication SVGs and nonlinear simulations require a Python rebuild.<span id="parameter-save-status" class="save-status">Loading values…</span></div>{body}<div class="footer">Rendered from {html.escape(markdown_path.name)} · build {BUILD_ID} · {generated}</div></article></div>
+<div class="topbar"><span class="name">{html.escape(title)}</span><button id="outline-toggle" type="button" aria-expanded="true" aria-controls="report-outline" onclick="toggleOutline()">Hide outline</button><button onclick="setDetails(false)">Collapse</button><button onclick="saveParameterFile()">Save parameters</button><button class="hide-small" onclick="toggleTheme()">Theme</button></div>
+<div class="layout"><nav id="report-outline"><div class="caption">On this page</div>{''.join(toc_html)}</nav><article><div class="edit-note"><span class="assumed-swatch"></span>Amber inputs are unidentified assumptions. “Save parameters” writes <code>model_parameters.json</code> through the browser’s file picker; save it beside this HTML and the Python builder so the next plot-generation run loads it. Dependent scalar values, live equations, and the live Bode panel recalculate immediately. Publication SVGs and nonlinear simulations update on rebuild.<span id="parameter-save-status" class="save-status">Loading values…</span></div>{body}<div class="footer">Rendered from {html.escape(markdown_path.name)} · build {BUILD_ID} · {generated}</div></article></div>
 <div id="image-lightbox" class="image-lightbox" role="dialog" aria-modal="true" aria-label="Expanded report image" hidden><div class="lightbox-toolbar"><span id="lightbox-title" class="lightbox-title">Expanded image</span><button type="button" onclick="changeImageZoom(-0.25)" aria-label="Zoom out">−</button><button id="lightbox-zoom" type="button" onclick="resetImageZoom()" title="Reset zoom">100%</button><button type="button" onclick="changeImageZoom(0.25)" aria-label="Zoom in">+</button><button type="button" onclick="closeImageLightbox()">Close</button></div><div id="lightbox-viewport" class="lightbox-viewport"><img id="lightbox-image" alt=""></div></div>
 <script>
 function setDetails(open) {{ document.querySelectorAll('details').forEach(d => d.open=open); }}
@@ -5737,7 +5432,6 @@ function initializeImageViewer() {{
   viewport.addEventListener('pointerup',()=>{{ dragging=false; viewport.classList.remove('dragging'); }});
   document.addEventListener('keydown',event=>{{ if (box.hidden) return; if (event.key==='Escape') closeImageLightbox(); else if (event.key==='+'||event.key==='=') changeImageZoom(0.25); else if (event.key==='-') changeImageZoom(-0.25); else if (event.key==='0') resetImageZoom(); }});
 }}
-const parameterStorageKey = 'model-parameters:dependency-v2:' + document.title + ':' + location.pathname;
 let parameterSaveTimer = null;
 function currentParameterValues() {{
   const values = {{}};
@@ -5750,84 +5444,45 @@ function setParameterStatus(message, kind='') {{
   status.textContent = message;
   status.className = 'save-status' + (kind ? ' ' + kind : '');
 }}
-function readHashParameterValues() {{
-  if (!location.hash.startsWith('#params=')) return {{}};
-  try {{ return JSON.parse(decodeURIComponent(location.hash.slice(8))); }} catch (_) {{ return {{}}; }}
-}}
-function writeHashParameterValues(values) {{
-  try {{
-    const url = new URL(location.href);
-    url.hash = 'params=' + encodeURIComponent(JSON.stringify(values));
-    history.replaceState(null, '', url.href);
-    return true;
-  }} catch (_) {{ return false; }}
-}}
-function persistParameterInputs(showStatus=true) {{
-  const values = currentParameterValues();
-  let browserStorageSaved = true;
-  try {{ localStorage.setItem(parameterStorageKey, JSON.stringify(values)); }}
-  catch (_) {{ browserStorageSaved = false; }}
-  const urlSaved = writeHashParameterValues(values);
-  if (showStatus) {{
-    const time = new Date().toLocaleTimeString();
-    if (browserStorageSaved || urlSaved) setParameterStatus('Variables saved · ' + time, 'ok');
-    else setParameterStatus('Browser storage unavailable; use Save HTML copy', 'warn');
-  }}
-  return browserStorageSaved || urlSaved;
-}}
-function saveParameterInputs() {{
-  persistParameterInputs(true);
+async function saveParameterFile() {{
   refreshInteractivePlots();
-  setParameterStatus('Saved in this browser · live dependencies updated · rebuild required for publication simulations', 'warn');
-}}
-function scheduleParameterUpdate() {{
-  setParameterStatus('Updating dependent values and live plots…', 'warn');
-  if (parameterSaveTimer) clearTimeout(parameterSaveTimer);
-  parameterSaveTimer = setTimeout(() => {{
-    persistParameterInputs(false);
-    refreshInteractivePlots();
-    setParameterStatus('Auto-saved in this browser · live dependencies updated · static simulations are now stale', 'warn');
-  }}, 160);
-}}
-function resetParameterInputs() {{
-  document.querySelectorAll('.parameter-input').forEach(input => {{
-    input.value = input.dataset.default;
-    input.setAttribute('value', input.value);
-  }});
-  try {{ localStorage.removeItem(parameterStorageKey); }} catch (_) {{}}
-  try {{ const url = new URL(location.href); url.hash = ''; history.replaceState(null, '', url.href); }} catch (_) {{}}
-  refreshInteractivePlots();
-  setParameterStatus('Defaults restored; saved overrides cleared', 'ok');
-}}
-async function saveEditedHtml() {{
-  persistParameterInputs(false);
-  const originalInputs = Array.from(document.querySelectorAll('.parameter-input'));
-  originalInputs.forEach(input => input.setAttribute('value', input.value));
-  const clonedRoot = document.documentElement.cloneNode(true);
-  const clonedInputs = Array.from(clonedRoot.querySelectorAll('.parameter-input'));
-  clonedInputs.forEach((input, index) => {{
-    const value = originalInputs[index].value;
-    input.setAttribute('value', value);
-    input.setAttribute('data-default', value);
-  }});
-  const source = '<!doctype html>\\n' + clonedRoot.outerHTML;
-  const suggestedName = location.pathname.split('/').pop() || 'model-report.html';
+  const payload = {{
+    schema: 'rev3-model-parameters-v1',
+    build_id: '{BUILD_ID}',
+    parameters: currentParameterValues()
+  }};
+  const source = JSON.stringify(payload, null, 2) + '\n';
+  const suggestedName = 'model_parameters.json';
   if ('showSaveFilePicker' in window) {{
     try {{
-      const handle = await window.showSaveFilePicker({{suggestedName, types:[{{description:'HTML document', accept:{{'text/html':['.html']}}}}]}});
+      const handle = await window.showSaveFilePicker({{
+        suggestedName,
+        types:[{{description:'Revision 3 model parameters', accept:{{'application/json':['.json']}}}}]
+      }});
       const writable = await handle.createWritable();
       await writable.write(source);
       await writable.close();
-      setParameterStatus('HTML copy saved with current values', 'ok');
+      setParameterStatus('Saved model_parameters.json. Keep it beside the HTML/builder; the next rebuild will load it.', 'ok');
       return;
-    }} catch (error) {{ if (error.name === 'AbortError') return; }}
+    }} catch (error) {{
+      if (error.name === 'AbortError') return;
+    }}
   }}
-  const blob = new Blob([source], {{type:'text/html;charset=utf-8'}});
+  const blob = new Blob([source], {{type:'application/json;charset=utf-8'}});
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  link.href = url; link.download = suggestedName; document.body.appendChild(link); link.click(); link.remove();
+  link.href = url; link.download = suggestedName;
+  document.body.appendChild(link); link.click(); link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  setParameterStatus('HTML copy downloaded with current values', 'ok');
+  setParameterStatus('Downloaded model_parameters.json. Move it beside the HTML/builder before rebuilding.', 'warn');
+}}
+function scheduleParameterUpdate() {{
+  setParameterStatus('Updating dependent values and live plots...', 'warn');
+  if (parameterSaveTimer) clearTimeout(parameterSaveTimer);
+  parameterSaveTimer = setTimeout(() => {{
+    refreshInteractivePlots();
+    setParameterStatus('Unsaved parameter changes - live preview updated - publication simulations are stale', 'warn');
+  }}, 160);
 }}
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -6320,19 +5975,12 @@ document.addEventListener('DOMContentLoaded', () => {{
   try {{ outlineOpen=localStorage.getItem(outlineStorageKey)!=='closed'; }} catch (_) {{}}
   setOutline(outlineOpen,false);
   initializeImageViewer();
-  let saved = {{}};
-  let browserStorageLoaded = true;
-  try {{ saved = JSON.parse(localStorage.getItem(parameterStorageKey) || '{{}}'); }} catch (_) {{ saved = {{}}; browserStorageLoaded = false; }}
-  saved = Object.assign(saved, readHashParameterValues());
   document.querySelectorAll('.parameter-input').forEach(input => {{
-    if (Object.prototype.hasOwnProperty.call(saved, input.dataset.param)) input.value = saved[input.dataset.param];
     input.setAttribute('value', input.value);
     input.addEventListener('input', () => {{ input.setAttribute('value', input.value); scheduleParameterUpdate(); }});
   }});
   refreshInteractivePlots();
-  if (Object.keys(saved).length) setParameterStatus('Saved variables restored', 'ok');
-  else if (browserStorageLoaded) setParameterStatus('Defaults loaded · auto-save active', 'ok');
-  else setParameterStatus('URL saving active; browser storage unavailable', 'warn');
+  setParameterStatus('Values loaded from the builder parameter source · Save parameters writes model_parameters.json', 'ok');
 }});
 </script>
 </body></html>"""
@@ -6363,6 +6011,7 @@ def main() -> None:
         raise FileNotFoundError("Both Markdown source documents must exist before building")
     build_progress(1, 8, "COMPILING inputs and validating model/report structure")
     ASSET_DIR.mkdir(exist_ok=True)
+    ensure_parameter_file()
     gms_audit = validate_gms_partition()
     loss_audit = validate_interface_loss_factors()
     validate_parameter_registry()
@@ -6412,10 +6061,8 @@ def main() -> None:
     finally:
         if executor is not None:
             executor.shutdown()
-    build_progress(4, 8, "SIMULATING IDS overlays and pricing memory-branch departures")
+    build_progress(4, 8, "PRICING memory-branch departures")
     branch_departure = memory_branch_departure(constants, memory_experiments)
-    ids_records = load_ids_microstepping_records()
-    ids_comparison = ids_microstepping_simulations(ids_records, constants)
     build_progress(5, 8, "RENDERING publication SVG figures")
     case_response_paths = plot_case_responses(
         frequencies, bode, times, command, time_data, constants, time_metrics)
@@ -6432,9 +6079,6 @@ def main() -> None:
     position_path = plot_position_dependence()
     resonance_path = plot_stepper_resonance_visibility()
     rotor_stage_path = plot_rotor_stage_transfer_functions(frequencies)
-    ids_overview_path = plot_ids_microstepping_overview(ids_records)
-    ids_overlay_path = plot_ids_microstepping_model_overlay(
-        ids_records, ids_comparison)
     for obsolete_name in ("bode_all_cases.svg", "step_tracking_all_cases.svg",
                           "full_reduced_single_edge_diagnostic.svg"):
         obsolete_path = ASSET_DIR / obsolete_name
@@ -6471,8 +6115,6 @@ def main() -> None:
     print(f"Built {position_path.relative_to(ROOT)}")
     print(f"Built {resonance_path.relative_to(ROOT)}")
     print(f"Built {rotor_stage_path.relative_to(ROOT)}")
-    print(f"Built standalone {ids_overview_path.relative_to(ROOT.parent)}")
-    print(f"Built standalone {ids_overlay_path.relative_to(ROOT.parent)}")
     print(f"Built {description_html.name}")
     print(f"Built {derivation_html.name}")
     print(f"Simulation workers: {args.jobs} of {os.cpu_count() or 1} logical CPUs")
@@ -6532,14 +6174,6 @@ def main() -> None:
         print(f"Step halving {key}: RMS({dt_text} us)="
               f"{rms_text} nm; observed p={result['observed_order']:.3f}; "
               f"fine relative change={result['fine_relative_pct']:.6f}%")
-    for size, record in ids_records.items():
-        metrics = ids_comparison[size]["metrics"]
-        print(
-            f"IDS step {size}: nominal={float(record['nominal_amplitude']) * 1e6:.4f} um; "
-            f"measured={float(record['measured_amplitude']) * 1e6:.4f} um; "
-            f"C={float(metrics['C']['plateau_amplitude']) * 1e6:.4f} um; "
-            f"C2={float(metrics['C2']['plateau_amplitude']) * 1e6:.4f} um; "
-            f"dwell={float(record['dwell']):.3f} s")
     print("Full-model modes below 3 kHz: " + ", ".join(
         f"{mode:.2f}" for mode in verification["full_modes"] if mode < 3000.0))
     build_progress(8, 8, "GREEN FLAG — simulation, Markdown, SVG, and HTML update complete")
