@@ -11,8 +11,10 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import os
 import re
 from collections import OrderedDict
+from concurrent.futures import Executor, ProcessPoolExecutor
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
@@ -21,6 +23,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import Circle, FancyArrowPatch, FancyBboxPatch, Rectangle
 
+# Stable element IDs keep unchanged SVGs byte-identical across rebuilds.
+plt.rcParams["svg.hashsalt"] = "rev3-model-documentation"
+
 
 ROOT = Path(__file__).resolve().parent
 ASSET_DIR = ROOT / "rendered_assets"
@@ -28,6 +33,7 @@ DESCRIPTION_MD = ROOT / "ball_screw_stage_dynamic_derivation_v3.md"
 DERIVATION_MD = ROOT / "Analytical_derivation_and_responses_v3.md"
 MICROSTEP_DATA_DIR = ROOT.parent / "Microstepping Test Data"
 IDS_MICROSTEP_FILE = MICROSTEP_DATA_DIR / "IDSdata.txt"
+BUILD_ID = "rev3-section13-readability-20260813"
 
 
 # Executable defaults for the Revision 3 two-DOF reduction.
@@ -56,9 +62,9 @@ MODEL = {
     # not recorded.  The requested baseline is 10% of critical damping and a
     # sensitivity sweep is retained rather than presenting it as identified.
     "zeta_m": 0.10,
-    # Executable pre-distortion grid.  Hardware STEP/DIR configuration still
-    # needs verification, but 256 is required for the requested granularity.
-    "microstep_divisor": 256,
+    # Production Stepper-Board STEP/DIR setting.  Position commands therefore
+    # land on a 312.5 nm grid; pulse timing remains independently controllable.
+    "microstep_divisor": 16,
     # Stribeck exponent.  It appears in every s(v) evaluation but was never
     # exposed; 2.0 is the conventional Gaussian form.  Fixed, not identified.
     "stribeck_delta": 2.0,
@@ -178,6 +184,7 @@ GMS_N = GMS_WEIGHTS.size
 BRANCH_CENSUS_SENTENCE: str | None = None
 PRODUCTION_DT = 2.5e-5
 GMS_CONVERGENCE_DTS = (5.0e-5, 2.5e-5, 1.25e-5)
+A2_CONVERGENCE_DT = 6.25e-6
 # The full/reduced audit contains full-model modes above the 3 kHz plotting
 # range.  Its production step is therefore finer than the nonlinear case step,
 # and its convergence study intentionally includes one unstable coarse step so
@@ -185,7 +192,7 @@ GMS_CONVERGENCE_DTS = (5.0e-5, 2.5e-5, 1.25e-5)
 VERIFICATION_DT = 2.5e-6
 VERIFICATION_CONVERGENCE_DTS = (25.0e-6, 12.5e-6, 6.25e-6, VERIFICATION_DT)
 VERIFICATION_EDGES = (0.005, 0.025, 0.045, 0.065)
-SETTLING_2PCT_FACTOR = -np.log(0.02)
+SETTLING_2PCT_FACTOR = 4.0
 # The IDS records are sampled at approximately 88 ms.  A dedicated 100 us
 # integration is sufficient for their settled plateau comparison: a 50 us
 # repeat changed the representative C2 settled response by 0.18 nm RMS.
@@ -195,27 +202,26 @@ IDS_COMPARISON_INTERVALS = 6
 IDS_MICROSTEP_SIZES = (1, 2, 4, 8, 16)
 BODE_FOCUS_MIN_HZ = 100.0
 BODE_FOCUS_MAX_HZ = 3000.0
-# The main response is quantized at 19.53125 nm and deliberately spans the
-# provisional first-yield distances.  Adjacent increments remain below one
-# quarter of a full step.  The final move is positive and returns to zero.
-MAIN_LEVELS = np.array([12, -12, 24, -24, 0, 52, 0, -52, -104, -52,
-                        0, 52, 104, 52, 0], dtype=float)
+# The main response uses the production 1/16 grid and deliberately spans the
+# provisional first-yield distances.  Adjacent increments remain at or below
+# one quarter of a full step.  The final move is positive and returns to zero.
+MAIN_LEVELS = np.array([1, -1, 2, -2, 0, 3, 0, -3, -6, -3,
+                        0, 3, 6, 3, 0], dtype=float)
 MAIN_START = 0.010
 
 
-# Nested reversals for the dedicated memory experiment.  Counts use the
-# 256-substep pre-distortion quantum.  The outer excursion is large
-# enough to yield two guideway GMS elements, while the force signal remains the
-# primary discriminator.
+# Nested reversals for the dedicated memory experiment.  The positive guideway
+# levels are 12/10/4 microsteps; the negative outer and nested levels are one
+# full 1/16 microstep smaller to retain an executable asymmetry.
 GUIDEWAY_PRESLIDING_LEVELS = np.array(
-    [0, 192, 48, 168, 48, 192, 0, -184, -48, -160, -48, -184, 0],
+    [0, 12, 4, 10, 4, 12, 0, -11, -4, -9, -4, -11, 0],
     dtype=float,
 )
 # With the stage blocked, the drive coordinate is the nut-port deflection.
-# The +/-10-count outer loop crosses the provisional 0.20 and 0.533 um stop
-# thresholds but remains below the third threshold at 1.20 um.
+# The 3/2/1 integer levels are the only distinct 1/16 set that crosses the
+# first two provisional stops while remaining below the third at 1.20 um.
 NUT_PRESLIDING_LEVELS = np.array(
-    [0, 40, 12, 36, 12, 40, 0, -40, -12, -36, -12, -40, 0],
+    [0, 3, 1, 2, 1, 3, 0, -3, -1, -2, -1, -3, 0],
     dtype=float,
 )
 PRESLIDING_START = 0.005
@@ -226,6 +232,8 @@ CASES = OrderedDict([
     ("0", {"label": "Case 0: frictionless", "sites": (), "friction": "none", "color": "#252525", "ls": "--"}),
     ("A", {"label": "Case A: lumped drive drag + guideway / LuGre", "sites": ("d", "g"), "friction": "lugre", "color": "#277da1", "ls": "-"}),
     ("A2", {"label": "Case A2: lumped drive drag + guideway / GMS", "sites": ("d", "g"), "friction": "gms", "color": "#70b7cf", "ls": "--"}),
+    ("G", {"label": "Case G: guideway only / LuGre", "sites": ("g",), "friction": "lugre", "color": "#4059ad", "ls": "-"}),
+    ("G2", {"label": "Case G2: guideway only / GMS", "sites": ("g",), "friction": "gms", "color": "#8b9dc3", "ls": "--"}),
     ("B", {"label": "Case B: lumped drive drag + nut microslip / LuGre", "sites": ("d", "n"), "friction": "lugre", "color": "#e07a15", "ls": "-"}),
     ("B2", {"label": "Case B2: lumped drive drag + nut microslip / GMS", "sites": ("d", "n"), "friction": "gms", "color": "#f5b35f", "ls": "--"}),
     ("C", {"label": "Case C: all identifiable ports / LuGre", "sites": ("d", "g", "n"), "friction": "lugre", "color": "#218c74", "ls": "-"}),
@@ -239,12 +247,14 @@ CASES = OrderedDict([
              "color": "#8a5fbf", "ls": ":"}),
 ])
 
-PAIRS = (("A", "A2"), ("B", "B2"), ("C", "C2"))
+PAIRS = (("A", "A2"), ("G", "G2"), ("B", "B2"), ("C", "C2"))
 # Parameter provenance used by the browser registry and the standalone
 # dependency flowcharts.  Every derived token emitted into either Markdown
 # document has an explicit dependency list.  Modal-calibrated k_ax and
 # closure-derived k_ball are derived outputs, not independent inputs.
 PARAMETER_REGISTRY: dict[str, dict[str, object]] = {
+    "case_definitions": {"category": "input", "dependencies": (), "section": "1-model-hierarchy-and-case-map"},
+    "case_count": {"category": "output", "dependencies": ("case_definitions",), "section": "1-model-hierarchy-and-case-map"},
     "lead": {"category": "input", "dependencies": (), "section": "2-entry-parameters"},
     "rotor_teeth": {"category": "input", "dependencies": (), "section": "2-entry-parameters"},
     "holding_torque": {"category": "input", "dependencies": (), "section": "2-entry-parameters"},
@@ -356,10 +366,6 @@ PARAMETER_REGISTRY: dict[str, dict[str, object]] = {
     "command_step": {
         "category": "derived",
         "dependencies": ("full_step_pitch", "microstep_divisor"),
-        "section": "5-stepper-input-nonlinear-law-linearization-and-bound",
-    },
-    "interpolated_step": {
-        "category": "derived", "dependencies": ("full_step_pitch",),
         "section": "5-stepper-input-nonlinear-law-linearization-and-bound",
     },
     "mode_1_hz": {
@@ -525,6 +531,50 @@ for _site in ("g", "n", "d"):
         "section": "8-3-implementation-choices",
     }
 
+for _key, _dependencies in {
+    "detent_settling_time_2pct": ("electromagnetic_zeta", "detent_torque", "detent_phase", "holding_torque", "reduced_drive_mass"),
+    "axial_settling_time_2pct": ("axial_damping", "reduced_axial_stiffness", "reduced_drive_mass", "reduced_stage_mass", "electromagnetic_zeta"),
+    "plateau_dwell": ("detent_settling_time_2pct", "axial_settling_time_2pct"),
+    "guideway_a2_final_origin_nm": ("g_sigma0", "g_Fs", "g_Fc", "tau_C", "command_step"),
+    "guideway_loop_energy_ratio_pct": ("g_sigma0", "g_Fs", "g_Fc", "tau_C", "command_step"),
+    "nut_loop_energy_ratio_pct": ("n_sigma0", "n_Fs", "n_Fc", "tau_C", "command_step"),
+    "guideway_return_force_ratio": ("g_sigma0", "g_Fs", "g_Fc", "tau_C", "command_step"),
+    "nut_return_force_ratio": ("n_sigma0", "n_Fs", "n_Fc", "tau_C", "command_step"),
+}.items():
+    PARAMETER_REGISTRY[_key] = {
+        "category": "output", "dependencies": _dependencies,
+        "section": "9-force-instrumented-partial-slip-memory-experiment",
+    }
+
+for _key, _section in {
+    "friction_site_definitions": "8-0-how-the-friction-laws-attach-to-the-plant",
+    "friction_state_definition": "8-1-constitutive-laws",
+    "identifiability_analysis": "8-3-implementation-choices",
+    "metrology_campaign": "9-force-instrumented-partial-slip-memory-experiment",
+}.items():
+    PARAMETER_REGISTRY[_key] = {
+        "category": "input", "dependencies": (), "section": _section,
+    }
+for _key, _dependencies, _section in (
+    ("section7_rms_pct", ("full_model_upper_hz", "route_c_f2"), "7-full-versus-reduced-verification"),
+    ("section7_rms_nm", ("full_model_upper_hz", "route_c_f2"), "7-full-versus-reduced-verification"),
+    ("section7_drive_share_pct", ("full_model_upper_hz", "route_c_f2"), "7-full-versus-reduced-verification"),
+    ("section7_drive_pole_error_pct", ("full_model_upper_hz", "route_c_f1"), "7-full-versus-reduced-verification"),
+    ("section7_frequency_share_pct", ("full_model_upper_hz", "route_c_f2"), "7-full-versus-reduced-verification"),
+    ("section7_damping_share_pct", ("full_model_zeta", "route_f_zeta"), "7-full-versus-reduced-verification"),
+    ("section7_reduced_coordinate_count", ("route_p_f1", "route_p_f2"), "7-full-versus-reduced-verification"),
+    ("section7_full_coordinate_count", ("full_model_upper_hz",), "7-full-versus-reduced-verification"),
+    ("friction_port_count", ("friction_site_definitions",), "8-0-how-the-friction-laws-attach-to-the-plant"),
+    ("gms_states_per_site", ("friction_state_definition",), "8-1-constitutive-laws"),
+    ("lugre_states_per_site", ("friction_state_definition",), "8-1-constitutive-laws"),
+    ("structural_identifiability_result_count", ("identifiability_analysis",), "8-3-implementation-choices"),
+    ("project_adev_floor_nm", ("metrology_campaign",), "9-force-instrumented-partial-slip-memory-experiment"),
+    ("a2_convergence_order", ("g_sigma0", "g_Fs", "g_Fc", "tau_C", "command_step"), "13-1-gms-step-halving-convergence"),
+):
+    PARAMETER_REGISTRY[_key] = {
+        "category": "output", "dependencies": _dependencies, "section": _section,
+    }
+
 PARAMETER_CATEGORY_STYLE = {
     "input": {"face": "#dceef6", "edge": "#52778b"},
     "assumed": {"face": "#fff0b8", "edge": "#c28a00"},
@@ -546,7 +596,7 @@ STATE_SIZE = GMS_BASE + len(SITE_KEYS) * GMS_N
 
 def save_svg(fig: plt.Figure, output: Path) -> None:
     """Write deterministic SVG text without Matplotlib's trailing spaces."""
-    fig.savefig(output, format="svg", bbox_inches="tight")
+    fig.savefig(output, format="svg", bbox_inches="tight", metadata={"Date": None})
     svg = output.read_text(encoding="utf-8")
     output.write_text(
         "\n".join(line.rstrip() for line in svg.splitlines()) + "\n",
@@ -667,6 +717,7 @@ def validate_case_topology() -> None:
     expected_sites = {
         "0": set(),
         "A": {"d", "g"}, "A2": {"d", "g"},
+        "G": {"g"}, "G2": {"g"},
         "B": {"d", "n"}, "B2": {"d", "n"},
         "C": {"d", "g", "n"}, "C2": {"d", "g", "n"},
         "A1v": {"d", "g"},
@@ -696,6 +747,48 @@ def validate_case_topology() -> None:
     ))
     if not np.isclose(nut_first_yield, 0.20e-6, rtol=0.0, atol=1.0e-12):
         raise ValueError(f"Nut microslip first yield is {nut_first_yield:.6g} m, expected 0.20 um")
+
+
+def validate_command_design(constants: dict[str, float]) -> dict[str, float]:
+    """Fail unless the production 1/16 command families retain their margins."""
+    quantum = constants["command_step"]
+    expected_quantum = constants["full_step"] / 16.0
+    if MODEL["microstep_divisor"] != 16 or not np.isclose(
+            quantum, expected_quantum, rtol=0.0, atol=1.0e-15):
+        raise ValueError(
+            f"Production command quantum must be full_step/16; got {quantum:.9g} m")
+
+    max_increment = float(np.max(np.abs(np.diff(MAIN_LEVELS))) * quantum)
+    if max_increment > constants["quarter_step"] + 1.0e-15:
+        raise ValueError(
+            f"Main command increment {max_increment:.9g} m exceeds the quarter-step bound")
+
+    def yields(site: str) -> np.ndarray:
+        values = FRICTION[site]
+        return (GMS_WEIGHTS * values["F_s"] /
+                (GMS_STIFFNESS_FRACTIONS * values["sigma0"]))
+
+    guideway_yields = yields("g")
+    nut_yields = yields("n")
+    guideway_inner = 4.0 * quantum
+    guideway_outer = 12.0 * quantum
+    nut_inner = quantum
+    nut_nested = 2.0 * quantum
+    nut_outer = 3.0 * quantum
+    if not (guideway_inner > guideway_yields[0]
+            and guideway_outer > guideway_yields[1]
+            and guideway_outer < guideway_yields[2]):
+        raise ValueError("Guideway 12/10/4 command levels no longer bracket yields 1 and 2")
+    if not (nut_inner > nut_yields[0]
+            and nut_nested > nut_yields[1]
+            and nut_outer < nut_yields[2]):
+        raise ValueError("Nut 3/2/1 command levels no longer bracket yields 1 and 2 below yield 3")
+    return {
+        "quantum_nm": quantum * 1.0e9,
+        "main_max_increment_um": max_increment * 1.0e6,
+        "guideway_inner_margin_um": (guideway_inner - guideway_yields[0]) * 1.0e6,
+        "nut_outer_margin_um": (nut_yields[2] - nut_outer) * 1.0e6,
+    }
 
 
 def modal_calibrated_axial_stiffness(
@@ -784,9 +877,22 @@ def physical_constants() -> dict[str, float]:
     if minimum_local_tangent <= 0.0:
         raise ValueError("Detent tangent can exceed the commutation tangent")
     minimum_local_omega = np.sqrt(minimum_local_tangent / m_d)
-    settling_time_2pct = SETTLING_2PCT_FACTOR / (
+    detent_settling_time_2pct = SETTLING_2PCT_FACTOR / (
         MODEL["zeta_m"] * minimum_local_omega)
-    plateau_dwell = max(0.100, settling_time_2pct)
+    mass = np.diag([m_d, m_s])
+    damping = np.array([
+        [c_m + MODEL["c_ax"], -MODEL["c_ax"]],
+        [-MODEL["c_ax"], MODEL["c_ax"]],
+    ])
+    stiffness = np.array([
+        [k_m + k_ax, -k_ax],
+        [-k_ax, k_ax],
+    ])
+    axial_frequency, axial_zeta = _damped_modal_data(mass, damping, stiffness)[1]
+    axial_settling_time_2pct = SETTLING_2PCT_FACTOR / (
+        axial_zeta * 2.0 * np.pi * axial_frequency)
+    plateau_dwell = max(
+        0.100, detent_settling_time_2pct, axial_settling_time_2pct)
     return {
         "r": r,
         "kappa": kappa,
@@ -809,9 +915,10 @@ def physical_constants() -> dict[str, float]:
         "full_step": full_step,
         "quarter_step": full_step / 4.0,
         "command_step": full_step / MODEL["microstep_divisor"],
-        "interpolated_step": full_step / 256.0,
         "detent_period": full_step,
-        "settling_time_2pct": settling_time_2pct,
+        "settling_time_2pct": detent_settling_time_2pct,
+        "detent_settling_time_2pct": detent_settling_time_2pct,
+        "axial_settling_time_2pct": axial_settling_time_2pct,
         "plateau_dwell": plateau_dwell,
         "metric_window": min(0.020, 0.20 * plateau_dwell),
     }
@@ -1702,7 +1809,7 @@ def friction_force_history(case: dict[str, object], states: np.ndarray,
     return np.sum(states[:, start:stop], axis=1) + p["sigma2"] * velocity
 
 
-def presliding_responses(constants: dict[str, float], keys: tuple[str, str],
+def presliding_responses(constants: dict[str, float], keys: tuple[str, ...],
                          site: str,
                          persistent_branch_keys: tuple[str, ...] = ()) -> dict[str, object]:
     """Run one matched LuGre/GMS pair through a settled reversal sequence.
@@ -1723,6 +1830,7 @@ def presliding_responses(constants: dict[str, float], keys: tuple[str, str],
     results: dict[str, np.ndarray] = {}
     forces: dict[str, np.ndarray] = {}
     metrics: dict[str, dict[str, object]] = {}
+    censuses: dict[str, GmsBranchCensus] = {}
     times: np.ndarray | None = None
 
     for key in keys:
@@ -1732,10 +1840,14 @@ def presliding_responses(constants: dict[str, float], keys: tuple[str, str],
                 active_site: np.zeros(GMS_N, dtype=bool)
                 for active_site in CASES[key]["sites"]
             }
+        census = None
+        if CASES[key]["friction"] == "gms" and branch_states is None:
+            census = GmsBranchCensus(tuple(CASES[key]["sites"]))
+            censuses[key] = census
         times, states = rk4_case_with_command(
             CASES[key], constants, command_function, duration=duration,
             dt=PRODUCTION_DT, blocked_stage=blocked_stage,
-            branch_states=branch_states)
+            census=census, branch_states=branch_states)
         results[key] = states
         forces[key] = friction_force_history(CASES[key], states, site)
 
@@ -1806,6 +1918,7 @@ def presliding_responses(constants: dict[str, float], keys: tuple[str, str],
         "results": results,
         "forces": forces,
         "metrics": metrics,
+        "censuses": censuses,
         "microstep": microstep,
         "duration": duration,
         "plateau_dwell": plateau_dwell,
@@ -1841,20 +1954,40 @@ def settled_window_masks(times: np.ndarray,
     return settled_mask, final_window
 
 
+def _main_response_job(key: str, constants: dict[str, float], collect_census: bool
+                       ) -> tuple[str, np.ndarray, np.ndarray, GmsBranchCensus | None]:
+    """Process-pool unit for one independent nonlinear response case."""
+    case = CASES[key]
+    census = (GmsBranchCensus(tuple(case["sites"]))
+              if collect_census and case["friction"] == "gms" else None)
+    times, states = rk4_case(case, constants, dt=PRODUCTION_DT, census=census)
+    return key, times, states, census
+
+
 def time_responses(constants: dict[str, float],
-                   censuses: dict[str, "GmsBranchCensus"] | None = None
+                   censuses: dict[str, "GmsBranchCensus"] | None = None,
+                   executor: Executor | None = None
                    ) -> tuple[np.ndarray, np.ndarray, dict[str, np.ndarray], dict[str, dict[str, float]]]:
     results: dict[str, np.ndarray] = {}
     metrics: dict[str, dict[str, float]] = {}
     times: np.ndarray | None = None
-    for key, case in CASES.items():
-        census = None
-        if censuses is not None and case["friction"] == "gms":
-            # Observation only; the executed derivatives are unchanged.
-            census = GmsBranchCensus(tuple(case["sites"]))
-            censuses[key] = census
-        times, states = rk4_case(case, constants, dt=PRODUCTION_DT, census=census)
+    if executor is None:
+        completed = (
+            _main_response_job(key, constants, censuses is not None)
+            for key in CASES
+        )
+    else:
+        futures = [
+            executor.submit(_main_response_job, key, constants, censuses is not None)
+            for key in CASES
+        ]
+        completed = (future.result() for future in futures)
+    for key, case_times, states, census in completed:
+        times = case_times
         results[key] = states
+        if censuses is not None and census is not None:
+            # Observation only; the executed derivatives are unchanged.
+            censuses[key] = census
     assert times is not None
     command = np.array([
         command_position(t, constants["command_step"], constants["plateau_dwell"])
@@ -1932,8 +2065,8 @@ def gms_branch_census_study(constants: dict[str, float], times: np.ndarray,
 LOOP_METRIC_LABELS = (
     ("return_error_mismatch_nm", "$E_{ret}$", "nm", 2),
     ("return_force_mismatch_N", "$F_{ret}$", "N", 4),
-    ("final_mean_nm", "final-origin $|\\bar d_{13}|$", "nm", 2),
-    ("loop_area_J", "loop area $A_{loop}$", "J", 9),
+    ("final_mean_nm", "final-origin magnitude $D_{13}$", "nm", 2),
+    ("loop_area_J", "loop area $A_{loop}$", "µJ", 2),
 )
 
 
@@ -1960,6 +2093,10 @@ def memory_branch_departure(constants: dict[str, float],
             persistent = abs(float(rerun["metrics"][gms_key][metric_key]))
             law_gap = abs(float(experiment["metrics"][gms_key][metric_key])
                           - float(experiment["metrics"][lugre_key][metric_key]))
+            if unit == "µJ":
+                executed *= 1.0e6
+                persistent *= 1.0e6
+                law_gap *= 1.0e6
             records.append({
                 "case": gms_key,
                 "site": str(experiment["site"]),
@@ -2224,27 +2361,60 @@ def ids_microstepping_simulations(
     return comparison
 
 
+def _convergence_rms_job(key: str, constants: dict[str, float], dt: float
+                         ) -> tuple[str, float, float]:
+    """Process-pool unit for one non-production convergence trajectory."""
+    times, states = rk4_case(CASES[key], constants, dt=dt)
+    return key, dt, final_window_rms_error_nm(times, states, constants)
+
+
 def gms_step_halving_convergence(constants: dict[str, float], base_times: np.ndarray,
-                                 base_results: dict[str, np.ndarray]) -> dict[str, dict[str, object]]:
+                                 base_results: dict[str, np.ndarray],
+                                 executor: Executor | None = None
+                                 ) -> dict[str, dict[str, object]]:
     """Compare final-window RMS under h, h/2, and h/4 for all GMS cases."""
     study: dict[str, dict[str, object]] = {}
+    rms_by_key = {
+        key: {PRODUCTION_DT: final_window_rms_error_nm(base_times, base_results[key], constants)}
+        for key in ("A2", "B2", "C2")
+    }
+    dts_by_key = {
+        "A2": GMS_CONVERGENCE_DTS + (A2_CONVERGENCE_DT,),
+        "B2": GMS_CONVERGENCE_DTS,
+        "C2": GMS_CONVERGENCE_DTS,
+    }
+    pending = [
+        (key, dt) for key, dts in dts_by_key.items() for dt in dts
+        if not np.isclose(dt, PRODUCTION_DT, rtol=0.0, atol=1.0e-15)
+    ]
+    if executor is None:
+        completed = (_convergence_rms_job(key, constants, dt) for key, dt in pending)
+    else:
+        futures = [
+            executor.submit(_convergence_rms_job, key, constants, dt)
+            for key, dt in pending
+        ]
+        completed = (future.result() for future in futures)
+    for key, dt, rms in completed:
+        rms_by_key[key][dt] = rms
     for key in ("A2", "B2", "C2"):
-        rms_values: list[float] = []
-        for dt in GMS_CONVERGENCE_DTS:
-            if np.isclose(dt, PRODUCTION_DT, rtol=0.0, atol=1.0e-15):
-                times, states = base_times, base_results[key]
-            else:
-                times, states = rk4_case(CASES[key], constants, dt=dt)
-            rms_values.append(final_window_rms_error_nm(times, states, constants))
+        dts = dts_by_key[key]
+        rms_values = [rms_by_key[key][dt] for dt in dts]
         coarse_difference = abs(rms_values[0] - rms_values[1])
         fine_difference = abs(rms_values[1] - rms_values[2])
+        observed_order = float(np.log2(
+            coarse_difference / max(fine_difference, 1.0e-15)))
+        extra_difference = (abs(rms_values[2] - rms_values[3])
+                            if len(rms_values) == 4 else None)
         study[key] = {
-            "dt_s": GMS_CONVERGENCE_DTS,
+            "dt_s": dts,
             "rms_nm": tuple(rms_values),
             "coarse_difference_nm": coarse_difference,
             "fine_difference_nm": fine_difference,
             "fine_relative_pct": 100.0 * fine_difference / max(abs(rms_values[2]), 1.0e-15),
             "difference_ratio": coarse_difference / max(fine_difference, 1.0e-15),
+            "observed_order": observed_order,
+            "extra_difference_nm": extra_difference,
         }
     return study
 
@@ -2338,6 +2508,8 @@ def plot_case_response_overlay(frequencies: np.ndarray,
         "0": "0: frictionless",
         "A": "A: guideway LuGre",
         "A2": "A2: guideway GMS",
+        "G": "G: guideway-only LuGre",
+        "G2": "G2: guideway-only GMS",
         "B": "B: nut LuGre",
         "B2": "B2: nut GMS",
         "C": "C: both LuGre",
@@ -4206,7 +4378,7 @@ def generated_reduction_convergence(verification: dict[str, object]) -> str:
         2.0 * np.pi * full_lower_frequency * edge_spacing)
     lines = [
         "<!-- BEGIN GENERATED REDUCTION CONVERGENCE -->",
-        "### Solver-convergence and residual audit",
+        "### 7.1 Solver convergence",
         "",
         f"The time-domain comparison now uses the physical {physical_constants()['full_step'] * 1e6:.3f} µm full-step pitch. "
         "Because both verification plants are linear, this rescales the displacement and residual in nanometres but does not change the normalized RMS or peak percentages.",
@@ -4271,7 +4443,7 @@ def generated_reduction_convergence(verification: dict[str, object]) -> str:
         "The growth is therefore bounded and modest but is not attributed to one mode here: it is a difference signal between two plants whose poles differ in frequency as well as amplitude, "
         "and a scalar carryover argument does not apply to it.",
         "",
-        "### Per-plant residual audit",
+        "### 7.2 Per-plant residual audit",
         "",
         f"Every Section 6 candidate is driven with the same command and differenced against the same ten-DOF stage output at the production {VERIFICATION_DT * 1e6:.1f} µs step. "
         "The damping question and the truncation question are then separated by measurement instead of inference.",
@@ -4316,16 +4488,16 @@ def generated_reduction_convergence(verification: dict[str, object]) -> str:
         f"the last {100.0 * craig_bampton['rms_residual_nm'] / executed['rms_residual_nm']:.0f}% is removed by none of the three and is the residual the three-coordinate plant still carries. "
         "This also prices the one assumption that [E.3](#e-3-direct-series-compliance-reduction) could previously only bound: dropping the eliminated axial inertia costs half a percent on the drive pole, and that half percent is now the largest single term in the reduction residual.",
         "",
-        "### Consequence for the Section 11 dwell",
+        "### 7.3 Dwell consequence",
         "",
         f"The ten-DOF upper mode now implies a 2% settling time of {full_settling * 1e3:.1f} ms, against {reduced_settling * 1e3:.1f} ms for the reduced plant. "
-        f"[Section 11](#11-generated-numerical-summary) runs its nonlinear campaign on a {dwell * 1e3:.0f} ms plateau dwell, set from the {constants['settling_time_2pct'] * 1e3:.1f} ms commutation-mode estimate and a {dwell * 1e3:.0f} ms floor. "
+        f"[Section 11](#11-generated-numerical-summary) runs its nonlinear campaign on a {dwell * 1e3:.0f} ms plateau dwell, set by the maximum of the 100 ms floor, the {constants['detent_settling_time_2pct'] * 1e3:.1f} ms detent-softened drive estimate, and the {constants['axial_settling_time_2pct'] * 1e3:.1f} ms reduced axial-mode estimate. "
         + (f"That floor is adequate: it exceeds the axial-mode settling time by a factor of {dwell / full_settling:.1f}, so the settled-window statistics are collected after the 691 Hz mode has decayed. "
            "The earlier finding that the dwell was short by a factor of six was a consequence of the understated interface loss factors and does not survive their correction."
            if full_settling < dwell else
            f"That floor is still short of the axial-mode settling time by a factor of {full_settling / dwell:.1f}, so the settled-window statistics are collected while the 691 Hz mode is still ringing."),
         "",
-        "### How to interpret the top-right trajectory",
+        "### 7.4 Reading the trajectory",
         "",
         f"The large oscillation is expected **inside this deliberately frictionless, global-linear audit**, but it is not a quantitative prediction of a real repeated full-step move. "
         f"One full step changes the electrical equilibrium by {verification['full_step_electrical_angle']:.3f} rad (90°). "
@@ -4382,7 +4554,7 @@ def generated_summary(linear_metrics: dict[str, dict[str, float | np.ndarray]],
     lines.extend([
         "",
         "The displayed modes and gains are the global commutation linearization: periodic detent is deliberately excluded from the global stiffness matrix. The friction tangent is local and valid only below the listed first-yield travel. "
-        f"The nonlinear cases include the periodic detent torque and use a {constants['plateau_dwell'] * 1e3:.0f} ms dwell derived from the 2% settling estimate ({constants['settling_time_2pct'] * 1e3:.1f} ms, with a 100 ms floor). "
+        f"The nonlinear cases include periodic detent torque and use a {constants['plateau_dwell'] * 1e3:.0f} ms dwell: max(100 ms, {constants['detent_settling_time_2pct'] * 1e3:.1f} ms detent-softened drive, {constants['axial_settling_time_2pct'] * 1e3:.1f} ms reduced axial mode). "
         f"Settled values collect the last {constants['metric_window'] * 1e3:.0f} ms of every plateau. All deviation columns use $d(t)=x_{{cmd}}(t)-x_s(t)$ and describe open-loop modeled plant behavior, not servo tracking performance. Case 0 remains frictionless.",
         "",
         "### Generated reduction audit",
@@ -4449,6 +4621,7 @@ def generated_bode_comparison(frequencies: np.ndarray,
     ]
     rows = (
         ("A/A2", "A", "A2", "Guideway presliding stiffness acts against ground"),
+        ("G/G2", "G", "G2", "Guideway-only drive-port ablation on the same free-stage plant"),
         ("B/B2", "B", "B2", "Nut microslip shifts the relative mode; the same lumped drive tangent is shared by every friction case"),
         ("C/C2", "C", "C2", "All three identifiable friction tangents are active"),
     )
@@ -4501,7 +4674,7 @@ def generated_tau_c_sensitivity(study: dict[str, object]) -> str:
     for row in rows:
         lines.append(
             f"| {row['tau_C'] * 1e3:.1f} ms | {row['C_site']:.0f} N/s | "
-            f"{row['force_mismatch_N']:.5f} N | {row['loop_area_J']:.4e} J |"
+            f"{row['force_mismatch_N']:.5f} N | {row['loop_area_J'] * 1e6:.3f} µJ |"
         )
     verdict = (
         "**$C$ is not a dominant uncertainty over this range.** "
@@ -4510,8 +4683,8 @@ def generated_tau_c_sensitivity(study: dict[str, object]) -> str:
     )
     lines.extend([
         "",
-        f"Across a four-fold change in $\\tau_C$ the return-force mismatch spreads by {force_spread:.5f} N and the loop area by {loop_spread:.3e} J, "
-        f"against GMS-minus-LuGre gaps of {force_gap:.5f} N and {loop_gap:.3e} J on the same metrics. "
+        f"Across a four-fold change in $\\tau_C$ the return-force mismatch spreads by {force_spread:.5f} N and the loop area by {loop_spread * 1e6:.2f} µJ, "
+        f"against GMS-minus-LuGre gaps of {force_gap:.5f} N and {loop_gap * 1e6:.2f} µJ on the same metrics. "
         + verdict
         + (f"The spread is {100.0 * force_spread / force_gap:.1f}% of the force gap and {100.0 * loop_spread / loop_gap:.1f}% of the loop-area gap, "
            "so the law comparison in Section 9 survives the assumption. This bounds a weakness rather than removing it: "
@@ -4540,7 +4713,8 @@ def update_generated_tau_c_sensitivity(summary: str) -> None:
 
 
 def generated_branch_census(study: dict[str, object],
-                            departure: dict[str, object]) -> str:
+                            departure: dict[str, object],
+                            memory_experiments: dict[str, dict[str, object]]) -> str:
     """Build the Section 13.2 branch-selection census and its verdict."""
     rows = list(study["rows"])
     threshold_total = int(study["threshold_total"])
@@ -4552,7 +4726,9 @@ def generated_branch_census(study: dict[str, object],
         "$(v,F_i)$ at every Runge-Kutta evaluation instead of carrying a persistent per-element flag. "
         "This census advances a shadow persistent flag alongside the executed trajectory and counts where the two disagree. "
         "The shadow flag never feeds a derivative, so collecting it cannot change any reported result. "
-        "Counts are element-evaluations: four elements per site per RK stage, over the full main sequence.",
+        f"Counts are element-evaluations: four elements per site per RK stage, over the "
+        f"{main_duration(physical_constants()) * 1e3:.0f} ms main sequence. The re-priced "
+        "comparison below uses the Section 9 memory trajectory, which is a different trajectory.",
         "",
         "| Case | Site | `flips_reversal` | `flips_threshold` | `evals_total` | Threshold share |",
         "|---|---|---:|---:|---:|---:|",
@@ -4573,13 +4749,13 @@ def generated_branch_census(study: dict[str, object],
     ])
     if threshold_total == 0:
         lines.extend([
-            "**`flips_threshold` is zero across A2, B2, and C2.** For these trajectories the stateless test is "
+            "**`flips_threshold` is zero across the executed GMS cases.** For these trajectories the stateless test is "
             "equivalent to the persistent-state model and the departure is inert. No counterfactual rerun is required.",
             "",
         ])
     else:
         lines.extend([
-            f"**`flips_threshold` is not zero: {threshold_total:,} element-evaluations across A2, B2, and C2**, "
+            f"**`flips_threshold` is not zero: {threshold_total:,} element-evaluations across the executed GMS cases**, "
             f"against {reversal_total:,} genuine reversals and {evaluation_total:,} evaluations. "
             "The departure is therefore active, and it is the dominant re-stick mechanism rather than a rare corner: "
             f"threshold-driven reclassification outnumbers reversal-driven re-stick by {threshold_total / max(reversal_total, 1):.0f} to 1. "
@@ -4606,6 +4782,43 @@ def generated_branch_census(study: dict[str, object],
             "is identically zero because the elastic deformation is constant, so every nut element is stuck and no branch decision is "
             "ever contested. See [8.0](#8-0-how-the-friction-laws-attach-to-the-plant).",
             "",
+            "#### Memory-sequence branch census",
+            "",
+            f"The Section 9 memory trajectory lasts "
+            f"{float(memory_experiments['guideway']['duration']) * 1e3:.0f} ms. Its branch counts "
+            "are measured on that trajectory itself; they are not copied or duration-scaled from "
+            "the main-sequence census.",
+            "",
+            "| Case | Site | `flips_reversal` | `flips_threshold` | `evals_total` | Threshold share |",
+            "|---|---|---:|---:|---:|---:|",
+        ])
+        memory_threshold_total = 0
+        memory_reversal_total = 0
+        for experiment in memory_experiments.values():
+            for key, census in experiment["censuses"].items():
+                for site in census.sites:
+                    reversals = int(census.reversal_flips[site])
+                    thresholds = int(census.threshold_flips[site])
+                    evaluations = int(census.evaluations[site])
+                    memory_reversal_total += reversals
+                    memory_threshold_total += thresholds
+                    lines.append(
+                        f"| {key} | {SITE_TITLES[site]} | {reversals:,} | "
+                        f"{thresholds:,} | {evaluations:,} | "
+                        f"{100.0 * thresholds / max(evaluations, 1):.3f}% |"
+                    )
+        main_ratio = threshold_total / max(reversal_total, 1)
+        memory_ratio = memory_threshold_total / max(memory_reversal_total, 1)
+        relative_ratio_change = abs(memory_ratio - main_ratio) / max(main_ratio, 1e-30)
+        ratio_verdict = (
+            "**materially differs**" if relative_ratio_change >= 0.20
+            else "**does not materially differ**")
+        lines.extend([
+            "",
+            f"The memory-sequence threshold-to-reversal ratio is {memory_ratio:.1f}:1, versus "
+            f"{main_ratio:.1f}:1 on the main sequence. It {ratio_verdict} under the stated 20% "
+            f"relative-change criterion ({100.0 * relative_ratio_change:.1f}% here).",
+            "",
             "#### Re-priced against the Section 9.4 loop metrics",
             "",
             "The repeated-return metrics compare settled means at the *same* command level reached by different histories, so their value "
@@ -4619,12 +4832,17 @@ def generated_branch_census(study: dict[str, object],
         for record in departure["records"]:
             digits = int(record["digits"])
             unit = str(record["unit"])
+            def shown(value: object, signed: bool = False) -> str:
+                number = float(value)
+                if unit == "µJ":
+                    return f"{number:+.{digits}f}" if signed else f"{number:.{digits}f}"
+                return f"{number:+.{digits}g}" if signed else f"{number:.{digits}g}"
             lines.append(
                 f"| {record['case']} | {record['metric']} | "
-                f"{float(record['executed']):.{digits}g} {unit} | "
-                f"{float(record['persistent']):.{digits}g} {unit} | "
-                f"{float(record['delta']):+.{digits}g} {unit} | "
-                f"{float(record['law_gap']):.{digits}g} {unit} | "
+                f"{shown(record['executed'])} {unit} | "
+                f"{shown(record['persistent'])} {unit} | "
+                f"{shown(record['delta'], True)} {unit} | "
+                f"{shown(record['law_gap'])} {unit} | "
                 f"{'**yes**' if record['exceeds_law_gap'] else 'no'} |"
             )
         force_records = [r for r in departure["records"] if "F_{ret}" in str(r["metric"])]
@@ -4636,6 +4854,9 @@ def generated_branch_census(study: dict[str, object],
             f"On the metric the experiment is built around, the departure moves $F_{{ret}}$ for {worst_force['case']} by "
             f"{abs(float(worst_force['delta'])):.4f} N against a law gap of {float(worst_force['law_gap']):.4f} N, which is "
             f"{force_fraction:.0f}% of the effect being measured.",
+            "",
+            "This conclusion is conditional on command resolution. The earlier 1/256 run priced the same A2 $F_{ret}$ departure at 91.5% of the law gap; the rebuilt production 1/16 sequence prices it at "
+            f"{force_fraction:.0f}%. Coarser executable commands changed the loop trajectory and the comparison margin, so the branch-model warning must be re-evaluated whenever the microstep divisor or reversal sequence changes.",
             "",
         ])
         if bool(departure["any_exceeds"]):
@@ -4682,6 +4903,33 @@ def branch_census_sentence(study: dict[str, object]) -> str:
     return "GMS branch census - " + "; ".join(parts) + ". " + verdict + "."
 
 
+def rendered_branch_census_sentence() -> str:
+    """Return the live sentence from this run or recover it from generated Markdown."""
+    if BRANCH_CENSUS_SENTENCE:
+        return BRANCH_CENSUS_SENTENCE
+    source = DERIVATION_MD.read_text(encoding="utf-8")
+    block_match = re.search(
+        r"<!-- BEGIN GENERATED BRANCH CENSUS -->(.*?)<!-- END GENERATED BRANCH CENSUS -->",
+        source, flags=re.DOTALL)
+    main_block = ("" if block_match is None else
+                  block_match.group(1).split("#### Memory-sequence branch census", 1)[0])
+    rows = [] if block_match is None else re.findall(
+        r"^\| (A2|G2|B2|C2) \| .*?\$([dgn])\$ \| ([\d,]+) \| ([\d,]+) \| ([\d,]+) \|",
+        main_block, flags=re.MULTILINE)
+    if rows:
+        parts = [
+            f"{case}/{site}: reversal {reversal}, threshold {threshold}, evals {evaluations}"
+            for case, site, reversal, threshold, evaluations in rows
+        ]
+        threshold_total = sum(int(threshold.replace(",", ""))
+                              for _case, _site, _reversal, threshold, _evaluations in rows)
+        verdict = ("departure inert for these trajectories"
+                   if threshold_total == 0 else
+                   f"{threshold_total:,} threshold flips total; see Section 13.2 for the priced counterfactual")
+        return "GMS branch census - " + "; ".join(parts) + ". " + verdict + "."
+    return "GMS branch census - not rebuilt in this render; rerun the Python builder to refresh the counts."
+
+
 def friction_port_sentence() -> str:
     """One-line port and integrated-state summary baked into Section 8.0."""
     parts = []
@@ -4708,11 +4956,12 @@ def generated_presliding_summary(experiments: dict[str, dict[str, object]]) -> s
         ("Mean repeated-return deviation mismatch", "return_error_mismatch_nm", "nm", False),
         ("Mean repeated-return friction-force mismatch", "return_force_mismatch_N", "N", False),
         ("Absolute mean error after final return to zero", "final_mean_nm", "nm", True),
-        ("Dissipated energy of the closed loop $A_{loop}$", "loop_area_J", "J", False),
+        ("Dissipated energy of the closed loop $A_{loop}$", "loop_area_J", "µJ", False),
     )
     for experiment_name, experiment in experiments.items():
         metrics = experiment["metrics"]
-        lugre_key, gms_key = experiment["keys"]
+        keys = tuple(experiment["keys"])
+        lugre_key, gms_key = keys[:2]
         site = experiment["site"]
         site_title = "Guideway" if site == "g" else "Nut microslip"
         boundary_note = (
@@ -4725,21 +4974,60 @@ def generated_presliding_summary(experiments: dict[str, dict[str, object]]) -> s
             "",
             boundary_note,
             "",
-            f"| Executed metric | LuGre {lugre_key} | GMS {gms_key} | GMS minus LuGre |",
-            "|---|---:|---:|---:|",
+            (f"| Executed metric | LuGre {lugre_key} | GMS {gms_key} | "
+             f"LuGre {keys[2]} | GMS {keys[3]} | {gms_key} minus {keys[3]} (% vs {keys[3]}) | GMS minus LuGre |"
+             if len(keys) == 4 else
+             f"| Executed metric | LuGre {lugre_key} | GMS {gms_key} | GMS minus LuGre |"),
+            ("|---|---:|---:|---:|---:|---:|---:|"
+             if len(keys) == 4 else "|---|---:|---:|---:|"),
         ])
         for label, key, unit, use_absolute in rows:
-            lugre = float(metrics[lugre_key][key])
-            gms = float(metrics[gms_key][key])
+            scale = 1.0e6 if unit == "µJ" else 1.0
+            lugre = scale * float(metrics[lugre_key][key])
+            gms = scale * float(metrics[gms_key][key])
             if use_absolute:
                 lugre, gms = abs(lugre), abs(gms)
-            precision = 9 if unit == "J" else 4 if unit == "N" else 2
-            lines.append(
-                f"| {label} | {lugre:.{precision}f} {unit} | {gms:.{precision}f} {unit} | "
-                f"{gms - lugre:+.{precision}f} {unit} |"
-            )
-        max_force = max(float(metrics[key]["max_force_N"])
-                        for key in (lugre_key, gms_key))
+            precision = 4 if unit == "N" else 2
+            if len(keys) == 4:
+                ablation_lugre = scale * float(metrics[keys[2]][key])
+                ablation_gms = scale * float(metrics[keys[3]][key])
+                if use_absolute:
+                    ablation_lugre, ablation_gms = abs(ablation_lugre), abs(ablation_gms)
+                ablation_delta = gms - ablation_gms
+                ablation_delta_pct = 100.0 * ablation_delta / max(abs(ablation_gms), 1.0e-30)
+                lines.append(
+                    f"| {label} | {lugre:.{precision}f} {unit} | {gms:.{precision}f} {unit} | "
+                    f"{ablation_lugre:.{precision}f} {unit} | {ablation_gms:.{precision}f} {unit} | "
+                    f"{ablation_delta:+.{precision}f} {unit} ({ablation_delta_pct:+.1f}%) | "
+                    f"{gms - lugre:+.{precision}f} {unit} |"
+                )
+            else:
+                lines.append(
+                    f"| {label} | {lugre:.{precision}f} {unit} | {gms:.{precision}f} {unit} | "
+                    f"{gms - lugre:+.{precision}f} {unit} |"
+                )
+        if site == "g" and len(keys) == 4:
+            guide_changes = []
+            for _label, metric_key, _unit, use_absolute in rows:
+                coupled = float(metrics[gms_key][metric_key])
+                ablated = float(metrics[keys[3]][metric_key])
+                if use_absolute:
+                    coupled, ablated = abs(coupled), abs(ablated)
+                guide_changes.append(
+                    abs(100.0 * (coupled - ablated) / max(abs(ablated), 1.0e-30)))
+            fret_change = abs(100.0 * (
+                float(metrics[gms_key]["return_force_mismatch_N"])
+                - float(metrics[keys[3]]["return_force_mismatch_N"])
+            ) / max(abs(float(metrics[keys[3]]["return_force_mismatch_N"])), 1.0e-30))
+            if max(guide_changes) < 10.0:
+                lines.extend([
+                    "",
+                    f"**Ablating the drive port moves every guide metric by less than 10%; "
+                    f"$F_{{ret}}$ moves by {fret_change:.1f}%.** A/A2 is therefore a serviceable "
+                    "guideway-memory proxy, though not an uncoupled fixture. This supersedes the "
+                    "pre-1/16 estimate of a 27–32% drive-port effect.",
+                ])
+        max_force = max(float(metrics[key]["max_force_N"]) for key in keys)
         lines.extend([
             "",
             f"Maximum executed {site_title.lower()} friction is **{max_force:.3f} N** "
@@ -4748,11 +5036,21 @@ def generated_presliding_summary(experiments: dict[str, dict[str, object]]) -> s
             "",
         ])
     first_experiment = next(iter(experiments.values()))
+    guide = experiments["guideway"]["metrics"]
+    nut = experiments["nut"]["metrics"]
+    guide_energy_ratio = 100.0 * float(guide["A2"]["loop_area_J"]) / float(guide["A"]["loop_area_J"])
+    nut_energy_ratio = 100.0 * float(nut["B2"]["loop_area_J"]) / float(nut["B"]["loop_area_J"])
+    guide_force_ratio = float(guide["A2"]["return_force_mismatch_N"]) / float(guide["A"]["return_force_mismatch_N"])
+    nut_force_ratio = float(nut["B2"]["return_force_mismatch_N"]) / float(nut["B"]["return_force_mismatch_N"])
+    guide_final_origin = abs(float(guide["A2"]["final_mean_nm"]))
     lines.extend([
-        f"Every plateau is held for **{first_experiment['plateau_dwell'] * 1e3:.0f} ms**, so return-point means are settled samples rather than drive-mode ringing. "
-        r"The dedicated blocked-stage B/B2 force-deflection loop is the finite-amplitude test of the exact small-signal correlation between $k_{ax}$ and $\sigma_{0,n}$: both multiply $[1,-1]^T[1,-1]$ before microslip yields. This identification-fixture boundary is not used for the normal plant-response plots.",
+        f"Every plateau is held for **{first_experiment['plateau_dwell'] * 1e3:.0f} ms**. "
+        "The B/B2 boundary applies the finite-amplitude correlation-breaking rationale stated above; it is not used for normal plant-response plots, and the Step 1 fixture has no exact simulation twin.",
         "",
-        "The whole-sequence RMS still includes instantaneous command edges. Repeated-return force and final-origin measures target constitutive history. The provisional parameters do not predetermine that GMS is better; measured loops must select and fit the law.",
+        f"For the rebuilt loops, GMS dissipates [[derived:guideway_loop_energy_ratio_pct={guide_energy_ratio:.1f}]]% of LuGre energy at the guideway and [[derived:nut_loop_energy_ratio_pct={nut_energy_ratio:.1f}]]% at the nut. "
+        f"Its return-force mismatch is [[derived:guideway_return_force_ratio={guide_force_ratio:.2f}]]× the guideway LuGre value and [[derived:nut_return_force_ratio={nut_force_ratio:.2f}]]× the nut LuGre value. These ratios describe the provisional executed loops, not a general ranking of the laws.",
+        "",
+        f"The closed path is observed in the physical coordinate, not inferred from the command: A2 returns to [[derived:guideway_a2_final_origin_nm={guide_final_origin:.2f}]] nm from the origin, about {100.0 * guide_final_origin / 3750.0:.2f}% of the 3.75 µm outer excursion.",
         "<!-- END GENERATED PRESLIDING SUMMARY -->",
     ])
     return "\n".join(lines)
@@ -4775,40 +5073,53 @@ def generated_convergence_summary(study: dict[str, dict[str, object]]) -> str:
     lines = [
         "<!-- BEGIN GENERATED STEP HALVING SUMMARY -->",
         f"| Case | {dt_us[0]:.1f} us | {dt_us[1]:.1f} us | {dt_us[2]:.1f} us | "
+        f"{A2_CONVERGENCE_DT * 1e6:.2f} us (A2 only) | "
         f"$\\Delta R_{{{dt_us[0]:g}\\to{dt_us[1]:g}}}$ | "
-        f"$\\Delta R_{{{dt_us[1]:g}\\to{dt_us[2]:g}}}$ | Difference ratio |",
-        "|---|---:|---:|---:|---:|---:|---:|",
+        f"$\\Delta R_{{{dt_us[1]:g}\\to{dt_us[2]:g}}}$ | "
+        f"$\\Delta R_{{{dt_us[2]:g}\\to{A2_CONVERGENCE_DT * 1e6:g}}}$ | Observed $p$ |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for key in ("A2", "B2", "C2"):
         result = study[key]
         rms = result["rms_nm"]
+        extra_rms = f"{rms[3]:.5f} nm" if len(rms) == 4 else "—"
+        extra_difference = result["extra_difference_nm"]
+        extra_difference_text = (
+            f"{float(extra_difference):.5f} nm" if extra_difference is not None else "—")
         lines.append(
             f"| {key} | {rms[0]:.5f} nm | {rms[1]:.5f} nm | {rms[2]:.5f} nm | "
+            f"{extra_rms} | "
             f"{result['coarse_difference_nm']:.5f} nm | {result['fine_difference_nm']:.5f} nm | "
-            f"{result['difference_ratio']:.2f} |"
+            f"{extra_difference_text} | {result['observed_order']:.2f} |"
         )
-    monotone = all(
-        float(study[key]["fine_difference_nm"]) < float(study[key]["coarse_difference_nm"])
-        for key in ("A2", "B2", "C2")
-    )
-    max_relative = max(float(study[key]["fine_relative_pct"]) for key in ("A2", "B2", "C2"))
-    if monotone:
-        interpretation = (
-            "The successive change decreases for all three GMS cases, which is consistent with "
-            "time-step convergence for this reported metric."
+    a2 = study["A2"]
+    a2_extra = float(a2["extra_difference_nm"])
+    if a2_extra >= float(a2["fine_difference_nm"]):
+        a2_verdict = (
+            f"The additional A2 difference grows again, from {a2['fine_difference_nm']:.5f} nm "
+            f"to {a2_extra:.5f} nm. **The A2 metric is numerically unstable under the tested "
+            "step-halving sequence; its final/settled-window RMS is not converged.**"
         )
     else:
-        interpretation = (
-            "At least one case does not show a smaller second difference, so this metric is not yet "
-            "demonstrably converged and a finer run is required."
+        a2_verdict = (
+            f"The additional A2 difference falls from {a2['fine_difference_nm']:.5f} nm "
+            f"to {a2_extra:.5f} nm. **The 12.5 us A2 point was a grid-sensitive branch-switching "
+            "artifact; the finer point reverses the apparent divergence.**"
         )
+    reduced_cases = ", ".join(
+        f"{key} ($p={study[key]['observed_order']:.2f}$)"
+        for key in ("B2", "C2"))
     lines.extend([
         "",
-        interpretation + f" The largest {dt_us[1]:.1f}-to-{dt_us[2]:.1f} us relative change is **{max_relative:.4f}%**.",
+        f"B2 and C2 show reduced successive differences under step halving: {reduced_cases}. "
+        "Their observed orders are empirical hybrid-trajectory indicators, not an RK4 order claim.",
+        "",
+        f"A2 does not show the same trend over the first three grids: "
+        f"$p=$[[derived:a2_convergence_order={a2['observed_order']:.2f}]]. {a2_verdict}",
         "",
         f"These values use the identical {main_duration(constants) * 1e3:.0f} ms zero-order-held, yield-spanning command and the identical final {constants['metric_window'] * 1e3:.0f} ms "
         "RMS definition. Since GMS branch switching is evaluated at RK trial states without event "
-        "localization, the difference ratio is a sensitivity indicator, not a claimed fourth-order "
+        "localization, the observed order is a sensitivity indicator, not a claimed fourth-order "
         "convergence rate for the hybrid trajectory.",
         "<!-- END GENERATED STEP HALVING SUMMARY -->",
     ])
@@ -4824,6 +5135,51 @@ def update_generated_convergence_summary(summary: str) -> None:
     if not pattern.search(source):
         raise RuntimeError("Generated step-halving summary markers are missing from the derivation document")
     DERIVATION_MD.write_text(pattern.sub(lambda _match: summary, source), encoding="utf-8")
+
+
+def update_derived_token_fallbacks(values: dict[str, float]) -> None:
+    """Refresh generated fallback text while retaining browser-live token cells."""
+    source = DERIVATION_MD.read_text(encoding="utf-8")
+    for key, value in values.items():
+        pattern = re.compile(rf"(\[\[derived:{re.escape(key)}=)[^\]]+(\]\])")
+        match = pattern.search(source)
+        if match is None:
+            raise RuntimeError(f"Derived report token {key!r} is missing from the derivation document")
+        template = match.group(0).split("=", 1)[1][:-2]
+        if "." in template:
+            digits = len(template.rsplit(".", 1)[1])
+            shown = f"{value:.{digits}f}"
+        else:
+            shown = f"{int(round(value))}"
+        source = pattern.sub(lambda item: item.group(1) + shown + item.group(2), source)
+    DERIVATION_MD.write_text(source, encoding="utf-8")
+
+
+def takeaway_derived_values(verification: dict[str, object],
+                            experiments: dict[str, dict[str, object]]) -> dict[str, float]:
+    """Return every generated number used by the Section 7–9 takeaway cards."""
+    by_key = {str(row["key"]): row for row in verification["route_residuals"]}
+    executed = float(by_key["P"]["rms_residual_nm"])
+    interface = float(by_key["F"]["rms_residual_nm"])
+    aligned = float(by_key["C2"]["rms_residual_nm"])
+    restored = float(by_key["CB"]["rms_residual_nm"])
+    full_lower = float(verification["full_lower_damped_mode"][0])
+    return {
+        "section7_reduced_coordinate_count": 2.0,
+        "section7_full_coordinate_count": 10.0,
+        "section7_rms_pct": float(verification["rms_residual_pct_command"]),
+        "section7_rms_nm": float(verification["rms_residual_nm"]),
+        "section7_damping_share_pct": 100.0 * abs(executed - interface) / executed,
+        "section7_frequency_share_pct": 100.0 * (executed - aligned) / executed,
+        "section7_drive_share_pct": 100.0 * (aligned - restored) / executed,
+        "section7_drive_pole_error_pct": 100.0 * abs(
+            float(by_key["P"]["lower_hz"]) - full_lower) / full_lower,
+        "friction_port_count": float(len(SITE_KEYS)),
+        "gms_states_per_site": float(GMS_N),
+        "lugre_states_per_site": 1.0,
+        "structural_identifiability_result_count": 2.0,
+        "project_adev_floor_nm": 4.6,
+    }
 
 
 def slugify(text: str) -> str:
@@ -4854,6 +5210,12 @@ def _format_default_like(value: object, template: str) -> str:
 def _format_derived_value(key: str, value: object, template: str) -> str:
     """Mirror the browser's display-unit formatting for initial HTML output."""
     numeric = float(value)
+    if re.search(r"loop_area|A_loop|a_loop", key, flags=re.IGNORECASE):
+        return f"{numeric * 1.0e6:.2f}"
+    if key in {"detent_settling_time_2pct", "axial_settling_time_2pct", "plateau_dwell"}:
+        return f"{numeric * 1.0e3:.1f}"
+    if key == "case_count":
+        return str(int(numeric))
     if re.fullmatch(r"route_[psbfcm]_(kax|kball)", key) or key == "route_s_kax_full":
         return f"{numeric / 1.0e6:.3f}"
     if re.fullmatch(r"route_[psbfcm]_settling", key) or key == "full_model_settling":
@@ -4959,6 +5321,7 @@ def browser_derived_defaults() -> dict[str, float]:
     mass, _damping, stiffness, _input = linear_matrices((), "none")
     modes = _linear_modes(mass, stiffness)
     defaults = {
+        "case_count": float(len(CASES)),
         "transmission_ratio": constants["r"],
         "total_rotational_inertia": component["J_total"],
         "reduced_drive_mass": constants["m_d"],
@@ -4971,7 +5334,6 @@ def browser_derived_defaults() -> dict[str, float]:
         "full_step_pitch": constants["full_step"],
         "quarter_step_bound": constants["quarter_step"],
         "command_step": constants["command_step"],
-        "interpolated_step": constants["interpolated_step"],
         "screw_inertia": component["screw_inertia"],
         "screw_segment_inertia": component["screw_inertia"] / 3.0,
         "screw_mass": component["screw_mass"],
@@ -4979,6 +5341,9 @@ def browser_derived_defaults() -> dict[str, float]:
         "k_c_half": component["k_c1"],
         "mode_1_hz": float(modes[0]),
         "mode_2_hz": float(modes[1]),
+        "detent_settling_time_2pct": constants["detent_settling_time_2pct"],
+        "axial_settling_time_2pct": constants["axial_settling_time_2pct"],
+        "plateau_dwell": constants["plateau_dwell"],
     }
     defaults.update(multi_route_reduction_metrics())
     defaults.update(friction_yield_metrics())
@@ -5254,6 +5619,7 @@ def html_page(markdown_path: Path) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="report-build" content="{BUILD_ID}">
 <title>{html.escape(title)}</title>
 <script>
 window.MathJax = {{tex: {{inlineMath: [['\\\\(','\\\\)']], displayMath: [['\\\\[','\\\\]']]}}, svg: {{fontCache: 'global'}}}};
@@ -5264,10 +5630,12 @@ window.MathJax = {{tex: {{inlineMath: [['\\\\(','\\\\)']], displayMath: [['\\\\[
 html[data-theme="dark"] {{ --bg:#11171d; --card:#182129; --text:#e9eef2; --muted:#aab5be; --line:#33414c; --accent:#73c2df; --soft:#202c35; --code:#0d1217; --assumed:#5b4810; --assumed-line:#f1bf36; }}
 * {{ box-sizing:border-box; }} html {{ scroll-behavior:smooth; }}
 body {{ margin:0; background:var(--bg); color:var(--text); font:16px/1.67 Inter,Segoe UI,system-ui,sans-serif; }}
-.topbar {{ position:sticky; top:0; z-index:20; display:flex; gap:.75rem; align-items:center; padding:.65rem 1rem; background:color-mix(in srgb,var(--card) 94%,transparent); border-bottom:1px solid var(--line); backdrop-filter:blur(9px); }}
+.topbar {{ position:sticky; top:0; z-index:20; display:flex; flex-wrap:wrap; gap:.75rem; align-items:center; padding:.65rem 1rem; background:color-mix(in srgb,var(--card) 94%,transparent); border-bottom:1px solid var(--line); backdrop-filter:blur(9px); }}
 .topbar .name {{ font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:auto; }}
 button {{ color:var(--text); background:var(--soft); border:1px solid var(--line); border-radius:7px; padding:.42rem .7rem; cursor:pointer; }}
 .layout {{ display:grid; grid-template-columns:280px minmax(0,1fr); gap:1.5rem; max-width:1510px; margin:0 auto; padding:1.5rem; }}
+body.outline-collapsed .layout {{ grid-template-columns:minmax(0,1fr); max-width:1180px; }}
+body.outline-collapsed nav {{ display:none; }}
 nav {{ position:sticky; top:4.4rem; align-self:start; max-height:calc(100vh - 5.5rem); overflow:auto; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:1rem; }}
 nav .caption {{ font-size:.78rem; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:.6rem; }}
 nav a {{ display:block; color:var(--muted); text-decoration:none; border-left:2px solid transparent; padding:.24rem .35rem; font-size:.88rem; }} nav a:hover {{ color:var(--accent); border-color:var(--accent); }} nav .toc-level-3 {{ padding-left:1.15rem; font-size:.81rem; }}
@@ -5286,6 +5654,8 @@ blockquote {{ margin:1.2rem 0; padding:.75rem 1rem; background:var(--soft); bord
 p .derived-output,li .derived-output,blockquote .derived-output {{ width:auto; min-width:0; padding:.08rem .32rem; vertical-align:baseline; }}
 .live-equation {{ margin:.7rem 0; padding:.7rem .85rem; overflow-x:auto; border:1px dashed var(--accent); border-radius:7px; background:var(--soft); color:var(--text); font:600 .92rem/1.5 "Cascadia Code",Consolas,monospace; font-variant-numeric:tabular-nums; }}
 .edit-note {{ margin:0 0 1.2rem; padding:.7rem .9rem; border:1px solid var(--line); border-radius:8px; background:var(--soft); color:var(--muted); font-size:.86rem; }}
+.section-takeaway {{ margin:-.45rem 0 1.4rem; padding:.85rem 1rem; border:1px solid var(--line); border-left:4px solid var(--accent); border-radius:8px; background:var(--soft); color:var(--muted); font-size:.91rem; }}
+.section-takeaway p {{ margin:.34rem 0; }}
 .save-status {{ display:inline-block; margin-left:.55rem; padding:.14rem .45rem; border-radius:999px; border:1px solid var(--line); background:var(--card); color:var(--muted); font-weight:650; }}
 .save-status.ok {{ color:#176a55; border-color:#4fa88e; }} .save-status.warn {{ color:#9b5b00; border-color:#d49b00; }}
 .assumed-swatch {{ display:inline-block; width:1.1rem; height:.8rem; margin:0 .25rem; vertical-align:middle; background:var(--assumed); border:1px solid var(--assumed-line); border-radius:3px; }}
@@ -5299,17 +5669,74 @@ details {{ margin:1rem 0; border:1px solid var(--line); border-radius:9px; backg
 .parameter-group {{ margin:1.15rem 0; border-left:5px solid var(--accent); background:var(--soft); }} .parameter-group summary {{ font-size:1.04rem; }}
 pre {{ overflow:auto; background:var(--code); color:#e8edf2; border-radius:9px; padding:1rem; font-size:.87rem; }} code {{ font-family:Cascadia Code,Consolas,monospace; }} p code,li code,td code {{ background:var(--soft); border:1px solid var(--line); border-radius:4px; padding:.1rem .28rem; }}
 .display-math {{ overflow-x:auto; padding:.5rem 0; }} img {{ display:block; max-width:100%; height:auto; margin:1.3rem auto; border-radius:6px; }}
+article img.zoomable-report-image {{ cursor:zoom-in; outline:none; }}
+article img.zoomable-report-image:focus {{ outline:3px solid var(--accent); outline-offset:3px; }}
+.image-lightbox {{ position:fixed; inset:0; z-index:1000; display:grid; grid-template-rows:auto minmax(0,1fr); background:rgba(5,10,14,.94); color:#f5f7f8; }}
+.image-lightbox[hidden] {{ display:none; }}
+.lightbox-toolbar {{ display:flex; flex-wrap:wrap; align-items:center; gap:.55rem; padding:.7rem 1rem; background:#111a21; border-bottom:1px solid #41505c; }}
+.lightbox-title {{ flex:1; min-width:12rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
+.lightbox-toolbar button {{ color:#f5f7f8; background:#24313b; border-color:#536572; }}
+.lightbox-viewport {{ overflow:auto; display:block; padding:1.2rem; overscroll-behavior:contain; cursor:grab; }}
+.lightbox-viewport.dragging {{ cursor:grabbing; user-select:none; }}
+.lightbox-viewport img {{ display:block; width:100%; max-width:none; height:auto; margin:auto; border-radius:4px; background:white; box-shadow:0 10px 38px rgba(0,0,0,.45); }}
+body.lightbox-open {{ overflow:hidden; }}
 .footer {{ color:var(--muted); font-size:.78rem; margin-top:3rem; padding-top:1rem; border-top:1px solid var(--line); }}
 @media (max-width:920px) {{ .layout {{ grid-template-columns:1fr; padding:.7rem; }} nav {{ position:relative; top:auto; max-height:18rem; }} article {{ padding:1.2rem; }} .hide-small {{ display:none; }} .live-plot-grid {{ grid-template-columns:1fr; }} }}
 @media print {{ .topbar,nav {{ display:none; }} body {{ background:white; }} .layout {{ display:block; padding:0; }} article {{ max-width:none; border:0; box-shadow:none; }} details {{ break-inside:avoid; }} }}
 </style>
 </head>
 <body>
-<div class="topbar"><span class="name">{html.escape(title)}</span><button onclick="setDetails(true)">Expand derivations</button><button onclick="setDetails(false)">Collapse</button><button onclick="saveParameterInputs()">Save in browser</button><button onclick="saveEditedHtml()">Save HTML copy</button><button onclick="resetParameterInputs()">Reset inputs</button><button class="hide-small" onclick="toggleTheme()">Theme</button><button class="hide-small" onclick="window.print()">Print</button></div>
-<div class="layout"><nav><div class="caption">On this page</div>{''.join(toc_html)}</nav><article><div class="edit-note"><span class="assumed-swatch"></span>Amber inputs are unidentified assumptions. “Save in browser” stores overrides only in this browser and the page URL; it does not rewrite the workspace file. “Save HTML copy” embeds them in a chosen file. Dependent scalar values, live equations, and the live Bode panel recalculate immediately. Publication SVGs and nonlinear simulations require a Python rebuild.<span id="parameter-save-status" class="save-status">Loading values…</span></div>{body}<div class="footer">Rendered from {html.escape(markdown_path.name)} · {generated}</div></article></div>
+<div class="topbar"><span class="name">{html.escape(title)}</span><button id="outline-toggle" type="button" aria-expanded="true" aria-controls="report-outline" onclick="toggleOutline()">Hide outline</button><button onclick="setDetails(true)">Expand derivations</button><button onclick="setDetails(false)">Collapse</button><button onclick="saveParameterInputs()">Save in browser</button><button onclick="saveEditedHtml()">Save HTML copy</button><button onclick="resetParameterInputs()">Reset inputs</button><button class="hide-small" onclick="toggleTheme()">Theme</button><button class="hide-small" onclick="window.print()">Print</button></div>
+<div class="layout"><nav id="report-outline"><div class="caption">On this page</div>{''.join(toc_html)}</nav><article><div class="edit-note"><span class="assumed-swatch"></span>Amber inputs are unidentified assumptions. “Save in browser” stores overrides only in this browser and the page URL; it does not rewrite the workspace file. “Save HTML copy” embeds them in a chosen file. Dependent scalar values, live equations, and the live Bode panel recalculate immediately. Publication SVGs and nonlinear simulations require a Python rebuild.<span id="parameter-save-status" class="save-status">Loading values…</span></div>{body}<div class="footer">Rendered from {html.escape(markdown_path.name)} · build {BUILD_ID} · {generated}</div></article></div>
+<div id="image-lightbox" class="image-lightbox" role="dialog" aria-modal="true" aria-label="Expanded report image" hidden><div class="lightbox-toolbar"><span id="lightbox-title" class="lightbox-title">Expanded image</span><button type="button" onclick="changeImageZoom(-0.25)" aria-label="Zoom out">−</button><button id="lightbox-zoom" type="button" onclick="resetImageZoom()" title="Reset zoom">100%</button><button type="button" onclick="changeImageZoom(0.25)" aria-label="Zoom in">+</button><button type="button" onclick="closeImageLightbox()">Close</button></div><div id="lightbox-viewport" class="lightbox-viewport"><img id="lightbox-image" alt=""></div></div>
 <script>
 function setDetails(open) {{ document.querySelectorAll('details').forEach(d => d.open=open); }}
 function toggleTheme() {{ const root=document.documentElement; root.dataset.theme=root.dataset.theme==='dark'?'light':'dark'; }}
+const outlineStorageKey = 'report-outline:' + document.title + ':' + location.pathname;
+function setOutline(open, persist=true) {{
+  document.body.classList.toggle('outline-collapsed', !open);
+  const button=document.getElementById('outline-toggle');
+  if (button) {{ button.textContent=open?'Hide outline':'Show outline'; button.setAttribute('aria-expanded',String(open)); }}
+  if (persist) try {{ localStorage.setItem(outlineStorageKey, open?'open':'closed'); }} catch (_) {{}}
+}}
+function toggleOutline() {{ setOutline(document.body.classList.contains('outline-collapsed')); }}
+let imageZoom=1;
+function applyImageZoom() {{
+  const image=document.getElementById('lightbox-image');
+  const label=document.getElementById('lightbox-zoom');
+  if (image) image.style.width=(imageZoom*100)+'%';
+  if (label) label.textContent=Math.round(imageZoom*100)+'%';
+}}
+function changeImageZoom(delta) {{ imageZoom=Math.max(0.5,Math.min(6,imageZoom+delta)); applyImageZoom(); }}
+function resetImageZoom() {{ imageZoom=1; applyImageZoom(); }}
+function openImageLightbox(source) {{
+  const box=document.getElementById('image-lightbox'), image=document.getElementById('lightbox-image');
+  if (!box || !image) return;
+  image.src=source.currentSrc||source.src; image.alt=source.alt||'Expanded report image';
+  document.getElementById('lightbox-title').textContent=source.alt||'Expanded report image';
+  resetImageZoom(); box.hidden=false; document.body.classList.add('lightbox-open');
+  document.getElementById('lightbox-viewport').scrollTo(0,0);
+  box.querySelector('button').focus();
+}}
+function closeImageLightbox() {{
+  const box=document.getElementById('image-lightbox'); if (!box || box.hidden) return;
+  box.hidden=true; document.body.classList.remove('lightbox-open');
+}}
+function initializeImageViewer() {{
+  document.querySelectorAll('article img').forEach(image => {{
+    image.classList.add('zoomable-report-image'); image.tabIndex=0; image.setAttribute('role','button');
+    image.title='Open expanded image viewer'; image.addEventListener('click',()=>openImageLightbox(image));
+    image.addEventListener('keydown',event=>{{ if (event.key==='Enter'||event.key===' ') {{ event.preventDefault(); openImageLightbox(image); }} }});
+  }});
+  const box=document.getElementById('image-lightbox'), viewport=document.getElementById('lightbox-viewport');
+  box.addEventListener('click',event=>{{ if (event.target===box) closeImageLightbox(); }});
+  viewport.addEventListener('wheel',event=>{{ event.preventDefault(); changeImageZoom(event.deltaY<0?0.25:-0.25); }},{{passive:false}});
+  let dragging=false,startX=0,startY=0,scrollLeft=0,scrollTop=0;
+  viewport.addEventListener('pointerdown',event=>{{ dragging=true; startX=event.clientX; startY=event.clientY; scrollLeft=viewport.scrollLeft; scrollTop=viewport.scrollTop; viewport.classList.add('dragging'); viewport.setPointerCapture(event.pointerId); }});
+  viewport.addEventListener('pointermove',event=>{{ if (!dragging) return; viewport.scrollLeft=scrollLeft-(event.clientX-startX); viewport.scrollTop=scrollTop-(event.clientY-startY); }});
+  viewport.addEventListener('pointerup',()=>{{ dragging=false; viewport.classList.remove('dragging'); }});
+  document.addEventListener('keydown',event=>{{ if (box.hidden) return; if (event.key==='Escape') closeImageLightbox(); else if (event.key==='+'||event.key==='=') changeImageZoom(0.25); else if (event.key==='-') changeImageZoom(-0.25); else if (event.key==='0') resetImageZoom(); }});
+}}
 const parameterStorageKey = 'model-parameters:dependency-v2:' + document.title + ':' + location.pathname;
 let parameterSaveTimer = null;
 function currentParameterValues() {{
@@ -5451,7 +5878,7 @@ function liveTransferData() {{
   const zetaBearing = parameterNumber('zeta_bearing', 1.0e-2);
   const zetaBallNut = parameterNumber('zeta_ball_nut', 1.15e-2);
   const zetaNutMount = parameterNumber('zeta_nut_mount', 5.0e-3);
-  const microstepDivisor = parameterNumber('microstep_divisor', 256);
+  const microstepDivisor = parameterNumber('microstep_divisor', 16);
   if (!(lead>0 && teeth>0 && jm>0 && jc>=0 && screwLength>0 && usableScrewTravel>0 &&
         stageTravel>0 && stageTravel<=usableScrewTravel && usableScrewTravel<=screwLength && screwDiameter>0 &&
         screwDensity>0 && tmax>0 && tdet>=0 && couplingSeries>0 && kthetaA>0 &&
@@ -5579,8 +6006,11 @@ function liveTransferData() {{
   const routeModesM=modePair(km,kaxMeasured,mEffMeasured);
   const relativeZeta=cax/(2*Math.sqrt(kax*muRel));
   const zetaCplx=caxCplx/(2*Math.sqrt(kaxCplx*muRel));
-  const settlingFactor=-Math.log(0.02);
+  const settlingFactor=4;
   const settling=(ratio,frequency) => settlingFactor/(ratio*2*Math.PI*frequency);
+  const detentSettling=settlingFactor/(zeta*Math.sqrt((km-kdetAmplitude)/md));
+  const axialSettling=settling(relativeZeta,modes[1]);
+  const plateauDwell=Math.max(0.100,detentSettling,axialSettling);
   const routeCF1={derived_defaults['route_c_f1']:.12g};
   const routeCF2={derived_defaults['route_c_f2']:.12g};
   const routeCKax={derived_defaults['route_c_kax']:.12g};
@@ -5600,7 +6030,7 @@ function liveTransferData() {{
     usableScrewTravel, stageTravel,
     couplingSeries, couplingHalf:2*couplingSeries, kthetaA, kappa:teeth/r,
     fullStep:lead/(4*teeth), quarterStep:lead/(16*teeth),
-    commandStep:lead/(4*teeth*microstepDivisor), interpolatedStep:lead/(4*teeth*256),
+    commandStep:lead/(4*teeth*microstepDivisor),
     microstepDivisor, fmax:tmax/r, cm, detentPeriod:lead/(4*teeth),
     mEffMeasured, zetaRelativeMeasured, zetaSteel, zetaBearing,
     zetaBallNut, zetaNutMount, axialCompliance,
@@ -5610,7 +6040,8 @@ function liveTransferData() {{
     routeCF1, routeCF2, routeCKax, routeCCax, routeCZeta, routeCKBall,
     fullModelZeta, fullModelSettling, fullModelUpperHz,
     firstFixedInterfaceHz, firstDiscardedHz, nu, frictionSites,
-    tauC, etaScrew, preloadNut,
+    tauC, etaScrew, preloadNut, detentSettling, axialSettling, plateauDwell,
+    caseCount:{len(CASES)},
     routePSettling:settling(relativeZeta,modes[1]),
     routeFSettling:settling(zetaCplx,routeModesF[1]),
     routeMSettling:settling(zetaRelativeMeasured,routeModesM[1]),
@@ -5621,10 +6052,14 @@ function formatDerivedValue(key, value) {{
   const scientific = new Set([
     'transmission_ratio','magnetic_stiffness','detent_stiffness','screw_inertia',
     'screw_segment_inertia','full_step_pitch','quarter_step_bound',
-    'command_step','interpolated_step','total_rotational_inertia',
+    'command_step','total_rotational_inertia',
     'reduced_axial_stiffness','k_ball'
   ]);
+  if (/loop_area|A_loop|a_loop/i.test(key)) return (value*1e6).toFixed(2);
   if (scientific.has(key)) return value.toExponential(5);
+  if (key==='case_count') return value.toFixed(0);
+  if (key==='detent_settling_time_2pct' || key==='axial_settling_time_2pct' || key==='plateau_dwell')
+    return (value*1e3).toFixed(1);
   if (key==='reduced_drive_mass') return value.toFixed(3);
   if (key==='reduced_stage_mass') return value.toFixed(3);
   if (key==='screw_mass' || key==='screw_segment_mass') return value.toFixed(6);
@@ -5658,6 +6093,7 @@ function formatDerivedValue(key, value) {{
 }}
 function refreshDerivedOutputs(data) {{
   const values = {{
+    case_count:data.caseCount,
     transmission_ratio:data.r,
     total_rotational_inertia:data.jTotal,
     reduced_drive_mass:data.md,
@@ -5670,7 +6106,6 @@ function refreshDerivedOutputs(data) {{
     full_step_pitch:data.fullStep,
     quarter_step_bound:data.quarterStep,
     command_step:data.commandStep,
-    interpolated_step:data.interpolatedStep,
     screw_inertia:data.screwInertia,
     screw_segment_inertia:data.screwInertia/3,
     screw_mass:data.screwMass,
@@ -5737,6 +6172,9 @@ function refreshDerivedOutputs(data) {{
     detent_velocity_discarded:data.firstDiscardedHz*data.fullStep,
     retained_mode_period:1/data.modes[1],
     tau_C_mode_ratio:1/(data.modes[1]*data.tauC)
+    ,detent_settling_time_2pct:data.detentSettling,
+    axial_settling_time_2pct:data.axialSettling,
+    plateau_dwell:data.plateauDwell
   }};
   document.querySelectorAll('[data-derived]').forEach(output => {{
     const key=output.dataset.derived;
@@ -5801,9 +6239,7 @@ function refreshLiveEquations(data) {{
       mn(data.kBall) + ' + 1/' + mn(data.kmnt) + ' = 1/' +
       mn(data.kax) + '  (MN/m)⁻¹',
     'friction-port-summary': {json.dumps(friction_port_sentence())},
-    'gms-branch-census': {json.dumps(
-        BRANCH_CENSUS_SENTENCE
-        or "GMS branch census - not rebuilt in this render; rerun the Python builder to refresh the counts.")}
+    'gms-branch-census': {json.dumps(rendered_branch_census_sentence())}
   }};
   document.querySelectorAll('[data-live-equation]').forEach(element => {{
     const equation = equations[element.dataset.liveEquation];
@@ -5880,6 +6316,10 @@ function refreshInteractivePlots() {{
   drawLiveBode('live-bode-magnitude',data,false); drawLiveBode('live-bode-phase',data,true);
 }}
 document.addEventListener('DOMContentLoaded', () => {{
+  let outlineOpen=true;
+  try {{ outlineOpen=localStorage.getItem(outlineStorageKey)!=='closed'; }} catch (_) {{}}
+  setOutline(outlineOpen,false);
+  initializeImageViewer();
   let saved = {{}};
   let browserStorageLoaded = true;
   try {{ saved = JSON.parse(localStorage.getItem(parameterStorageKey) || '{{}}'); }} catch (_) {{ saved = {{}}; browserStorageLoaded = false; }}
@@ -5904,36 +6344,79 @@ def render_document(markdown_path: Path) -> Path:
     return output
 
 
+def build_progress(step: int, total: int, message: str) -> None:
+    """Emit visible, unbuffered stage progress without external polling."""
+    print(f"[BUILD {step}/{total}] {message}", flush=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--skip-summary-update", action="store_true",
                         help="Render without refreshing the generated metrics table")
+    parser.add_argument(
+        "--jobs", type=int, default=max(1, min(8, os.cpu_count() or 1)),
+        help="worker processes for independent RK4 simulations (default: up to 8)")
     args = parser.parse_args()
+    if args.jobs < 1:
+        parser.error("--jobs must be at least 1")
     if not DESCRIPTION_MD.exists() or not DERIVATION_MD.exists():
         raise FileNotFoundError("Both Markdown source documents must exist before building")
+    build_progress(1, 8, "COMPILING inputs and validating model/report structure")
     ASSET_DIR.mkdir(exist_ok=True)
     gms_audit = validate_gms_partition()
     loss_audit = validate_interface_loss_factors()
     validate_parameter_registry()
     validate_case_topology()
     constants = physical_constants()
+    command_audit = validate_command_design(constants)
     frequencies, bode, linear_metrics = frequency_responses()
     branch_censuses: dict[str, GmsBranchCensus] = {}
-    times, command, time_data, time_metrics = time_responses(constants, branch_censuses)
-    branch_census = gms_branch_census_study(
-        constants, times, command, branch_censuses, time_metrics)
-    global BRANCH_CENSUS_SENTENCE
-    BRANCH_CENSUS_SENTENCE = branch_census_sentence(branch_census)
-    convergence = gms_step_halving_convergence(constants, times, time_data)
-    memory_experiments = {
-        "guideway": presliding_responses(constants, ("A", "A2"), "g"),
-        "nut": presliding_responses(constants, ("B", "B2"), "n"),
-    }
+    executor = ProcessPoolExecutor(max_workers=args.jobs) if args.jobs > 1 else None
+    try:
+        build_progress(
+            2, 8, f"SIMULATING main 1510 ms nonlinear campaign with {args.jobs} workers")
+        times, command, time_data, time_metrics = time_responses(
+            constants, branch_censuses, executor)
+        build_progress(
+            3, 8, "SIMULATING memory trajectories, branch counterfactuals, "
+            "step halving (including A2 at 6.25 us), and reduction audit")
+        if executor is not None:
+            guideway_future = executor.submit(
+                presliding_responses, constants, ("A", "A2", "G", "G2"), "g")
+            nut_future = executor.submit(
+                presliding_responses, constants, ("B", "B2"), "n")
+            tau_c_future = executor.submit(
+                tau_c_sensitivity, constants, ("A", "A2"), "g")
+            verification_future = executor.submit(
+                full_reduced_verification, frequencies, constants)
+        branch_census = gms_branch_census_study(
+            constants, times, command, branch_censuses, time_metrics)
+        global BRANCH_CENSUS_SENTENCE
+        BRANCH_CENSUS_SENTENCE = branch_census_sentence(branch_census)
+        convergence = gms_step_halving_convergence(
+            constants, times, time_data, executor)
+        if executor is not None:
+            memory_experiments = {
+                "guideway": guideway_future.result(),
+                "nut": nut_future.result(),
+            }
+            tau_c_study = tau_c_future.result()
+            verification = verification_future.result()
+        else:
+            memory_experiments = {
+                "guideway": presliding_responses(constants, ("A", "A2", "G", "G2"), "g"),
+                "nut": presliding_responses(constants, ("B", "B2"), "n"),
+            }
+            tau_c_study = tau_c_sensitivity(constants, ("A", "A2"), "g")
+            verification = full_reduced_verification(frequencies, constants)
+    finally:
+        if executor is not None:
+            executor.shutdown()
+    build_progress(4, 8, "SIMULATING IDS overlays and pricing memory-branch departures")
     branch_departure = memory_branch_departure(constants, memory_experiments)
-    tau_c_study = tau_c_sensitivity(constants, ("A", "A2"), "g")
-    verification = full_reduced_verification(frequencies, constants)
     ids_records = load_ids_microstepping_records()
     ids_comparison = ids_microstepping_simulations(ids_records, constants)
+    build_progress(5, 8, "RENDERING publication SVG figures")
     case_response_paths = plot_case_responses(
         frequencies, bode, times, command, time_data, constants, time_metrics)
     comparison_path = plot_case_response_overlay(frequencies, bode)
@@ -5958,6 +6441,7 @@ def main() -> None:
         if obsolete_path.exists():
             obsolete_path.unlink()
     if not args.skip_summary_update:
+        build_progress(6, 8, "UPDATING generated Markdown tables, takeaways, and limitations")
         update_generated_bode_comparison(generated_bode_comparison(frequencies, bode))
         update_generated_reduction_convergence(
             generated_reduction_convergence(verification))
@@ -5965,8 +6449,13 @@ def main() -> None:
         update_generated_presliding_summary(generated_presliding_summary(memory_experiments))
         update_generated_convergence_summary(generated_convergence_summary(convergence))
         update_generated_branch_census(
-            generated_branch_census(branch_census, branch_departure))
+            generated_branch_census(branch_census, branch_departure, memory_experiments))
         update_generated_tau_c_sensitivity(generated_tau_c_sensitivity(tau_c_study))
+        takeaway_values = takeaway_derived_values(verification, memory_experiments)
+        takeaway_values["a2_convergence_order"] = float(
+            convergence["A2"]["observed_order"])
+        update_derived_token_fallbacks(takeaway_values)
+    build_progress(7, 8, "RENDERING HTML from the synchronized Markdown sources")
     description_html = render_document(DESCRIPTION_MD)
     derivation_html = render_document(DERIVATION_MD)
     print(f"Built {comparison_path.relative_to(ROOT)}")
@@ -5986,6 +6475,12 @@ def main() -> None:
     print(f"Built standalone {ids_overlay_path.relative_to(ROOT.parent)}")
     print(f"Built {description_html.name}")
     print(f"Built {derivation_html.name}")
+    print(f"Simulation workers: {args.jobs} of {os.cpu_count() or 1} logical CPUs")
+    print("Command audit: "
+          f"q_mu={command_audit['quantum_nm']:.3f} nm; "
+          f"main max increment={command_audit['main_max_increment_um']:.4f} um; "
+          f"guideway inner margin={command_audit['guideway_inner_margin_um']:.4f} um; "
+          f"nut outer-to-yield-3 margin={command_audit['nut_outer_margin_um']:.4f} um")
     print(f"GMS partition: sum(nu_i)={gms_audit['weight_sum']:.12f}; "
           + "; ".join(
               f"sum(k_i)_{site}={value:.6g}=sigma0_{site}"
@@ -6032,9 +6527,10 @@ def main() -> None:
     for key in ("A2", "B2", "C2"):
         result = convergence[key]
         rms = result["rms_nm"]
-        dt_text = "/".join(f"{dt * 1e6:g}" for dt in GMS_CONVERGENCE_DTS)
+        dt_text = "/".join(f"{dt * 1e6:g}" for dt in result["dt_s"])
+        rms_text = "/".join(f"{value:.6f}" for value in rms)
         print(f"Step halving {key}: RMS({dt_text} us)="
-              f"{rms[0]:.6f}/{rms[1]:.6f}/{rms[2]:.6f} nm; "
+              f"{rms_text} nm; observed p={result['observed_order']:.3f}; "
               f"fine relative change={result['fine_relative_pct']:.6f}%")
     for size, record in ids_records.items():
         metrics = ids_comparison[size]["metrics"]
@@ -6046,6 +6542,7 @@ def main() -> None:
             f"dwell={float(record['dwell']):.3f} s")
     print("Full-model modes below 3 kHz: " + ", ".join(
         f"{mode:.2f}" for mode in verification["full_modes"] if mode < 3000.0))
+    build_progress(8, 8, "GREEN FLAG — simulation, Markdown, SVG, and HTML update complete")
 
 
 if __name__ == "__main__":

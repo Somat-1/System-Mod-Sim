@@ -23,9 +23,9 @@ This workspace documents and executes a physics-based model of the stepper-drive
    Passive two-node elements are assembled as positive-semidefinite outer products, which preserves sign and energy consistency.
 4. **Apply ball-screw kinematics.** With $r=L/(2\pi)$, the torsional/axial nut-contact deformation couples screw rotation to translation. Virtual work fixes the equal-and-opposite force signs at the interface.
 5. **Reduce only after auditing the full model.** Internal coordinates whose modes lie outside the intended bandwidth are condensed into a two-coordinate model: effective drive displacement $x_d$ and stage displacement $x_s$. The stage still has one externally observable translation; the second retained coordinate represents compliant internal drive motion.
-6. **Retain the nonlinear stepper law.** The nonlinear simulations use the bounded magnetic force $F_{max}\sin[\kappa(x_{cmd}-x_d)]$, the full 5 µm-period detent torque, and the requested 10% electromagnetic damping. Global Bode plots use commutation stiffness only; detent is reported separately as a local 137–194 Hz tangent band.
+6. **Retain the nonlinear stepper law.** The nonlinear simulations use the bounded magnetic force $F_{max}\sin[\kappa(x_{cmd}-x_d)]$, the full 5 µm-period detent torque, production 1/16 STEP/DIR commands, and the requested 10% electromagnetic damping. Global Bode plots use commutation stiffness only; detent is reported separately as a local 137–194 Hz tangent band.
 7. **Apply friction through power-conjugate ports.** Guideway friction uses $v_g=\dot x_s$. Nut microslip uses $v_n=\dot x_d-\dot x_s$. Every physical drag contribution sharing $v_d=\dot x_d$, including gross nut rolling, is one identifiable drive-side law.
-8. **Use the installed geometry.** The screw is 192 mm long, approximately 170 mm is usable, the stage travel is 150 mm, and the installed lead-accuracy class is IT1.
+8. **Use the installed geometry.** The screw is 192 mm long, approximately 170 mm is usable, the stage travel is 150 mm, and the installed lead-accuracy class is IT3.
 
 ## Executed cases
 
@@ -41,7 +41,7 @@ LuGre uses one average bristle state per active site. GMS uses four force states
 ## Simulations and numerical checks
 
 - Frequency responses use the linearized presliding tangent and are shown per case, with topology-matched LuGre/GMS comparisons.
-- The main nonlinear command uses a 19.53125 nm pre-distortion grid, spans 0.234–2.031 µm absolute levels, keeps adjacent increments below 1.25 µm, and ends with a positive return to zero. The physical hardware STEP/DIR setting remains an open configuration item.
+- The main nonlinear command uses the production 312.5 nm 1/16 STEP/DIR grid, spans 0.3125–1.8750 µm absolute levels, keeps adjacent increments at or below 1.25 µm, and ends with a positive return to zero.
 - Every main and memory plateau uses a damping-derived dwell with a 100 ms floor; metrics use the settled final 20 ms rather than the ringing transient.
 - Separate force-instrumented nested-reversal tests cross guideway and nut yield distances. A/A2 uses the normal free-stage plant. The dedicated B/B2 identification fixture blocks the stage, commands the drive coordinate, and measures nut-path reaction force; this is what tests the exact small-signal $k_{ax}$/$\sigma_{0,n}$ correlation. Normal B/B2 plant responses remain free-stage.
 - Fixed-step RK4 holds a discontinuous command constant over all four stages. GMS re-stick and yield tests use the current RK trial state before the derivative is assigned.
@@ -56,7 +56,7 @@ From the workspace root, run:
 python ".\Rev 3\build_model_documentation.py"
 ```
 
-The builder requires NumPy and Matplotlib. It rewrites the generated result blocks in the analytical Markdown, regenerates SVG files in `Rev 3/rendered_assets/`, and renders both Revision 3 Markdown documents to HTML. Edit the Markdown and the single builder; do not manually edit generated HTML or SVG output.
+The builder requires NumPy and Matplotlib. It rewrites the generated result blocks in the analytical Markdown, regenerates SVG files in `Rev 3/rendered_assets/`, and renders both Revision 3 Markdown documents to HTML. Independent RK4 trajectories use up to eight worker processes by default; pass `--jobs N` to match the available CPU and memory. Edit the Markdown and the single builder; do not manually edit generated HTML or SVG output.
 
 ## Editable HTML parameters
 

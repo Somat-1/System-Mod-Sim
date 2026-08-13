@@ -224,9 +224,8 @@ The following cells show the executable component values. Reflected mass and mag
 | axial play, grade O | 0.0 | m |
 | support bearing $k_{brg}$ | [[assumed:k_brg=2.500e7]] | N/m |
 | open-loop drive damping ratio $\zeta_m$ | [[assumed:electromagnetic_zeta=0.10]] | – |
-| pre-distortion substep divisor | [[assumed:microstep_divisor=256]] | – |
-| derived STEP/DIR quantum | [[derived:command_step=7.81250e-8]] | m |
-| derived 256-interpolated quantum | [[derived:interpolated_step=1.95313e-8]] | m |
+| production STEP/DIR microstep divisor | [[assumed:microstep_divisor=16]] | – |
+| derived STEP/DIR quantum | [[derived:command_step=3.12500e-7]] | m |
 
 The coupling inertia remains an estimate because the component datasheet publishes its 23.8 g mass but not its polar inertia. The model does not force the component sum to a target $m_d$.
 
@@ -378,7 +377,7 @@ The global two-DOF modes are **167.7 Hz** and **695.8 Hz**. The local detent tan
 
 Simulate both models on identical input and report the discrepancy.
 
-1. Single pre-distortion substep, 19.53125 nm at $\mu = 256$, from rest.
+1. Single production microstep, 312.5 nm at $\mu = 16$, from rest.
 2. Bidirectional reversal at the target repeatability scale.
 3. Trapezoidal move over full travel with deceleration shaping.
 4. Frequency sweep 10 Hz to 3 kHz, drive-to-stage transfer function.
@@ -460,14 +459,17 @@ The reduced equation of Section 5.3 is unchanged. Only the forcing vector change
 |---|:---:|:---:|:---:|---|
 | 0 | – | – | – | Modal baseline |
 | A/A2 | ✓ | – | ✓ | Guideway hypothesis |
+| G/G2 | ✓ | – | – | Drive-port ablation on the same free-stage plant |
 | B/B2 | – | ✓ | ✓ | Nut microslip hypothesis |
 | C/C2 | ✓ | ✓ | ✓ | Combined hypothesis |
 
-Cases with suffix `2` use the same mechanical force vector as their unsuffixed counterpart. Only the constitutive law changes from LuGre to GMS. Case 0 is always frictionless. The aggregated drivetrain port is active in every friction case.
+Cases with suffix `2` use the same mechanical force vector as their unsuffixed counterpart. Only the constitutive law changes from LuGre to GMS. Case 0 is always frictionless. The aggregated drivetrain port is active except in the deliberate G/G2 ablation; that numerical ablation is not an uncoupled-guideway fixture.
 
 **Case 0:** $\mathbf{f} = \begin{bmatrix} F_{mag}+F_{det} \\ 0\end{bmatrix}$
 
 **Case A:** $\mathbf{f} = \begin{bmatrix} F_{mag}+F_{det}-F_{f,d}(\dot x_d) \\ -F_{f,g}(\dot x_s) \end{bmatrix}$
+
+**Case G:** $\mathbf{f} = \begin{bmatrix} F_{mag}+F_{det} \\ -F_{f,g}(\dot x_s) \end{bmatrix}$
 
 **Case B:** $\mathbf{f} = \begin{bmatrix} F_{mag}+F_{det} - F_{f,n}(\dot x_d - \dot x_s)-F_{f,d}(\dot x_d) \\ +F_{f,n}(\dot x_d - \dot x_s) \end{bmatrix}$
 
@@ -477,7 +479,7 @@ $F_{f,d}$ is the one identifiable $v_d$ law and includes motor-bearing, coupling
 
 ### 8.1 Executed presliding discriminator
 
-The companion derivation includes [force-instrumented nested-reversal experiments](Analytical_derivation_and_responses_v3.html#9-force-instrumented-partial-slip-memory-experiment) for A/A2 and B/B2. A/A2 uses the normal free-stage plant. The dedicated B/B2 identification fixture imposes $x_s=0$, commands $x_d$, and measures the nut-path reaction, because the free stage otherwise follows the slow drive motion and provides too little relative deflection. Both use 256-substep pre-distortion quanta and 100 ms derived dwell. The blocked-stage B/B2 loop crosses nut yield and directly tests the $k_{ax}$/$\sigma_{0,n}$ correlation; normal B/B2 plant responses remain free-stage.
+The companion derivation includes [force-instrumented nested-reversal experiments](Analytical_derivation_and_responses_v3.html#9-force-instrumented-partial-slip-memory-experiment) for A/A2, G/G2, and B/B2. A/A2 and the G/G2 ablation use the normal free-stage plant. The dedicated B/B2 identification fixture imposes $x_s=0$, commands $x_d$, and measures the nut-path reaction because the free stage otherwise provides too little relative deflection. All use production 1/16 STEP/DIR quanta and the live dwell $\max(100\,\mathrm{ms},t_{detent},t_{axial})$. The blocked-stage B/B2 loop crosses nut yield and directly tests the $k_{ax}$/$\sigma_{0,n}$ correlation; normal B/B2 plant responses remain free-stage, and the guideway-alone physical fixture has no exact simulation twin.
 
 ---
 
