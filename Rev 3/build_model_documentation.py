@@ -1172,7 +1172,10 @@ def physical_constants() -> dict[str, float]:
     r = lead / (2.0 * np.pi)
     kappa = 2.0 * np.pi * teeth / lead
     t_max = MODEL["T_max"]
-    t_det = MODEL["T_det"]
+    # The enable flag is the single switch for the periodic detent term: it
+    # gates the executed torque itself, so the ablation and the campaign
+    # cannot disagree about whether detent is present.
+    t_det = MODEL["T_det"] if MODEL["detent_enabled"] else 0.0
     k_m = teeth * t_max / r**2
     k_det_amplitude = 4.0 * teeth * t_det / r**2
     k_det = k_det_amplitude * np.cos(MODEL["detent_phase"])
@@ -1234,7 +1237,10 @@ def physical_constants() -> dict[str, float]:
     # not a quantization-noise argument; see Section 5 and Appendix C item 16.
     detent_equilibrium_error = (r / teeth) * np.arcsin(min(t_det / t_max, 1.0))
     predistortion_resolution = detent_equilibrium_error / MODEL["predistortion_levels"]
-    required_divisor = full_step / predistortion_resolution
+    # With detent disabled there is no position-periodic term to correct, so
+    # the requirement is vacuous rather than infinite.
+    required_divisor = (full_step / predistortion_resolution
+                        if predistortion_resolution > 0.0 else 0.0)
     return {
         "r": r,
         "kappa": kappa,
@@ -6672,7 +6678,6 @@ def document_frequency_tokens(constants: dict[str, float],
         "closure_singular_limit_mn": float(branches["singular_limit"]) / 1.0e6,
         "measured_settling_ms": constants["measured_settling_time_2pct"] * 1.0e3,
         "interface_settling_ms": constants["interface_settling_time_2pct"] * 1.0e3,
-        "executed_settling_ms": constants["axial_settling_time_2pct"] * 1.0e3,
         "detent_equilibrium_error_nm": constants["detent_equilibrium_error"] * 1.0e9,
         "predistortion_resolution_nm": constants["predistortion_resolution"] * 1.0e9,
         "required_microstep_divisor": constants["required_microstep_divisor"],

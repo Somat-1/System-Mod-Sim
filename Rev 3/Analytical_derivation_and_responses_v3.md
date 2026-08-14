@@ -70,7 +70,8 @@ Open only the parameter group you need. Browser edits update dependent values, l
 | $f_{2,meas}$ | measured axial band, upper edge | [[input:measured_axial_band_high_hz=690.0]] | Hz |
 | $m_{eff,meas}$ | effective mass from the mass-loading modal series | [[input:m_eff_measured=0.600]] | kg |
 | $\zeta_{rel,meas}$ | measured relative-mode damping pending half-power re-extraction | [[assumed:zeta_relative_measured=0.0014]] | – |
-| $k_{ax}$ | modal-calibrated reduced axial-path stiffness, derived | [[derived:reduced_axial_stiffness=7.70993e6]] | N/m |
+| $k_{ax}$ | modal-calibrated reduced axial-path stiffness, derived on the **frictionless** branch | [[derived:reduced_axial_stiffness=7.70993e6]] | N/m |
+| $k_{ax,pre}$ | same target solved with the guideway and nut presliding tangents present, derived; see [6.3](#6-3-reduction-evidence) | [[derived:presliding_k_ax_mn=4.952]] | MN/m |
 | $c_{ax}$ | provisional executable reduced-link damping | [[assumed:axial_damping=55.0]] | N·s/m |
 | $\zeta_m$ | provisional open-loop drive damping ratio | [[assumed:electromagnetic_zeta=0.10]] | – |
 | $n_\mu$ | production STEP/DIR microstep divisor, **unconfirmed**: the board MRES setting is not recorded | [[assumed:microstep_divisor=16]] | – |
@@ -471,7 +472,37 @@ The comparison is outcome-oriented: it asks whether the 2-DOF model preserves th
 <div class="live-equation" data-live-equation="route-comparison-summary">Live reduction agreement summary loads in the browser.</div>
 
 <!-- BEGIN GENERATED CALIBRATION BRANCHES -->
-Calibration-branch audit pending rebuild.
+**The calibration measurement contains the presliding tangents, and only one branch removes them.** A hammer FRF at micrometre amplitudes never leaves the presliding regime: every rolling contact behaves as a spring, so the measured pole already carries $\sigma_{0,g}=0.76\times10^6$ N/m and $\sigma_{0,n}=2.00\times10^6$ N/m. Solving for $k_{ax}$ on the frictionless eigenproblem and then adding the friction ports back therefore counts that stiffness twice, which is why [10.1](#10-1-presliding-stiffness-shifts-the-retained-mode) predicts an operating mode above the measurement that set the calibration.
+
+| Calibration branch | $k_{ax}$ | $k_{ball}$ closure | Reproduces the measured pole with |
+|---|---:|---:|---|
+| Frictionless (executed) | 7.706 MN/m | 16.934 MN/m | structure only |
+| Presliding-inclusive | 4.952 MN/m | 7.622 MN/m | structure plus $\sigma_{0,g}$ and $\sigma_{0,n}$ |
+
+The presliding-inclusive branch is a factor of 0.643 softer. Which branch is correct is a question about the fixture, not about the algebra, and the fixture record below is the missing evidence. Until it is filled in, every $k_{ax}$-dependent number in this document carries that factor as an unquantified bias.
+
+| Calibration boundary condition | Recorded value |
+|---|---|
+| Screw coupled or decoupled from the motor | not recorded |
+| Motor powered or unpowered during the impact | not recorded |
+| Excitation amplitude at the stage | not recorded |
+| Any GMS element beyond its yield distance during the impact | not recorded |
+| Measurement point and direction | not recorded |
+
+**One worry is cheap to remove.** The drive-side boundary condition barely matters: setting $K_m=0$, the unpowered-motor limit, moves $k_{ax}$ by 0.030%, because $\lambda m_d$ dominates $K_m$ in the characteristic equation. Whether the motor was energized during the hammer test is therefore not the open question; whether the friction ports were loaded is.
+
+**$k_{ball}$ is a closure residual, so it inherits the bearing assumption.** It absorbs whatever axial compliance the other three elements leave over, and below a singular limit on $k_{brg}$ there is nothing left to absorb:
+
+| $k_{brg}$ | Closure $k_{ball}$ |
+|---:|---:|
+| 10.60 MN/m | 212.007 MN/m |
+| 15.00 MN/m | 30.877 MN/m |
+| 25.00 MN/m (executed) | 16.934 MN/m |
+| 40.00 MN/m | 13.504 MN/m |
+
+The singular limit is 10.096 MN/m and the executed 25.0 MN/m sits a factor of 2.48 above it. The Barden duplex contact angle is itself unresolved between 15° and 25°, which is a factor-of-two axial stiffness question, so [E.7](#e-7-measured-frf-identification)'s instruction to compare the implied $k_{ball}$ with an independent contact estimate has no discriminating power until $k_{brg}$ is fixed first.
+
+**The damping chain survives this uncertainty even though the stiffness does not.** Every joint carries the same target loss factor, so the equivalent $\eta$ at the retained mode is unchanged across the admissible $k_{brg}$ band; only the reported $k_{ball}$ moves. The two conclusions are therefore not coupled, and fixing $k_{brg}$ is a stiffness measurement, not a damping one.
 <!-- END GENERATED CALIBRATION BRANCHES -->
 
 ### 6.4 Decision and residual risk
@@ -2619,20 +2650,20 @@ LuGre's plotted settled force sits near zero at every deflection in Section 9 wh
 | Plateau | Commanded level | LuGre A | GMS A2 |
 |---:|---:|---:|---:|
 | 1 | 0.0000 µm | 0.0000 N | 0.0000 N |
-| 2 | +3.7500 µm | +0.0239 N | +0.6832 N |
-| 3 | +1.2500 µm | -0.0477 N | -0.0830 N |
-| 4 | +3.1250 µm | +0.0757 N | +0.7461 N |
-| 5 | +1.2500 µm | -0.0644 N | -0.2003 N |
-| 6 | +3.7500 µm | +0.0473 N | +0.7609 N |
-| 7 | 0.0000 µm | -0.0087 N | -0.1821 N |
-| 8 | -3.4375 µm | -0.0286 N | -0.6725 N |
-| 9 | -1.2500 µm | +0.0553 N | +0.0666 N |
-| 10 | -2.8125 µm | -0.1108 N | -0.7427 N |
-| 11 | -1.2500 µm | +0.0773 N | +0.1153 N |
-| 12 | -3.4375 µm | -0.0525 N | -0.8270 N |
-| 13 | 0.0000 µm | +0.0051 N | +0.1137 N |
+| 2 | +3.7500 µm | +0.0127 N | +0.6403 N |
+| 3 | +1.2500 µm | -0.0161 N | -0.0366 N |
+| 4 | +3.1250 µm | +0.0721 N | +0.7501 N |
+| 5 | +1.2500 µm | -0.0321 N | -0.1722 N |
+| 6 | +3.7500 µm | +0.0160 N | +0.6832 N |
+| 7 | 0.0000 µm | +0.0024 N | -0.1829 N |
+| 8 | -3.4375 µm | -0.0409 N | -0.6734 N |
+| 9 | -1.2500 µm | +0.0220 N | +0.0297 N |
+| 10 | -2.8125 µm | -0.0951 N | -0.7294 N |
+| 11 | -1.2500 µm | +0.0497 N | +0.1201 N |
+| 12 | -3.4375 µm | -0.0570 N | -0.7858 N |
+| 13 | 0.0000 µm | -0.0013 N | +0.1080 N |
 
-**A2's settled force changes sign inside the positive branch.** Plateau 2 holds +0.683 N at +3.7500 µm, and plateau 3 holds -0.083 N at +1.2500 µm, both at positive commanded levels. That is the nested-return signature in raw digits: on the inner return the elements that yielded on the way out are reloaded in the opposite direction, so the stack unloads past zero while the command is still positive. LuGre A changes sign at the same pair, but its whole column stays within 0.111 N of zero, so that sign is the post-edge relaxation residue of a single bristle rather than a held return-point state; the retention gap in [9.1](#9-1-guideway-result) is the same observation stated as a fraction.
+**A2's settled force changes sign inside the positive branch.** Plateau 2 holds +0.640 N at +3.7500 µm, and plateau 3 holds -0.037 N at +1.2500 µm, both at positive commanded levels. That is the nested-return signature in raw digits: on the inner return the elements that yielded on the way out are reloaded in the opposite direction, so the stack unloads past zero while the command is still positive. LuGre A changes sign at the same pair, but its whole column stays within 0.095 N of zero, so that sign is the post-edge relaxation residue of a single bristle rather than a held return-point state; the retention gap in [9.2](#9-2-guideway-plateau-map-damping-conditional) is the same observation stated as a fraction.
 
 
 **Blocked nut (B, B2): settled friction force versus plateau index**
@@ -2640,23 +2671,23 @@ LuGre's plotted settled force sits near zero at every deflection in Section 9 wh
 | Plateau | Commanded level | LuGre B | GMS B2 |
 |---:|---:|---:|---:|
 | 1 | 0.0000 µm | 0.0000 N | 0.0000 N |
-| 2 | +0.9375 µm | +0.0003 N | +0.3054 N |
-| 3 | +0.3125 µm | -0.0080 N | -0.0372 N |
-| 4 | +0.6250 µm | +0.0485 N | +0.2532 N |
-| 5 | +0.3125 µm | -0.0441 N | -0.0620 N |
-| 6 | +0.9375 µm | +0.0066 N | +0.4028 N |
-| 7 | 0.0000 µm | -0.0014 N | -0.0772 N |
-| 8 | -0.9375 µm | -0.0004 N | -0.3047 N |
-| 9 | -0.3125 µm | +0.0080 N | +0.0385 N |
-| 10 | -0.6250 µm | -0.0485 N | -0.2518 N |
-| 11 | -0.3125 µm | +0.0441 N | +0.0633 N |
-| 12 | -0.9375 µm | -0.0066 N | -0.4015 N |
-| 13 | 0.0000 µm | +0.0014 N | +0.0785 N |
+| 2 | +0.9375 µm | +0.0003 N | +0.2990 N |
+| 3 | +0.3125 µm | -0.0078 N | -0.0373 N |
+| 4 | +0.6250 µm | +0.0478 N | +0.2531 N |
+| 5 | +0.3125 µm | -0.0435 N | -0.0620 N |
+| 6 | +0.9375 µm | +0.0064 N | +0.3947 N |
+| 7 | 0.0000 µm | -0.0014 N | -0.0790 N |
+| 8 | -0.9375 µm | -0.0004 N | -0.2995 N |
+| 9 | -0.3125 µm | +0.0078 N | +0.0368 N |
+| 10 | -0.6250 µm | -0.0479 N | -0.2536 N |
+| 11 | -0.3125 µm | +0.0435 N | +0.0615 N |
+| 12 | -0.9375 µm | -0.0064 N | -0.3954 N |
+| 13 | 0.0000 µm | +0.0014 N | +0.0786 N |
 
-**B2 shows the same sign change on this fixture.** Plateau 2 holds +0.305 N at +0.9375 µm, and plateau 3 holds -0.037 N at +0.3125 µm, both at positive commanded levels. The mechanism is the one stated under the guideway table.
+**B2 shows the same sign change on this fixture.** Plateau 2 holds +0.299 N at +0.9375 µm, and plateau 3 holds -0.037 N at +0.3125 µm, both at positive commanded levels. The mechanism is the one stated under the guideway table.
 
 
-LuGre's column stays within 0.111 N of zero at every plateau at both sites, while GMS's column tracks the commanded deflection up to 0.827 N. **The mechanism is confirmed**: this is not a plotting artifact, LuGre's column genuinely holds almost nothing.
+LuGre's column stays within 0.095 N of zero at every plateau at both sites, while GMS's column tracks the commanded deflection up to 0.786 N. **The mechanism is confirmed**: this is not a plotting artifact, LuGre's column genuinely holds almost nothing.
 
 #### Demoted ablation and branch diagnostics
 
@@ -2666,33 +2697,31 @@ The A2/G2 ablation and the nut positive/negative branch split remain available h
 
 #### High-damping confirmation run
 
-The retained-mode pole at baseline structural damping sits at 729.0 Hz with $\zeta_2=0.01507$, decaying with $\tau=14.49$ ms (envelope to 5%: 43.5 ms) — far longer than the millisecond-scale bristle relaxation time computed in 9.3, which is why the ringing wipes the bristle before the settled window opens. Scaling $c_{ax}$ and $c_m$ by 50$\times$ raises the same pole to $\zeta_2=0.74264$, $\tau=0.29$ ms, envelope to 5% in 0.88 ms — ringing now dies within about a millisecond.
+The retained-mode pole at baseline structural damping sits at 728.9 Hz with $\zeta_2=0.01509$, decaying with $\tau=14.47$ ms (envelope to 5%: 43.4 ms) — far longer than the millisecond-scale bristle relaxation time computed in 9.3, which is why the ringing wipes the bristle before the settled window opens. Scaling $c_{ax}$ and $c_m$ by 50$\times$ raises the same pole to $\zeta_2=0.74278$, $\tau=0.30$ ms, envelope to 5% in 0.89 ms — ringing now dies within about a millisecond.
 
 Rerunning the guideway A/A2 experiment at this damping, with everything else unchanged:
 
 | Plateau | Commanded level | LuGre A (baseline damping) | LuGre A (ringing suppressed) | GMS A2 (ringing suppressed) |
 |---:|---:|---:|---:|---:|
 | 1 | 0.0000 µm | 0.0000 N | 0.0000 N | 0.0000 N |
-| 2 | +3.7500 µm | +0.0239 N | +1.8025 N | +1.7482 N |
-| 3 | +1.2500 µm | -0.0477 N | -0.5393 N | -0.0834 N |
-| 4 | +3.1250 µm | +0.0757 N | +0.9213 N | +1.4697 N |
-| 5 | +1.2500 µm | -0.0644 N | -0.6893 N | -0.0834 N |
-| 6 | +3.7500 µm | +0.0473 N | +1.1370 N | +1.7482 N |
-| 7 | 0.0000 µm | -0.0087 N | -1.3373 N | -0.5098 N |
-| 8 | -3.4375 µm | -0.0286 N | -2.2709 N | -1.6804 N |
-| 9 | -1.2500 µm | +0.0553 N | +0.0788 N | +0.0212 N |
-| 10 | -2.8125 µm | -0.1108 N | -1.0215 N | -1.2848 N |
-| 11 | -1.2500 µm | +0.0773 N | +0.3938 N | +0.0212 N |
-| 12 | -3.4375 µm | -0.0525 N | -1.1662 N | -1.6804 N |
-| 13 | 0.0000 µm | +0.0051 N | +1.2040 N | +0.4466 N |
+| 2 | +3.7500 µm | +0.0127 N | +1.8001 N | +1.7482 N |
+| 3 | +1.2500 µm | -0.0161 N | -0.5422 N | -0.0835 N |
+| 4 | +3.1250 µm | +0.0721 N | +0.9201 N | +1.4702 N |
+| 5 | +1.2500 µm | -0.0321 N | -0.6908 N | -0.0835 N |
+| 6 | +3.7500 µm | +0.0160 N | +1.1362 N | +1.7482 N |
+| 7 | 0.0000 µm | +0.0024 N | -1.3372 N | -0.5098 N |
+| 8 | -3.4375 µm | -0.0409 N | -2.2663 N | -1.6806 N |
+| 9 | -1.2500 µm | +0.0220 N | +0.0837 N | +0.0213 N |
+| 10 | -2.8125 µm | -0.0951 N | -1.0191 N | -1.2862 N |
+| 11 | -1.2500 µm | +0.0497 N | +0.3968 N | +0.0213 N |
+| 12 | -3.4375 µm | -0.0570 N | -1.1645 N | -1.6806 N |
+| 13 | 0.0000 µm | -0.0013 N | +1.2049 N | +0.4466 N |
 
-With ringing suppressed, LuGre's settled force recovers from a mean 0.0583 N over the nonzero plateaus to 1.0020 N — 17.2$\times$ larger, comparable to or exceeding GMS at the same raised damping. **The dither-driven relaxation mechanism is confirmed from both directions**: it is present when ringing is left alone and it disappears when ringing is suppressed.
+With ringing suppressed, LuGre's settled force recovers from a mean 0.0414 N over the nonzero plateaus to 1.0020 N — 24.2$\times$ larger, comparable to or exceeding GMS at the same raised damping. **The dither-driven relaxation mechanism is confirmed from both directions**: it is present when ringing is left alone and it disappears when ringing is suppressed.
 
 #### Continuous presliding loop
 
-![Continuous quasi-static presliding loop](rendered_assets/presliding_true_loop.svg)
-
-A slow continuous triangular ramp-reversal, no plateaus, at the guideway outer amplitude. Unlike the settled return-point maps in 9.1, this is a literature-comparable presliding $F$-$x$ loop and is the signal a quasi-static Kistler identification sweep will actually produce.
+The continuous quasi-static loop was promoted out of this appendix and now opens [Section 9](#9-1-continuous-presliding-loop-the-primary-discriminator). It is the only discriminator in the chapter that does not depend on plateau settling, which is exactly the quantity this appendix shows the plateau maps are sensitive to.
 <!-- END GENERATED RETENTION DIAGNOSTIC -->
 
 ## Appendix H. Full friction-case response audit
@@ -2702,22 +2731,24 @@ The complete Bode view and ten-case metric dump support Section 10 without compe
 ![All command-to-stage Bode responses](rendered_assets/bode_all_cases.svg)
 
 <!-- BEGIN GENERATED FULL RESPONSE SUMMARY -->
-| Case | Friction law | Global-linear modes (Hz) | Local tangent gain $X_s/X_{cmd}$ | Smallest first-yield travel | First-step overshoot | Settled RMS deviation | Settled maximum | All-time peak | Final-window RMS |
-|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| 0 | none | 167.9, 695.8 | 1.00000 | not applicable | 41.0% | 160.6 nm | 234.4 nm | 1147.8 nm | 0.1 nm |
-| A | LuGre | 170.5, 729.1 | 0.88275 | 0.583 µm | 26.6% | 172.4 nm | 261.2 nm | 1170.1 nm | 20.6 nm |
-| A2 | GMS | 170.5, 729.1 | 0.88275 | 0.583 µm | 25.8% | 215.7 nm | 358.7 nm | 1210.5 nm | 16.2 nm |
-| G | LuGre | 168.4, 729.1 | 0.90498 | 0.987 µm | 28.7% | 171.0 nm | 258.0 nm | 1167.9 nm | 18.8 nm |
-| G2 | GMS | 168.4, 729.1 | 0.90498 | 0.987 µm | 28.1% | 207.7 nm | 339.3 nm | 1201.7 nm | 12.0 nm |
-| B | LuGre | 170.0, 780.9 | 0.97530 | 0.200 µm | 38.4% | 161.3 nm | 235.9 nm | 1148.9 nm | 1.1 nm |
-| B2 | GMS | 170.0, 780.9 | 0.97530 | 0.200 µm | 38.3% | 168.4 nm | 253.7 nm | 1157.0 nm | 4.5 nm |
-| C | LuGre | 170.5, 810.6 | 0.89928 | 0.200 µm | 27.5% | 173.9 nm | 265.2 nm | 1173.6 nm | 22.3 nm |
-| C2 | GMS | 170.5, 810.6 | 0.89928 | 0.200 µm | 27.0% | 207.2 nm | 341.2 nm | 1200.6 nm | 13.6 nm |
-| A1v | LuGre | 170.5, 729.1 | 0.88275 | 0.583 µm | 26.5% | 172.5 nm | 261.5 nm | 1170.4 nm | 20.8 nm |
+| Case | Friction law | Global-linear modes (Hz) | Local tangent gain $X_s/X_{cmd}$ | Smallest first-yield travel | First-step overshoot | Settled RMS deviation | Settled RMS, detent off | Friction-only contribution | Settled maximum | All-time peak | Final-window RMS |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0 | none | 177.7, 695.8 | 1.00000 | not applicable | 39.6% | 160.6 nm | 0.0 nm | 100.0% detent | 234.1 nm | 1147.7 nm | 0.0 nm |
+| A | LuGre | 180.5, 729.0 | 0.88271 | 0.583 µm | 25.9% | 172.0 nm | 19.2 nm | 88.9% detent | 259.8 nm | 1170.1 nm | 20.1 nm |
+| A2 | GMS | 180.5, 729.0 | 0.88271 | 0.583 µm | 25.2% | 215.5 nm | 64.5 nm | 70.1% detent | 356.9 nm | 1211.2 nm | 17.1 nm |
+| G | LuGre | 178.3, 729.0 | 0.90494 | 0.987 µm | 28.2% | 170.7 nm | 17.2 nm | 90.0% detent | 256.7 nm | 1167.9 nm | 18.4 nm |
+| G2 | GMS | 178.3, 729.0 | 0.90494 | 0.987 µm | 27.7% | 207.3 nm | 54.7 nm | 73.6% detent | 336.7 nm | 1203.0 nm | 13.6 nm |
+| B | LuGre | 179.9, 780.9 | 0.97530 | 0.200 µm | 39.0% | 161.3 nm | 1.6 nm | 99.0% detent | 235.7 nm | 1148.9 nm | 1.1 nm |
+| B2 | GMS | 179.9, 780.9 | 0.97530 | 0.200 µm | 38.9% | 168.4 nm | 9.8 nm | 94.2% detent | 253.4 nm | 1156.9 nm | 4.4 nm |
+| C | LuGre | 180.5, 810.6 | 0.89925 | 0.200 µm | 28.5% | 173.1 nm | 21.6 nm | 87.5% detent | 263.6 nm | 1171.9 nm | 20.9 nm |
+| C2 | GMS | 180.5, 810.6 | 0.89925 | 0.200 µm | 28.0% | 206.7 nm | 54.8 nm | 73.5% detent | 339.5 nm | 1200.0 nm | 13.2 nm |
+| A1v | LuGre | 180.5, 729.0 | 0.88271 | 0.583 µm | 25.9% | 172.2 nm | 19.4 nm | 88.7% detent | 260.2 nm | 1170.5 nm | 20.4 nm |
 
-The displayed modes and gains are the global commutation linearization; periodic detent is excluded from the global stiffness matrix. The friction tangent is local and valid only below the listed first-yield travel. The nonlinear cases include periodic detent torque and use a 100 ms dwell. Settled values collect the last 20 ms of every plateau. All deviation columns use $d(t)=x_{cmd}(t)-x_s(t)$ and describe open-loop modeled plant behavior, not servo tracking.
+The displayed modes and gains are the global commutation linearization; periodic detent is excluded from the global stiffness matrix. The friction tangent is local and valid only below the listed first-yield travel. The nonlinear cases include periodic detent torque and use a 654 ms dwell. Settled values collect the last 20 ms of every plateau. All deviation columns use $d(t)=x_{cmd}(t)-x_s(t)$ and describe open-loop modeled plant behavior, not servo tracking.
 
 The first-yield travel independently checks the ablation: A/A2 begins at 0.583 µm on the drive port, whereas G/G2 begins at 0.987 µm on the guideway after the drive port is removed.
+
+The two detent columns are the paired ablation described in [10.3](#10-3-generated-numerical-summary): the same command rerun with $\hat T_{det}=0$. The friction-only column reports how much of each settled window survives that removal, so a friction comparison between two rows is only defensible on the detent-off column.
 <!-- END GENERATED FULL RESPONSE SUMMARY -->
 
 ## 7. Full-versus-reduced verification
@@ -2726,9 +2757,9 @@ The first-yield travel independently checks the ablation: A/A2 begins at 0.583 �
 <div class="section-takeaway">
 **Answers.** Can [[derived:section7_reduced_coordinate_count=2]] coordinates stand in for [[derived:section7_full_coordinate_count=10]]?
 
-**The number.** [[derived:section7_rms_pct=1.99]]% command RMS, or [[derived:section7_rms_nm=99.6]] nm.
+**The number.** [[derived:section7_rms_pct=2.17]]% command RMS, or [[derived:section7_rms_nm=108.4]] nm.
 
-**Why it matters.** About [[derived:section7_drive_share_pct=74.9]]% of the residual is removed by correcting a [[derived:section7_drive_pole_error_pct=0.54]]% drive-pole error, versus [[derived:section7_frequency_share_pct=15.0]]% from retained-frequency alignment and [[derived:section7_damping_share_pct=0.5]]% from damping. Coordinate truncation dominates.
+**Why it matters.** About [[derived:section7_drive_share_pct=51.6]]% of the residual is removed by correcting a [[derived:section7_drive_pole_error_pct=0.44]]% drive-pole error, versus [[derived:section7_frequency_share_pct=35.6]]% from retained-frequency alignment and [[derived:section7_damping_share_pct=2.1]]% from damping. Coordinate truncation dominates.
 
 **What it is not.** Model agreement is not hardware accuracy.
 </div>
@@ -2745,45 +2776,47 @@ The full model includes every discarded internal resonance, including modes abov
 
 The time-domain comparison now uses the physical 5.000 µm full-step pitch. Because both verification plants are linear, this rescales the displacement and residual in nanometres but does not change the normalized RMS or peak percentages.
 
-| RK4 step $h$ | Points/cycle at 2002.0 Hz | Maximum $\lvert R(h\lambda)\rvert$ | Result | RMS residual | Peak residual |
+| RK4 step $h$ | Points/cycle at 2278.9 Hz | Maximum $\lvert R(h\lambda)\rvert$ | Result | RMS residual | Peak residual |
 |---:|---:|---:|---|---:|---:|
-| 25.00 µs | 20.0 | 2.882548 | **unstable** | not reportable | not reportable |
-| 12.50 µs | 40.0 | 0.999283 | stable | 99.567 nm (1.99134%) | 245.618 nm (4.91237%) |
-| 6.25 µs | 79.9 | 0.999642 | stable | 99.570 nm (1.99140%) | 245.619 nm (4.91238%) |
-| 2.50 µs | 199.8 | 0.999857 | stable | 99.572 nm (1.99144%) | 245.619 nm (4.91238%) |
+| 25.00 µs | 17.6 | 3.550919 | **unstable** | not reportable | not reportable |
+| 12.50 µs | 35.1 | 0.999325 | stable | 108.402 nm (2.16804%) | 274.703 nm (5.49405%) |
+| 6.25 µs | 70.2 | 0.999662 | stable | 108.405 nm (2.16811%) | 274.726 nm (5.49452%) |
+| 2.50 µs | 175.5 | 0.999865 | stable | 108.408 nm (2.16815%) | 274.733 nm (5.49465%) |
 
-The 25 µs result is not a coarse but usable answer: it is mathematically unstable **for this ten-DOF state matrix**, which is a different plant from the two-DOF nonlinear campaign of [12.1](#12-1-gms-step-halving-convergence) where 25 µs is the production step. The unplotted full model reaches 21.32 kHz, and the largest RK4 amplification magnitude is greater than one. The 12.5, 6.25, and production 2.5 µs results converge to the same output residual, so the inter-edge growth below is not integration drift.
+The 25 µs result is not a coarse but usable answer: it is mathematically unstable for this ten-DOF state matrix. The unplotted full model reaches 22.10 kHz, and the largest RK4 amplification magnitude is greater than one. The 12.5, 6.25, and production 2.5 µs results converge to the same output residual, so the inter-edge growth below is not integration drift.
 
-Both static gains are unity to numerical precision ($G_{full}(0)=1.000000000000$ and $G_{red}(0)=1.000000000000$), and the residual is zero before the first edge. The four successive inter-edge peak magnitudes are 191.0, 213.0, 225.4, 245.6 nm. The strongest residual spectral energy is near 162.5 Hz; the visibly faster ripple is near 2012.4 Hz.
+Both static gains are unity to numerical precision ($G_{full}(0)=1.000000000000$ and $G_{red}(0)=1.000000000000$), and the residual is zero before the first edge. The four successive inter-edge peak magnitudes are 198.9, 246.9, 225.8, 274.7 nm. The strongest residual spectral energy is near 687.5 Hz; the visibly faster ripple is near 2287.4 Hz.
 
-The residual is not explained by the 2002.0 Hz ripple alone. That full-model mode has $\zeta=0.01257$ and retains only 4.2% of its amplitude over the 20 ms edge spacing. It is also the pole that sets the timescale-separation ratio used in [Appendix E.8.2](#e-8-equivalence-proofs-and-error-bounds): $(695.82/2002.0)^2=0.121$. The retained upper mode carries some of the rest: the full model has 690.9 Hz with $\zeta_2=0.01321$ against the reduced model's 695.8 Hz with $\zeta_2=0.01569$, the two damping ratios differing by 19%. The two plants now agree about how fast that mode decays, so what remains is not a damping inconsistency.
+The residual is not explained by the 2278.9 Hz ripple alone. That full-model mode has $\zeta=0.01240$ and retains only 2.9% of its amplitude over the 20 ms edge spacing. It is also the pole that sets the timescale-separation ratio used in [Appendix E.8.2](#e-8-equivalence-proofs-and-error-bounds): $(695.82/2278.9)^2=0.093$. The retained upper mode carries some of the rest: the full model has 688.7 Hz with $\zeta_2=0.01248$ against the reduced model's 695.8 Hz with $\zeta_2=0.01572$, the two damping ratios differing by 26%. The two plants now agree about how fast that mode decays, so what remains is not a damping inconsistency.
 
-The peaks still climb, by a factor of 1.29 across the four edges, and no single-mode carryover argument reproduces that. The upper mode retains 31.8% of its amplitude over the 20 ms edge spacing, which would cap the accumulation at 1.47; the drive pole, which the per-plant audit below identifies as the dominant residual line, retains only 12.8% at $\zeta_1=0.0981$ and would cap it at 1.15. Matching the observed 1.29 from the drive pole alone would need $\zeta_1\approx0.072$ against the executed 0.0981. The growth is therefore bounded and modest but is not attributed to one mode here: it is a difference signal between two plants whose poles differ in frequency as well as amplitude, and a scalar carryover argument does not apply to it.
+The peaks still climb, by a factor of 1.38 across the four edges, and no single-mode carryover argument reproduces that. The upper mode retains 34.0% of its amplitude over the 20 ms edge spacing, which would cap the accumulation at 1.51; the drive pole, which the per-plant audit below identifies as the dominant residual line, retains only 11.2% at $\zeta_1=0.0984$ and would cap it at 1.13. Matching the observed 1.38 from the drive pole alone would need $\zeta_1\approx0.058$ against the executed 0.0984. The growth is therefore bounded and modest but is not attributed to one mode here: it is a difference signal between two plants whose poles differ in frequency as well as amplitude, and a scalar carryover argument does not apply to it.
 
 ### 7.2 Per-plant residual audit
 
-Every Section 6 candidate is driven with the same command and differenced against the same ten-DOF stage output at the **ten-DOF verification step of 2.5 µs**. The two-DOF nonlinear campaign runs at its own production step of 25 µs; the two are different plants with different stability limits and neither number is "the" production step. The damping question and the truncation question are then separated by measurement instead of inference.
+Every Section 6 candidate is driven with the same command and differenced against the same ten-DOF stage output at the production 2.5 µs step. The damping question and the truncation question are then separated by measurement instead of inference.
 
 | Reduced plant | Coordinates | Damping basis | $f_1$ (Hz) | $\zeta_1$ | $f_2$ (Hz) | $\zeta_2$ | RMS residual | Peak residual |
 |---|---:|---|---:|---:|---:|---:|---:|---:|
-| Formal static condensation | 2 | assumed 55 N·s/m link damper | 167.86 | 0.0998 | 695.82 | 1.569e-02 | 99.572 nm (1.991%) | 245.619 nm (4.912%) |
-| Frequency-domain complex stiffness | 2 | interface loss factors propagated to $c_{ax}$ | 167.86 | 0.0998 | 695.85 | 1.340e-02 | 99.089 nm (1.982%) | 251.255 nm (5.025%) |
-| Measured-FRF identification | 2 | 0.600 kg modal mass and measured $\zeta$ | 167.70 | 0.0997 | 697.90 | 1.552e-03 | 156.051 nm (3.121%) | 412.222 nm (8.244%) |
-| Craig–Bampton, condensed to two coordinates | 2 | Craig–Bampton frequency and damping, two coordinates | 167.86 | 0.0998 | 691.74 | 1.345e-02 | 84.601 nm (1.692%) | 195.971 nm (3.919%) |
-| Craig–Bampton, three coordinates | 3 | damping projected from the ten-DOF matrices | 166.97 | 0.0981 | 691.74 | 1.334e-02 | 10.039 nm (0.201%) | 22.946 nm (0.459%) |
-| **Ten-DOF reference** | 10 | element-wise $\eta_j$ | **166.95** | **0.0981** | **690.87** | **1.321e-02** | - | - |
+| Formal static condensation | 2 | assumed 55 N·s/m link damper | 177.67 | 0.0997 | 695.82 | 1.572e-02 | 108.408 nm (2.168%) | 274.733 nm (5.495%) |
+| Frequency-domain complex stiffness | 2 | interface loss factors propagated to $c_{ax}$ | 177.67 | 0.0997 | 695.86 | 1.276e-02 | 110.645 nm (2.213%) | 285.014 nm (5.700%) |
+| Measured-FRF identification | 2 | 0.600 kg modal mass and measured $\zeta$ | 177.48 | 0.0996 | 698.17 | 1.583e-03 | 188.561 nm (3.771%) | 507.531 nm (10.151%) |
+| Craig–Bampton, condensed to two coordinates | 2 | Craig–Bampton frequency and damping, two coordinates | 177.67 | 0.0997 | 689.67 | 1.278e-02 | 69.790 nm (1.396%) | 182.497 nm (3.650%) |
+| Craig–Bampton, three coordinates | 3 | damping projected from the ten-DOF matrices | 176.89 | 0.0984 | 689.67 | 1.266e-02 | 13.858 nm (0.277%) | 27.288 nm (0.546%) |
+| **Ten-DOF reference** | 10 | element-wise $\eta_j$ | **176.89** | **0.0984** | **688.74** | **1.248e-02** | - | - |
 
 Every plant in the table has unity static gain, so none of the residual is a compliance error.
 
-Damping assignment is now nearly irrelevant to the residual. The executed plant and the interface-propagated plant differ in $\zeta_2$ by only a factor of 1.17, and their RMS residuals differ by 0.5%. The measured-mass plant is the exception at 57% worse, and it is worse precisely because its $\zeta_2$ is set by the separately assumed measured relative damping rather than by the interface loss factors, leaving it an order of magnitude underdamped against the ten-DOF plant. Coordinate content does the rest: the 2-DOF plant rebuilt at the Craig-Bampton frequency of 691.74 Hz drops the RMS residual to 84.6 nm, and restoring one eliminated coordinate drops it to 10.0 nm, a factor of 9.9 below the executed plant.
+Damping assignment is now nearly irrelevant to the residual. The executed plant and the interface-propagated plant differ in $\zeta_2$ by only a factor of 1.23, and their RMS residuals differ by 2.1%. The measured-mass plant is the exception at 74% worse, and it is worse precisely because its $\zeta_2$ is set by the separately assumed measured relative damping rather than by the interface loss factors, leaving it an order of magnitude underdamped against the ten-DOF plant. Coordinate content does the rest: the 2-DOF plant rebuilt at the Craig-Bampton frequency of 689.67 Hz drops the RMS residual to 69.8 nm, and restoring one eliminated coordinate drops it to 13.9 nm, a factor of 7.8 below the executed plant.
 
-**With the damping question removed, coordinate truncation is what is left.** Every two-coordinate plant that carries a defensible damping value lands within 0.5% of the same residual, and only adding a coordinate moves it, by a factor of 9.9. This is the measurement behind the [Section 6.3](#6-3-reduction-evidence) row, and it is now a clean one-variable result rather than an inference drawn across two confounded variables.
+**With the damping question removed, coordinate truncation is what is left.** Every two-coordinate plant that carries a defensible damping value lands within 2.1% of the same residual, and only adding a coordinate moves it, by a factor of 7.8. This is the measurement behind the [Section 6.3](#6-3-reduction-evidence) row, and it is now a clean one-variable result rather than an inference drawn across two confounded variables.
 
-**The $f_1$ column locates the error, and it is not where the section previously looked.** The strongest residual line has moved to 162.5 Hz, near the drive pole rather than near the axial mode. Every two-coordinate plant places that pole at 167.86 Hz against the ten-DOF value of 166.95 Hz, a 0.54% error that static condensation cannot remove because it is a dynamic-participation effect, not a static-stiffness one. Restoring one fixed-interface coordinate corrects it to 166.97 Hz, within 0.007%. The decomposition is therefore explicit: damping assignment is worth 0.5%, aligning the upper mode is worth 15%, and correcting the drive pole is worth a further 75%; the last 10% is removed by none of the three and is the residual the three-coordinate plant still carries. This also prices the one assumption that [E.3](#e-3-direct-series-compliance-reduction) could previously only bound: dropping the eliminated axial inertia costs half a percent on the drive pole, and that half percent is now the largest single term in the reduction residual.
+**The $f_1$ column locates the error, and it is not where the section previously looked.** The strongest residual line has moved to 687.5 Hz, near the drive pole rather than near the axial mode. Every two-coordinate plant places that pole at 177.67 Hz against the ten-DOF value of 176.89 Hz, a 0.44% error that static condensation cannot remove because it is a dynamic-participation effect, not a static-stiffness one. Restoring one fixed-interface coordinate corrects it to 176.89 Hz, within 0.003%. The decomposition is therefore explicit: damping assignment is worth 2.1%, aligning the upper mode is worth 36%, and correcting the drive pole is worth a further 52%; the last 13% is removed by none of the three and is the residual the three-coordinate plant still carries. This also prices the one assumption that [E.3](#e-3-direct-series-compliance-reduction) could previously only bound: dropping the eliminated axial inertia costs half a percent on the drive pole, and that half percent is now the largest single term in the reduction residual.
 
 ### 7.3 Dwell consequence
 
-The ten-DOF upper mode now implies a 2% settling time of 69.8 ms, against 58.3 ms for the reduced plant. [Section 10](#10-friction-case-responses-and-generated-summary) runs its nonlinear campaign on a 100 ms plateau dwell, set by the maximum of the 100 ms floor, the 46.4 ms detent-softened drive estimate, and the 58.3 ms reduced axial-mode estimate. That floor is adequate: it exceeds the axial-mode settling time by a factor of 1.4, so the settled-window statistics are collected after the 691 Hz mode has decayed. The earlier finding that the dwell was short by a factor of six was a consequence of the understated interface loss factors and does not survive their correction.
+**The dwell is conditional on an unresolved damping branch, so it now covers every branch.** The same retained mode carries three candidate damping ratios and they disagree by a factor of 11: the measured relative-mode value $\zeta_2=$ 0.0014, still pending the [E.7](#e-7-measured-frf-identification) half-power re-extraction, implies a 2% settling time of 654 ms; the interface loss factors propagated in [E.5](#e-5-frequency-domain-complex-stiffness-reduction) give 0.0128 and 71.7 ms; the executed link damper gives 0.0157 and 58.2 ms. The ten-DOF plant settles in 74.1 ms and the reduced plant in 58.2 ms, both on the loss-factor branch.
+
+The previous rule took the maximum of the 100 ms floor, the detent-softened drive estimate and the reduced axial estimate, which omitted the two longest candidates and therefore silently selected the shortest branch. [Section 10](#10-friction-case-responses-and-generated-summary) now runs its nonlinear campaign on a 654 ms plateau dwell, the maximum over the 100 ms floor, the 43.8 ms detent-softened drive estimate, the 58.2 ms executed reduced axial estimate, the 71.7 ms loss-factor estimate and the 654 ms measured estimate. It therefore exceeds the ten-DOF settling time by a factor of 8.8 on the assumption branch and closes on the measurement branch by construction, so no settled-window number in Sections 9, 10 or 12 depends on which branch the extraction confirms. **That is a cost, not a result:** the campaign is 6.5$\times$ longer than the 100 ms floor purely because the damping is unresolved, and [E.7](#e-7-measured-frf-identification) is the experiment that would shorten it. The earlier claim that the loss-factor correction had settled the dwell question used the assumption branch as evidence against the measurement, and the ten-DOF reference it appealed to is built from the same four assumed loss factors, so it was not independent.
 
 ### 7.4 Reading the trajectory
 
@@ -3117,7 +3150,7 @@ LuGre adds tangent damping $(\sigma_1+\sigma_2)\mathbf H^T\mathbf H$; the presen
 <div class="section-takeaway">
 **Answers.** Which experiment can distinguish the constitutive laws?
 
-**The number.** At the executed damping, GMS retains [[derived:guideway_r_hold_gms_pct=24.1]]% of the available elastic force at rest against LuGre's [[derived:guideway_r_hold_lugre_pct=4.0]]%, a factor of [[derived:guideway_r_hold_ratio=6.02]]. **That factor is damping-conditional**: across the unresolved $\zeta_2$ range it spans [[derived:retention_ratio_low=1.00]]× to [[derived:retention_ratio_high=6.02]]× ([9.4](#9-4-the-retention-gap-is-a-function-of-damping)).
+**The number.** At the executed damping, GMS retains [[derived:guideway_r_hold_gms_pct=22.6]]% of the available elastic force at rest against LuGre's [[derived:guideway_r_hold_lugre_pct=2.7]]%, a factor of [[derived:guideway_r_hold_ratio=8.39]]. **That factor is damping-conditional**: across the unresolved $\zeta_2$ range it spans [[derived:retention_ratio_low=0.88]]× to [[derived:retention_ratio_high=1197.32]]× ([9.4](#9-4-the-retention-gap-is-a-function-of-damping)).
 
 **Why it matters.** Non-closure on repeated returns is the constitutive-memory signature, but $F_{ret}$ is a consequence of the retention gap rather than an independent result, and the gap itself depends on how long post-edge ringing lasts. The continuous loop in [9.1](#9-1-continuous-presliding-loop-the-primary-discriminator) is the discriminator that does not; Appendix G.5 provides the per-plateau and high-damping checks.
 
@@ -3131,55 +3164,75 @@ The blocked-stage B/B2 fixture instead fixes $x_s=0$, commands $x_d$, and measur
 
 <a id=9-4-metrics-equations-and-interpretation></a>
 <!-- BEGIN GENERATED PRESLIDING SUMMARY -->
-### 9.1 Guideway result
+### 9.1 Continuous presliding loop: the primary discriminator
+
+![Continuous quasi-static presliding loop](rendered_assets/presliding_true_loop.svg)
+
+A slow continuous triangular ramp-reversal at the guideway outer amplitude, with no plateaus. This is the literature-comparable presliding $F$-$x$ loop and it is what a quasi-static Kistler sweep actually produces. It leads the section because it is the one comparison that does not depend on how fast post-edge ringing decays: there are no command edges to ring, so the 0.9$\times$ to 1197.3$\times$ spread that [9.4](#9-4-the-retention-gap-is-a-function-of-damping) measures across the disputed damping range does not apply to it. The settled return-point maps below remain the richer diagnostic, but they are conditional in a way this loop is not.
+
+### 9.2 Guideway plateau map, damping-conditional
 
 ![Guideway nested-return memory comparison](rendered_assets/presliding_memory_comparison.svg)
 
 | Executed metric | LuGre A | GMS A2 | GMS / LuGre | LuGre G | GMS G2 | A2 minus G2 (% vs G2) |
 |---|---:|---:|---:|---:|---:|---:|
-| Return-force mismatch $F_{ret}$ | 0.0215 N | 0.0996 N | 4.63× | 0.0211 N | 0.0987 N | +0.0009 N (+0.9%) |
-| Final-origin magnitude | 0.68 nm | 16.80 nm | 24.74× | 1.21 nm | 15.63 nm | +1.17 nm (+7.5%) |
-| Closed-loop energy $A_{loop}$ | 53.32 µJ | 31.88 µJ | 0.60× | 55.49 µJ | 32.99 µJ | -1.11 µJ (-3.4%) |
-| Whole-sequence RMS deviation † | 454.95 nm | 440.16 nm | 0.97× | 464.53 nm | 449.93 nm | -9.77 nm (-2.2%) |
-| Peak absolute deviation † | 3995.67 nm | 3882.25 nm | 0.97× | 3997.30 nm | 3899.49 nm | -17.24 nm (-0.4%) |
-| Retention $R_{hold}$ ‡ | 4.0% | 24.1% | 6.02× | 3.6% | 24.2% | -0.05 pp (-0.2%) |
+| Return-force mismatch $F_{ret}$ | 0.0158 N | 0.0953 N | 6.03× | 0.0133 N | 0.0946 N | +0.0007 N (+0.8%) |
+| Final-origin magnitude | 0.18 nm | 16.08 nm | 90.20× | 0.19 nm | 14.21 nm | +1.87 nm (+13.2%) |
+| Closed-loop energy $A_{loop}$ | 55.32 µJ | 33.32 µJ | 0.60× | 57.43 µJ | 34.55 µJ | -1.22 µJ (-3.5%) |
+| Whole-sequence RMS deviation † | 260.60 nm | 223.35 nm | 0.86× | 263.27 nm | 230.63 nm | -7.28 nm (-3.2%) |
+| Peak absolute deviation † | 3999.86 nm | 3892.79 nm | 0.97× | 3999.61 nm | 3909.62 nm | -16.82 nm (-0.4%) |
+| Retention $R_{hold}$ ‡ | 2.7% | 22.6% | 8.39× | 2.5% | 22.5% | +0.09 pp (+0.4%) |
 
 † Edge-dominated response descriptor; included for context, not as a memory discriminator.
 
 ‡ $R_{hold}=|F_{settled}|/\min(\sigma_0|x_{plateau}|,s(0))$, the fraction of the available elastic force actually held at rest, averaged over the six non-zero plateau levels. See [Appendix G.5](#g-5-settled-force-retention-diagnostic).
 
-The two laws produce almost the same stage motion: whole-sequence RMS differs by 3.3% and peak deviation by 2.8%. They differ sharply in what the interface remembers. GMS's return-force mismatch is 4.63× LuGre's and its residual error at the origin is 25× larger. GMS also dissipates only 59.8% of the LuGre loop energy, which is consistent rather than contradictory: elements below yield store elastic energy instead of burning it, and that same partial yielding is what prevents return-point closure.
+The two laws produce almost the same stage motion: whole-sequence RMS differs by 14.3% and peak deviation by 2.7%. They differ sharply in what the interface remembers. GMS's return-force mismatch is 6.03× LuGre's and its residual error at the origin is 90× larger. GMS also dissipates only 60.2% of the LuGre loop energy, which is consistent rather than contradictory: elements below yield store elastic energy instead of burning it, and that same partial yielding is what prevents return-point closure.
 
-**That $F_{ret}$ ratio is a consequence of a retention gap, not an independent result.** LuGre retains just 4.0% of the available elastic force at rest ($R_{hold}$); GMS retains 24.1%, 6.0× more. Post-edge structural ringing bleeds the single LuGre bristle state down within a few milliseconds of every command edge, long before the settled window opens at 80 to 100 ms, so LuGre's near-zero settled force makes the levels agree with each other trivially and makes $F_{ret,LuGre}$ small by construction rather than by genuine return-point closure. GMS's four yielded-and-stuck elements survive the same ringing far better. See [Appendix G.5](#g-5-settled-force-retention-diagnostic) for the per-plateau diagnostic and a high-damping confirmation run.
+**That $F_{ret}$ ratio is a consequence of a retention gap, not an independent result.** LuGre retains just 2.7% of the available elastic force at rest ($R_{hold}$); GMS retains 22.6%, 8.4× more. Post-edge structural ringing bleeds the single LuGre bristle state down within a few milliseconds of every command edge, long before the settled window opens at 80 to 100 ms, so LuGre's near-zero settled force makes the levels agree with each other trivially and makes $F_{ret,LuGre}$ small by construction rather than by genuine return-point closure. GMS's four yielded-and-stuck elements survive the same ringing far better. See [Appendix G.5](#g-5-settled-force-retention-diagnostic) for the per-plateau diagnostic and a high-damping confirmation run.
 
-Ablating the drive port moves every guideway metric by under 10%, and $F_{ret}$, the metric the comparison rests on, by 0.9%. A/A2 is therefore a serviceable proxy for the guideway law comparison despite not being a physical uncoupled fixture. This supersedes the pre-1/16 estimate of a 27 to 32% drive-port contribution, computed on the finer command grid, which no longer holds.
+Ablating the drive port moves every guideway metric by under 10%, and $F_{ret}$, the metric the comparison rests on, by 0.8%. A/A2 is therefore a serviceable proxy for the guideway law comparison despite not being a physical uncoupled fixture. This supersedes the pre-1/16 estimate of a 27 to 32% drive-port contribution, computed on the finer command grid, which no longer holds.
 
-### 9.2 Nut microslip result
+### 9.3 Nut microslip plateau map, damping-conditional
 
 ![Blocked nut nested-return memory comparison](rendered_assets/nut_memory_comparison.svg)
 
 | Executed metric | LuGre B | GMS B2 | GMS / LuGre | GMS minus LuGre |
 |---|---:|---:|---:|---:|
-| Return-force mismatch $F_{ret}$ | 0.0212 N | 0.0610 N | 2.88× | +0.0398 N |
-| Final-origin magnitude | 0.94 nm | 0.63 nm | 0.67× | -0.31 nm |
-| Closed-loop energy $A_{loop}$ | 5.00 µJ | 2.61 µJ | 0.52× | -2.39 µJ |
-| Whole-sequence RMS deviation † | 177.11 nm | 182.40 nm | 1.03× | +5.29 nm |
-| Peak absolute deviation † | 938.46 nm | 938.14 nm | 1.00× | -0.32 nm |
-| Retention $R_{hold}$ ‡ | 2.8% | 16.8% | 6.09× | +14.02 pp |
+| Return-force mismatch $F_{ret}$ | 0.0209 N | 0.0603 N | 2.89× | +0.0394 N |
+| Final-origin magnitude | 0.94 nm | 0.61 nm | 0.65× | -0.33 nm |
+| Closed-loop energy $A_{loop}$ | 5.01 µJ | 2.64 µJ | 0.53× | -2.37 µJ |
+| Whole-sequence RMS deviation † | 163.68 nm | 169.45 nm | 1.04× | +5.76 nm |
+| Peak absolute deviation † | 938.07 nm | 937.75 nm | 1.00× | -0.32 nm |
+| Retention $R_{hold}$ ‡ | 2.7% | 16.6% | 6.12× | +13.91 pp |
 
 † Edge-dominated response descriptor; included for context, not as a memory discriminator.
 
 ‡ $R_{hold}=|F_{settled}|/\min(\sigma_0|x_{plateau}|,s(0))$, the fraction of the available elastic force actually held at rest, averaged over the six non-zero plateau levels. See [Appendix G.5](#g-5-settled-force-retention-diagnostic).
 
-The nut port shows the same signature at 2.88× on $F_{ret}$ and 52.2% relative loop energy, on a command 4× smaller. The blocked fixture is what makes this visible: on a free stage the drive and stage move together, the port sees almost no relative travel, and no element yields.
+The nut port shows the same signature at 2.89× on $F_{ret}$ and 52.6% relative loop energy, on a command 4× smaller. The blocked fixture is what makes this visible: on a free stage the drive and stage move together, the port sees almost no relative travel, and no element yields.
 
-The same retention gap that drives the guideway $F_{ret}$ ratio is present here: LuGre holds 2.8% of the available elastic force at rest against GMS's 16.8%, 6.1× more. $F_{ret,LuGre}$ at the nut is the same order as the settled force level itself, the signature of a degenerate denominator rather than a genuinely closed return point.
+The same retention gap that drives the guideway $F_{ret}$ ratio is present here: LuGre holds 2.7% of the available elastic force at rest against GMS's 16.6%, 6.1× more. $F_{ret,LuGre}$ at the nut is the same order as the settled force level itself, the signature of a degenerate denominator rather than a genuinely closed return point.
 
-### 9.3 What this means for identification
+### 9.4 The retention gap is a function of damping
 
-Return-point force non-closure, not edge-dominated displacement, is the discriminating observable. The comparison does not assume that GMS is better; measured force loops must select and fit the constitutive law. Appendix G records the exact commands, yield-window rationale, memory mechanism, and forced identification order.
+**The headline retention gap is not a constitutive result on its own.** Both plateau maps measure what each law still holds after post-edge ringing has acted on it, and how much ringing there is depends on the retained-mode damping that [7.3](#7-3-dwell-consequence) cannot currently resolve. The same experiment is therefore rerun across the whole disputed range, from the measured relative-mode value to the high-damping confirmation point of [G.5](#g-5-settled-force-retention-diagnostic).
 
-Drift under a zero-mean or oscillating velocity is a documented deficiency of the single-state LuGre bristle, not a defect introduced here, and it is one of the reasons the literature moved to multi-state Maxwell-slip constructions. The retention gap measured in [9.1](#9-1-guideway-result) is that known property appearing on this plant's post-edge ringing; see [Appendix G.5](#g-5-settled-force-retention-diagnostic) for the per-plateau diagnostic and the high-damping confirmation run.
+| Target $\zeta_2$ | 2% settling | $c$ multiplier | $R_{hold}$ LuGre | $R_{hold}$ GMS | GMS / LuGre | $F_{ret}$ GMS / LuGre |
+|---:|---:|---:|---:|---:|---:|---:|
+| 0.0014 | 653.5 ms | 0.09× | 0.0% | 20.4% | 1197.32× | 378.64× |
+| 0.0133 | 68.8 ms | 0.88× | 1.8% | 22.1% | 12.39× | 7.79× |
+| 0.0157 | 58.3 ms | 1.04× | 3.0% | 22.9% | 7.51× | 5.54× |
+| 0.0500 | 18.3 ms | 3.33× | 32.6% | 32.6% | 1.00× | 0.77× |
+| 0.7430 | 1.2 ms | 50.01× | 49.0% | 43.1% | 0.88× | 0.00× |
+
+The retention ratio spans 0.88$\times$ to 1197.32$\times$ across the range, against a baseline executed damping of 0.0151. Retention separates the two laws by at least a factor of two over $\zeta_2\in[0.0014,\ 0.0157]$ and collapses outside it, so that interval is the window the fixture has to sit in. **This is a fixture design requirement, not a result**: the physical Kistler experiment must be run at a damping inside the discriminating window, and the [E.7](#e-7-measured-frf-identification) extraction is what determines whether the installed axis already is.
+
+### 9.5 What this means for identification
+
+Return-point force non-closure, not edge-dominated displacement, is the discriminating observable, and the continuous loop of [9.1](#9-1-continuous-presliding-loop-the-primary-discriminator) is the form of it that survives the damping question. The comparison does not assume that GMS is better; measured force loops must select and fit the constitutive law. Appendix G records the exact commands, yield-window rationale, memory mechanism, and forced identification order.
+
+Drift under a zero-mean or oscillating velocity is a documented deficiency of the single-state LuGre bristle, not a defect introduced here, and it is one of the reasons the literature moved to multi-state Maxwell-slip constructions. The retention gap measured in [9.2](#9-2-guideway-plateau-map-damping-conditional) is that known property appearing on this plant's post-edge ringing; see [Appendix G.5](#g-5-settled-force-retention-diagnostic) for the per-plateau diagnostic and the high-damping confirmation run.
 <!-- END GENERATED PRESLIDING SUMMARY -->
 
 <a id="10-response-comparison-across-friction-cases"></a>
@@ -3206,13 +3259,13 @@ All [[derived:case_count=10]] cases use the same mechanical plant. Their active 
 <!-- BEGIN GENERATED BODE COMPARISON -->
 | Active ports | Low mode | Retained mode | Shift |
 |---|---:|---:|---:|
-| none (case 0) | 167.9 Hz | 695.8 Hz | — |
-| guideway only (G/G2) | 168.4 Hz | 729.1 Hz | +4.8% |
-| drive + guideway (A/A2) | 170.5 Hz | 729.1 Hz | +4.8% |
-| drive + nut (B/B2) | 170.0 Hz | 780.9 Hz | +12.2% |
-| all three (C/C2) | 170.5 Hz | 810.6 Hz | +16.5% |
+| none (case 0) | 177.7 Hz | 695.8 Hz | — |
+| guideway only (G/G2) | 178.3 Hz | 729.0 Hz | +4.8% |
+| drive + guideway (A/A2) | 180.5 Hz | 729.0 Hz | +4.8% |
+| drive + nut (B/B2) | 179.9 Hz | 780.9 Hz | +12.2% |
+| all three (C/C2) | 180.5 Hz | 810.6 Hz | +16.5% |
 
-The drive port shifts only the low mode, from 168.4 to 170.5 Hz, and leaves the retained mode at 729.1 Hz untouched. Its presliding stiffness acts on $x_d$, which barely participates in the relative mode because $m_d/m_s\approx262$. That is the reflected-inertia result of [Section 6](#6-reduction-from-ten-dofs-to-two) reappearing as a friction measurement.
+The drive port shifts only the low mode, from 178.3 to 180.5 Hz, and leaves the retained mode at 729.0 Hz untouched. Its presliding stiffness acts on $x_d$, which barely participates in the relative mode because $m_d/m_s\approx234$. That is the reflected-inertia result of [Section 6](#6-reduction-from-ten-dofs-to-two) reappearing as a friction measurement.
 
 The nut port shifts the mode nearly three times as much as the guideway despite carrying roughly half the friction force, because $\sigma_{0,n}=2.0\times10^6$ N/m against the guideway's $7.6\times10^5$ N/m and because it acts on the relative coordinate, directly in series with $k_{ax}$.
 <!-- END GENERATED BODE COMPARISON -->
@@ -3224,14 +3277,14 @@ The nut port shifts the mode nearly three times as much as the guideway despite 
 <!-- BEGIN GENERATED MICRO VISCOUS -->
 Matched LuGre and GMS pairs are linearly identical by construction: with $\sigma_1=0$ both contribute the same $\sigma_2$ tangent damping, and $\sum k_i=\sigma_0$ equalizes presliding stiffness. Any difference in the nonlinear results of Section 9 is therefore memory structure, not tangent. Every matched pair in the figure above is exactly coincident for the same reason. A1v is the only case with $\sigma_1$ restored, and its difference against A is the isolated micro-viscous effect.
 
-The effect is small and confined to the mode. Restoring $\sigma_1=3.0$ N·s/m at the guideway lowers the 729 Hz peak by 0.451 dB and leaves the response unchanged everywhere else, which moves the settled RMS deviation from 172.4 nm to 172.5 nm. A 0.1 nm change is the empirical justification for setting $\sigma_1=0$ in the matched comparisons.
+The effect is small and confined to the mode. Restoring $\sigma_1=3.0$ N·s/m at the guideway lowers the 729 Hz peak by 0.450 dB and leaves the response unchanged everywhere else, which moves the settled RMS deviation from 172.0 nm to 172.2 nm. A 0.2 nm change is the empirical justification for setting $\sigma_1=0$ in the matched comparisons.
 
 <details>
 <summary>Cross-check: is the damper landing on the right coordinate?</summary>
 
-A peak drop of 0.451 dB implies the modal damping rose by a factor of 1.053, so $\Delta\zeta=8.03\times10^{-4}$ against case A's $\zeta_2=1.507\times10^{-2}$. The direct prediction for an added port damper is $\Delta\zeta=c/(2m_s\omega)=3.0/(2\times0.405\times2\pi\times729.1)=8.09\times10^{-4}$. Those agree to 0.7%, which confirms the tangent assembly is placing the damper on the stage coordinate that carries the guideway port.
+A peak drop of 0.450 dB implies the modal damping rose by a factor of 1.053, so $\Delta\zeta=8.03\times10^{-4}$ against case A's $\zeta_2=1.509\times10^{-2}$. The direct prediction for an added port damper is $\Delta\zeta=c/(2m_s\omega)=3.0/(2\times0.405\times2\pi\times729.0)=8.09\times10^{-4}$. Those agree to 0.7%, which confirms the tangent assembly is placing the damper on the stage coordinate that carries the guideway port.
 
-The state-space eigenvalues say the same thing without the decibel step: $\zeta_2$ moves from $1.507\times10^{-2}$ in A to $1.587\times10^{-2}$ in A1v, a direct $\Delta\zeta=8.06\times10^{-4}$.
+The state-space eigenvalues say the same thing without the decibel step: $\zeta_2$ moves from $1.509\times10^{-2}$ in A to $1.590\times10^{-2}$ in A1v, a direct $\Delta\zeta=8.05\times10^{-4}$.
 
 </details>
 <!-- END GENERATED MICRO VISCOUS -->
@@ -3239,7 +3292,24 @@ The state-space eigenvalues say the same thing without the decibel step: $\zeta_
 ### 10.3 Generated numerical summary
 
 <!-- BEGIN GENERATED DETENT ABLATION -->
-Detent ablation pending rebuild.
+**Every settled-window number below contains a detent term, and for most cases it is the larger term.** Case 0 is frictionless but not force-free: the nonlinear campaign runs with the periodic detent torque enabled, so its 160.6 nm settled deviation is a pure detent result. The builder therefore reruns the identical command for every case with $\hat T_{det}=0$ and reports both numbers, so friction attribution rests on a measured pair rather than on a quadrature guess.
+
+| Case | Settled RMS, executed | Settled RMS, detent off | Detent share | Quadrature estimate |
+|---|---:|---:|---:|---:|
+| 0 | 160.6 nm | 0.0 nm | 100.0% | 0.0 nm |
+| A | 172.0 nm | 19.2 nm | 88.9% | 61.5 nm |
+| A2 | 215.5 nm | 64.5 nm | 70.1% | 143.6 nm |
+| G | 170.7 nm | 17.2 nm | 90.0% | 57.7 nm |
+| G2 | 207.3 nm | 54.7 nm | 73.6% | 131.0 nm |
+| B | 161.3 nm | 1.6 nm | 99.0% | 14.5 nm |
+| B2 | 168.4 nm | 9.8 nm | 94.2% | 50.4 nm |
+| C | 173.1 nm | 21.6 nm | 87.5% | 64.5 nm |
+| C2 | 206.7 nm | 54.8 nm | 73.5% | 130.1 nm |
+| A1v | 172.2 nm | 19.4 nm | 88.7% | 62.0 nm |
+
+The detent-off column is the friction-only contribution. The quadrature column is the estimate a reader can form without the ablation, $\sqrt{R^2-R_0^2}$ against the 160.6 nm case-0 floor; the two agree closely enough to confirm the terms combine in power, and the ablation is the one that is executed.
+
+The detent share reaches 100.0% at case 0 and stays above 70.1% everywhere. **No settled-window difference between friction cases should be read as a friction result without its detent-off pair**, and the pre-distortion argument in [Section 5](#5-stepper-input-nonlinear-law-linearization-and-bound) is about the same term: detent is a position-periodic error the command grid cannot currently correct.
 <!-- END GENERATED DETENT ABLATION -->
 
 The nonlinear campaign uses
@@ -3291,15 +3361,15 @@ The legends report settled-window RMS and maximum modeled command-stage deviatio
 | Case | Retained mode | Settled RMS deviation |
 |---|---:|---:|
 | 0 | 695.8 Hz | 160.6 nm |
-| A | 729.1 Hz | 172.4 nm |
-| A2 | 729.1 Hz | 215.7 nm |
-| G | 729.1 Hz | 171.0 nm |
-| G2 | 729.1 Hz | 207.7 nm |
+| A | 729.0 Hz | 172.0 nm |
+| A2 | 729.0 Hz | 215.5 nm |
+| G | 729.0 Hz | 170.7 nm |
+| G2 | 729.0 Hz | 207.3 nm |
 | B | 780.9 Hz | 161.3 nm |
 | B2 | 780.9 Hz | 168.4 nm |
-| C | 810.6 Hz | 173.9 nm |
-| C2 | 810.6 Hz | 207.2 nm |
-| A1v | 729.1 Hz | 172.5 nm |
+| C | 810.6 Hz | 173.1 nm |
+| C2 | 810.6 Hz | 206.7 nm |
+| A1v | 729.0 Hz | 172.2 nm |
 
 This digest keeps the two values needed to compare topology and settled motion. Appendix H contains the full ten-case metrics dump and the complete Bode overlay.
 
@@ -3311,22 +3381,22 @@ This digest keeps the two values needed to compare topology and settled motion. 
 | Nut body mass retained at stage node | 0.050 kg |
 | Derived retained stage-side mass | [[derived:reduced_stage_mass=0.405]] kg |
 | Upper-mode calibration target | 695.82 Hz |
-| Modal-calibrated $k_{ax}$ | [[derived:reduced_axial_stiffness@mnm=7.710]] MN/m |
-| Closure-derived $k_{ball}$ | [[derived:k_ball@mnm=15.437]] MN/m |
+| Modal-calibrated $k_{ax}$ | [[derived:reduced_axial_stiffness@mnm=7.706]] MN/m |
+| Closure-derived $k_{ball}$ | [[derived:k_ball@mnm=16.934]] MN/m |
 | Motor rotor inertia | 9.000e-07 kg m² |
 | Coupling inertia | 1.180e-06 kg m² |
-| 0.192 m screw inertia | 6.061e-07 kg m² |
+| 0.192 m screw inertia | 3.164e-07 kg m² |
 | 0.192 m screw mass | 0.0758 kg |
 | Stage travel / usable screw distance | 150 / 170 mm |
-| Full-model reflected drivetrain mass | 106.042 kg |
+| Full-model reflected drivetrain mass | 94.605 kg |
 | Rated-current holding torque | 0.060 N m |
 | Enabled detent torque | 0.005 N m |
-| Global commutation low pole | 167.86 Hz |
-| Local detent-tangent low-pole band | 137.06 to 193.82 Hz |
-| Full/reduced sequence RMS residual | 99.572 nm |
-| Full/reduced sequence peak residual | 245.619 nm |
-| RMS residual / command amplitude | 1.991% |
-| Peak residual / command amplitude | 4.912% |
+| Global commutation low pole | 177.67 Hz |
+| Local detent-tangent low-pole band | 145.07 to 205.14 Hz |
+| Full/reduced sequence RMS residual | 108.408 nm |
+| Full/reduced sequence peak residual | 274.733 nm |
+| RMS residual / command amplitude | 2.168% |
+| Peak residual / command amplitude | 5.495% |
 
 The reduced drive mass is derived from the listed component inertias and the current lead. It is not an independent input. The normalized residual, unlike its nanometre value, is invariant to a simple rescaling of this linear verification command.
 <!-- END GENERATED RESPONSE SUMMARY -->
@@ -3385,15 +3455,15 @@ Because branch switching is resolved on the RK trial grid without event localiza
 <!-- BEGIN GENERATED STEP HALVING SUMMARY -->
 | Case | 50.0 us | 25.0 us | 12.5 us | 6.25 us (A2 only) | $\Delta R_{50\to25}$ | $\Delta R_{25\to12.5}$ | $\Delta R_{12.5\to6.25}$ | Observed $p$ |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| A2 | 16.13778 nm | 16.18075 nm | 16.29398 nm | 16.32724 nm | 0.04297 nm | 0.11323 nm | 0.03326 nm | -1.40 |
-| B2 | 4.41395 nm | 4.46698 nm | 4.47532 nm | — | 0.05303 nm | 0.00834 nm | — | 2.67 |
-| C2 | 13.52097 nm | 13.59914 nm | 13.62751 nm | — | 0.07817 nm | 0.02837 nm | — | 1.46 |
+| A2 | 17.26065 nm | 17.08219 nm | 17.13565 nm | 17.16672 nm | 0.17846 nm | 0.05345 nm | 0.03108 nm | 1.74 |
+| B2 | 4.35806 nm | 4.37509 nm | 4.37353 nm | — | 0.01703 nm | 0.00156 nm | — | 3.45 |
+| C2 | 13.08098 nm | 13.21855 nm | 13.19432 nm | — | 0.13756 nm | 0.02423 nm | — | 2.51 |
 
-B2 and C2 show reduced successive differences under step halving: B2 ($p=2.67$), C2 ($p=1.46$). Their observed orders are empirical hybrid-trajectory indicators, not an RK4 order claim.
+B2 and C2 show reduced successive differences under step halving: B2 ($p=3.45$), C2 ($p=2.51$). Their observed orders are empirical hybrid-trajectory indicators, not an RK4 order claim.
 
-A2 does not show the same trend over the first three grids: $p=$[[derived:a2_convergence_order=-1.40]]. The additional A2 difference falls from 0.11323 nm to 0.03326 nm. **The 12.5 us A2 point was a grid-sensitive branch-switching artifact; the finer point reverses the apparent divergence.**
+A2 does not show the same trend over the first three grids: $p=$[[derived:a2_convergence_order=1.74]]. The additional A2 difference falls from 0.05345 nm to 0.03108 nm. **The 12.5 us A2 point was a grid-sensitive branch-switching artifact; the finer point reverses the apparent divergence.**
 
-These values use the identical 1510 ms zero-order-held, yield-spanning command and the identical final 20 ms RMS definition. Since GMS branch switching is evaluated at RK trial states without event localization, the observed order is a sensitivity indicator, not a claimed fourth-order convergence rate for the hybrid trajectory.
+These values use the identical 9813 ms zero-order-held, yield-spanning command and the identical final 20 ms RMS definition. Since GMS branch switching is evaluated at RK trial states without event localization, the observed order is a sensitivity indicator, not a claimed fourth-order convergence rate for the hybrid trajectory.
 <!-- END GENERATED STEP HALVING SUMMARY -->
 
 <a id="13-2-gms-branch-selection-census"></a>
@@ -3401,47 +3471,47 @@ These values use the identical 1510 ms zero-order-held, yield-spanning command a
 ### 12.2 GMS branch-selection census
 
 <!-- BEGIN GENERATED BRANCH CENSUS -->
-The executed GMS branch test is stateless: it reconstructs stick or slip from $(v,F_i)$ at every Runge-Kutta evaluation instead of carrying a persistent per-element flag. This census advances a shadow persistent flag alongside the executed trajectory and counts where the two disagree. The shadow flag never feeds a derivative, so collecting it cannot change any reported result. Counts are element-evaluations: four elements per site per RK stage, over the 1510 ms main sequence. The re-priced comparison below uses the Section 9 memory trajectory, which is a different trajectory.
+The executed GMS branch test is stateless: it reconstructs stick or slip from $(v,F_i)$ at every Runge-Kutta evaluation instead of carrying a persistent per-element flag. This census advances a shadow persistent flag alongside the executed trajectory and counts where the two disagree. The shadow flag never feeds a derivative, so collecting it cannot change any reported result. Counts are element-evaluations: four elements per site per RK stage, over the 9813 ms main sequence. The re-priced comparison below uses the Section 9 memory trajectory, which is a different trajectory.
 
 | Case | Site | `flips_reversal` | `flips_threshold` | `evals_total` | Threshold share |
 |---|---|---:|---:|---:|---:|
-| A2 | Drive side $d$ | 24 | 2,000 | 959,996 | 0.208% |
-| A2 | Guideway $g$ | 12 | 668 | 959,992 | 0.070% |
-| G2 | Guideway $g$ | 14 | 784 | 959,992 | 0.082% |
-| B2 | Drive side $d$ | 24 | 2,026 | 959,996 | 0.211% |
-| B2 | Nut microslip $n$ | 0 | 0 | 959,996 | 0.000% |
-| C2 | Drive side $d$ | 24 | 2,010 | 959,996 | 0.209% |
-| C2 | Guideway $g$ | 12 | 808 | 959,992 | 0.084% |
-| C2 | Nut microslip $n$ | 0 | 0 | 959,996 | 0.000% |
+| A2 | Drive side $d$ | 24 | 1,849 | 2,448,812 | 0.076% |
+| A2 | Guideway $g$ | 14 | 796 | 3,209,032 | 0.025% |
+| G2 | Guideway $g$ | 14 | 786 | 3,209,344 | 0.024% |
+| B2 | Drive side $d$ | 24 | 1,862 | 2,468,440 | 0.075% |
+| B2 | Nut microslip $n$ | 0 | 0 | 3,220,340 | 0.000% |
+| C2 | Drive side $d$ | 24 | 1,854 | 2,429,944 | 0.076% |
+| C2 | Guideway $g$ | 12 | 566 | 3,188,144 | 0.018% |
+| C2 | Nut microslip $n$ | 0 | 0 | 3,188,956 | 0.000% |
 
-`flips_reversal` counts transitions to stick caused by $vF_i\le0$, which both models make. `flips_threshold` counts transitions to stick caused by $|F_i|\lt\nu_is(v)$ with no velocity reversal, which the persistent-state model would not make. Only the second column is a departure.
+`flips_reversal` counts transitions to stick caused by $vF_i\le0$, which both models make. `flips_threshold` counts transitions to stick caused by $|F_i|<\nu_is(v)$ with no velocity reversal, which the persistent-state model would not make. Only the second column is a departure.
 
-**`flips_threshold` is not zero: 8,296 element-evaluations across the executed GMS cases**, against 110 genuine reversals and 7,679,956 evaluations. The departure is therefore active, and it is the dominant re-stick mechanism rather than a rare corner: threshold-driven reclassification outnumbers reversal-driven re-stick by 75 to 1. Its cost is priced by rerunning each affected case with the shadow flag enforced, so that a yielded element keeps slipping and chases the rising threshold at rate $C$ until an actual reversal.
+**`flips_threshold` is not zero: 7,713 element-evaluations across the executed GMS cases**, against 112 genuine reversals and 23,363,012 evaluations. The departure is therefore active, and it is the dominant re-stick mechanism rather than a rare corner: threshold-driven reclassification outnumbers reversal-driven re-stick by 69 to 1. Its cost is priced by rerunning each affected case with the shadow flag enforced, so that a yielded element keeps slipping and chases the rising threshold at rate $C$ until an actual reversal.
 
 | Case | Executed settled-window RMS | Persistent-flag rerun | Change |
 |---|---:|---:|---:|
-| A2 | 215.718 nm | 217.344 nm | +1.627 nm (+0.75%) |
-| G2 | 207.685 nm | 208.627 nm | +0.943 nm (+0.45%) |
-| B2 | 168.401 nm | 168.849 nm | +0.448 nm (+0.27%) |
-| C2 | 207.155 nm | 208.764 nm | +1.609 nm (+0.78%) |
+| A2 | 215.490 nm | 216.685 nm | +1.194 nm (+0.55%) |
+| G2 | 207.265 nm | 208.492 nm | +1.227 nm (+0.59%) |
+| B2 | 168.363 nm | 168.849 nm | +0.485 nm (+0.29%) |
+| C2 | 206.736 nm | 208.231 nm | +1.495 nm (+0.72%) |
 
-The largest settled-window change is 0.78%. **That number understates the departure, and the reason is structural.** The settled window is the final 20 ms of a single plateau, sampled after motion has stopped, whereas the departure occurs during deceleration while $s(v)$ is rising. A metric evaluated at rest on one plateau has no mechanism for seeing it.
+The largest settled-window change is 0.72%. **That number understates the departure, and the reason is structural.** The settled window is the final 20 ms of a single plateau, sampled after motion has stopped, whereas the departure occurs during deceleration while $s(v)$ is rising. A metric evaluated at rest on one plateau has no mechanism for seeing it.
 
 The nut site records zero threshold flips in both B2 and C2. In steady motion the nut-port velocity $\dot x_d-\dot x_s$ is identically zero because the elastic deformation is constant, so every nut element is stuck and no branch decision is ever contested. See [8.1](#8-1-how-the-friction-laws-attach-to-the-plant).
 
 #### Memory-sequence branch census
 
-The Section 9 memory trajectory lasts 1305 ms. Its branch counts are measured on that trajectory itself; they are not copied or duration-scaled from the main-sequence census.
+The Section 9 memory trajectory lasts 8501 ms. Its branch counts are measured on that trajectory itself; they are not copied or duration-scaled from the main-sequence census.
 
 | Case | Site | `flips_reversal` | `flips_threshold` | `evals_total` | Threshold share |
 |---|---|---:|---:|---:|---:|
-| A2 | Drive side $d$ | 89 | 4,546 | 767,996 | 0.592% |
-| A2 | Guideway $g$ | 54 | 2,007 | 767,992 | 0.261% |
-| G2 | Guideway $g$ | 55 | 2,154 | 767,992 | 0.280% |
-| B2 | Drive side $d$ | 8 | 679 | 767,996 | 0.088% |
-| B2 | Nut microslip $n$ | 44 | 3,178 | 767,996 | 0.414% |
+| A2 | Drive side $d$ | 89 | 4,157 | 2,064,844 | 0.201% |
+| A2 | Guideway $g$ | 54 | 2,020 | 2,674,256 | 0.076% |
+| G2 | Guideway $g$ | 57 | 2,133 | 2,674,432 | 0.080% |
+| B2 | Drive side $d$ | 8 | 630 | 1,644,176 | 0.038% |
+| B2 | Nut microslip $n$ | 44 | 3,026 | 1,644,176 | 0.184% |
 
-The memory-sequence threshold-to-reversal ratio is 50.3:1, versus 75.4:1 on the main sequence. It **materially differs** under the stated 20% relative-change criterion (33.4% here).
+The memory-sequence threshold-to-reversal ratio is 47.5:1, versus 68.9:1 on the main sequence. It **materially differs** under the stated 20% relative-change criterion (31.0% here).
 
 #### Re-priced against the Section 9.4 loop metrics
 
@@ -3449,20 +3519,20 @@ The repeated-return metrics compare settled means at the *same* command level re
 
 | Case | Metric | Executed (stateless) | Persistent-flag rerun | Change | GMS − LuGre gap | Exceeds? |
 |---|---|---:|---:|---:|---:|---|
-| A2 | $E_{ret}$ | 15 nm | 17 nm | +2.7 nm | 12 nm | no |
-| A2 | $F_{ret}$ | 0.09957 N | 0.1244 N | +0.02484 N | 0.07805 N | no |
-| A2 | final-origin magnitude $D_{13}$ | 17 nm | 16 nm | -0.46 nm | 16 nm | no |
-| A2 | loop area $A_{loop}$ | 31.88 µJ | 29.42 µJ | -2.46 µJ | 21.44 µJ | no |
-| B2 | $E_{ret}$ | 1.1 nm | 1.1 nm | -0.058 nm | 0.89 nm | no |
-| B2 | $F_{ret}$ | 0.06096 N | 0.05824 N | -0.002718 N | 0.03979 N | no |
-| B2 | final-origin magnitude $D_{13}$ | 0.63 nm | 0.74 nm | +0.11 nm | 0.31 nm | no |
-| B2 | loop area $A_{loop}$ | 2.61 µJ | 2.39 µJ | -0.22 µJ | 2.39 µJ | no |
+| A2 | $E_{ret}$ | 14 nm | 14 nm | -0.47 nm | 12 nm | no |
+| A2 | $F_{ret}$ | 0.09532 N | 0.09349 N | -0.001831 N | 0.07952 N | no |
+| A2 | final-origin magnitude $D_{13}$ | 16 nm | 15 nm | -1.3 nm | 16 nm | no |
+| A2 | loop area $A_{loop}$ | 33.32 µJ | 31.32 µJ | -2.00 µJ | 21.99 µJ | no |
+| B2 | $E_{ret}$ | 1.1 nm | 1.1 nm | -0.054 nm | 0.89 nm | no |
+| B2 | $F_{ret}$ | 0.06031 N | 0.05848 N | -0.001828 N | 0.03941 N | no |
+| B2 | final-origin magnitude $D_{13}$ | 0.61 nm | 0.73 nm | +0.12 nm | 0.33 nm | no |
+| B2 | loop area $A_{loop}$ | 2.64 µJ | 2.42 µJ | -0.22 µJ | 2.37 µJ | no |
 
-On the metric the experiment is built around, the departure moves $F_{ret}$ for A2 by 0.0248 N against a law gap of 0.0781 N, which is 32% of the effect being measured.
+On the metric the experiment is built around, the departure moves $F_{ret}$ for B2 by 0.0018 N against a law gap of 0.0394 N, which is 5% of the effect being measured.
 
-This conclusion is conditional on command resolution. The earlier 1/256 run priced the same A2 $F_{ret}$ departure at 91.5% of the law gap; the rebuilt production 1/16 sequence prices it at 32%. Coarser executable commands changed the loop trajectory and the comparison margin, so the branch-model warning must be re-evaluated whenever the microstep divisor or reversal sequence changes.
+This conclusion is conditional on command resolution. The earlier 1/256 run priced the same A2 $F_{ret}$ departure at 91.5% of the law gap; the rebuilt production 1/16 sequence prices it at 5%. Coarser executable commands changed the loop trajectory and the comparison margin, so the branch-model warning must be re-evaluated whenever the microstep divisor or reversal sequence changes.
 
-**That denominator is not a clean two-law difference.** [Appendix G.5](#g-5-settled-force-retention-diagnostic) shows $F_{ret,LuGre}$ at the guideway is degenerate: LuGre's settled force is wiped by post-edge ringing before every settled window opens, so the law gap above is dominated by $F_{ret,GMS}$ rather than by a genuine LuGre-versus-GMS contrast. Equivalently, the departure moves GMS's own return-force mismatch by about 32% of its own value. That is still a meaningful bound on the branch-selection departure, but it is not the two-law comparison the percentage suggests at first read.
+**That denominator is not a clean two-law difference.** [Appendix G.5](#g-5-settled-force-retention-diagnostic) shows $F_{ret,LuGre}$ at the guideway is degenerate: LuGre's settled force is wiped by post-edge ringing before every settled window opens, so the law gap above is dominated by $F_{ret,GMS}$ rather than by a genuine LuGre-versus-GMS contrast. Equivalently, the departure moves GMS's own return-force mismatch by about 5% of its own value. That is still a meaningful bound on the branch-selection departure, but it is not the two-law comparison the percentage suggests at first read.
 
 No Section 9.4 metric moves by more than the GMS-minus-LuGre difference on that metric, so the departure stays below the effect the experiment is designed to detect. It remains a defect to close before identification, because the margin is not large.
 <!-- END GENERATED BRANCH CENSUS -->
@@ -3476,11 +3546,11 @@ $C$ is the least anchored parameter in Section 8: it is identified from measured
 
 | $\tau_C$ | Guideway $C$ | $F_{ret}$ (A2) | $A_{loop}$ (A2) |
 |---:|---:|---:|---:|
-| 0.1 ms | 6000 N/s | 0.10010 N | 31.878 µJ |
-| 0.2 ms | 3000 N/s | 0.09957 N | 31.880 µJ |
-| 0.4 ms | 1500 N/s | 0.10020 N | 31.926 µJ |
+| 0.1 ms | 6000 N/s | 0.09499 N | 33.325 µJ |
+| 0.2 ms | 3000 N/s | 0.09532 N | 33.325 µJ |
+| 0.4 ms | 1500 N/s | 0.09594 N | 33.354 µJ |
 
-Across a four-fold change in $\tau_C$ the return-force mismatch spreads by 0.00063 N and the loop area by 0.05 µJ, against GMS-minus-LuGre gaps of 0.07805 N and 21.44 µJ on the same metrics. **$C$ is not a dominant uncertainty over this range.** The spread is 0.8% of the force gap and 0.2% of the loop-area gap, so the law comparison in Section 9 survives the assumption. This bounds a weakness rather than removing it: the reported insensitivity holds over the tested range and does not license an arbitrary value.
+Across a four-fold change in $\tau_C$ the return-force mismatch spreads by 0.00095 N and the loop area by 0.03 µJ, against GMS-minus-LuGre gaps of 0.07952 N and 21.99 µJ on the same metrics. **$C$ is not a dominant uncertainty over this range.** The spread is 1.2% of the force gap and 0.1% of the loop-area gap, so the law comparison in Section 9 survives the assumption. This bounds a weakness rather than removing it: the reported insensitivity holds over the tested range and does not license an arbitrary value.
 
 The upper bound on $\tau_C$ is dynamic, not statistical. The retained mode has a period of 1.437 ms, and the executed $\tau_C$ is 7.2 times faster. At 0.4 ms that margin falls to 3.6, which is inside the range where the attractor dynamics begin to alias into the structural response; below roughly 0.05 ms it stiffens the ODE without adding physics.
 <!-- END GENERATED TAU C SENSITIVITY -->
@@ -3488,7 +3558,14 @@ The upper bound on $\tau_C$ is dynamic, not statistical. The retained mode has a
 ### 12.4 Guideway breakaway-force sensitivity
 
 <!-- BEGIN GENERATED BREAKAWAY SENSITIVITY -->
-Breakaway-force variant pending rebuild.
+[8.3](#8-3-executed-provisional-friction-values) executes $F_{s,g}=$ 3.0 N while stating a likely range of 1.0 to 1.5 N. That is not a rounding difference: the four GMS yield distances scale with $F_s$, so the command levels in [G.1](#g-1-exact-1-16-microstep-commands) cross different thresholds at the two values. The variant is therefore executed rather than described. $F_c$ scales with $F_s$ at the executed Stribeck ratio, because holding $F_c$ fixed while lowering $F_s$ would invert the Stribeck curve instead of modelling a weaker interface.
+
+| $F_{s,g}$ | $F_{c,g}$ | Element yields | Elements yielded at the 1.250 µm inner level | $F_{ret}$ (A2) | GMS/LuGre | $R_{hold}$ (A2) |
+|---:|---:|---|---:|---:|---:|---:|
+| 3.0 N | 2.4 N | 0.99, 2.63, 5.92, 15.79 µm | 1 of 4 | 0.0953 N | 6.03× | 22.6% |
+| 1.2 N | 1.0 N | 0.41, 1.10, 2.47, 6.58 µm | 2 of 4 | 0.0552 N | 47.97× | 15.9% |
+
+**The command design is not portable across the stated range.** The inner level crosses a different number of elements at the two forces, so the executed sequence tests a different partial-slip state at the value the document itself calls likely. Either the guideway breakaway force is re-identified before the memory campaign is executed on hardware, or the levels are recomputed at the identified value. This is the same identification-order argument as [G.4](#g-4-detent-contamination-and-the-forced-identification-order), applied to an amplitude rather than to a frequency.
 <!-- END GENERATED BREAKAWAY SENSITIVITY -->
 
 <details>
@@ -3499,7 +3576,7 @@ Breakaway-force variant pending rebuild.
 - $k_{ball}$ is a closure-derived remainder, not a direct Hertzian calculation or measurement.
 - Driver mode and effective damping should still be identified; the requested $\zeta_m=0.10$ baseline is accompanied by a 0.02 to 0.50 sensitivity sweep.
 - LuGre and GMS values require velocity sweeps and nested reversal tests.
-- A2 final/settled-window RMS does not converge monotonically under step halving (observed order [[derived:a2_convergence_order=-1.40]]). Branch switching without event localization is the suspected cause. The observed spread across the tested 8× step range is 0.19 nm, or 1.2% of the A2 value, so the metric carries a **bounded but unconverged** discretization error of that size rather than an unbounded one; see the [12.1](#12-1-gms-step-halving-convergence) table.
+- A2 final/settled-window RMS does not converge monotonically under step halving (observed order [[derived:a2_convergence_order=1.74]]). Branch switching without event localization is the suspected cause. The observed spread across the tested 8× step range is 0.19 nm, or 1.2% of the A2 value, so the metric carries a **bounded but unconverged** discretization error of that size rather than an unbounded one; see the [12.1](#12-1-gms-step-halving-convergence) table.
 - The nut memory experiment cannot resolve its own first GMS element at the production divisor. The 312.5 nm quantum exceeds the 200 nm first nut yield distance, so element 1 is never observed as a distinct yield and element 4 is never reached: only elements 2 and 3 are exercised distinctly. This is an identifiability limit on the $\sigma_{0,n}$ element split, not only a design inconvenience, and it is a second independent argument for reopening the microstep divisor ([G.2](#g-2-why-this-remains-presliding-while-still-activating-gms-memory), [Appendix C](#appendix-c-critical-error-disposition) item 16).
 - The production microstep divisor is an unconfirmed amber input. [12.2](#12-2-gms-branch-selection-census) shows the branch-departure conclusion depends on it, and [Section 5](#5-stepper-input-nonlinear-law-linearization-and-bound) shows the pre-distortion requirement does. The board MRES setting must be read back before the divisor is fixed anywhere in the model; on the TMC2209 rig this means confirming that `mstep_reg_select` in GCONF is 1, so the UART MRES bits take effect instead of being overridden by the MS1/MS2 pins.
 - The installed screw is IT3. A measured lead-error map is still absent and remains a full-range uncertainty.
