@@ -348,7 +348,7 @@ PARAMETER_REGISTRY: dict[str, dict[str, object]] = {
     "eta_nut_mount": {"category": "assumed", "dependencies": (), "section": "2-entry-parameters"},
     "zeta_steel": {
         "category": "derived",
-        "dependencies": ("eta_steel", "k_sha", "screw_mass", "axial_mode_target_hz"),
+        "dependencies": ("eta_steel", "k_shb", "screw_mass", "axial_mode_target_hz"),
         "section": "2-entry-parameters",
     },
     "zeta_bearing": {
@@ -371,7 +371,7 @@ PARAMETER_REGISTRY: dict[str, dict[str, object]] = {
     "interface_axial_damping": {
         "category": "derived",
         "dependencies": (
-            "reduced_axial_stiffness", "k_ball", "k_brg", "k_sha", "k_mnt",
+            "reduced_axial_stiffness", "k_ball", "k_brg", "k_shb", "k_mnt",
             "zeta_steel", "zeta_bearing", "zeta_ball_nut", "zeta_nut_mount",
             "screw_length", "screw_diameter", "screw_density", "nut_mass",
             "stage_mass", "axial_mode_target_hz",
@@ -423,7 +423,7 @@ PARAMETER_REGISTRY: dict[str, dict[str, object]] = {
     },
     "k_ball": {
         "category": "derived",
-        "dependencies": ("reduced_axial_stiffness", "k_brg", "k_sha", "k_mnt"),
+        "dependencies": ("reduced_axial_stiffness", "k_brg", "k_shb", "k_mnt"),
         "section": "4-full-ten-dof-derivation",
     },
     "k_mnt": {"category": "assumed", "dependencies": (), "section": "4-full-ten-dof-derivation"},
@@ -507,7 +507,7 @@ PARAMETER_REGISTRY: dict[str, dict[str, object]] = {
 # auditable through the existing provenance machinery.
 _ROUTE_COMMON_DEPS = (
     "reduced_drive_mass", "reduced_stage_mass", "magnetic_stiffness",
-    "reduced_axial_stiffness", "k_ball", "k_brg", "k_sha", "k_mnt",
+    "reduced_axial_stiffness", "k_ball", "k_brg", "k_shb", "k_mnt",
 )
 for _route in ("p", "s", "b"):
     for _suffix in ("md", "ms", "kax", "cax", "zeta", "f1", "f2", "kball", "settling"):
@@ -538,7 +538,7 @@ for _suffix in ("md", "ms", "kax", "cax", "zeta", "f1", "f2", "kball", "settling
         "category": "derived",
         "dependencies": (
             "reduced_drive_mass", "magnetic_stiffness", "axial_mode_target_hz",
-            "m_eff_measured", "zeta_relative_measured", "k_brg", "k_sha", "k_mnt",
+            "m_eff_measured", "zeta_relative_measured", "k_brg", "k_shb", "k_mnt",
         ),
         "section": "6-3-reduction-evidence",
     }
@@ -684,7 +684,7 @@ for _key, _dependencies in {
         "axial_mode_target_hz", "first_fixed_interface_hz"),
     "presliding_k_ax_mn": ("reduced_axial_stiffness", "g_sigma0", "n_sigma0",
                            "axial_mode_target_hz"),
-    "closure_singular_limit_mn": ("reduced_axial_stiffness", "k_sha", "k_mnt"),
+    "closure_singular_limit_mn": ("reduced_axial_stiffness", "k_shb", "k_mnt"),
     "measured_settling_ms": ("zeta_relative_measured", "axial_mode_target_hz"),
     "interface_settling_ms": ("interface_axial_damping", "reduced_axial_stiffness",
                               "reduced_drive_mass", "reduced_stage_mass"),
@@ -813,7 +813,7 @@ def interface_loss_factors() -> dict[str, dict[str, float]]:
     pair = lambda a, b: a * b / (a + b)  # noqa: E731
     elements = {
         "zeta_bearing": (component["k_brg"], segment_mass),
-        "zeta_steel": (component["k_sha"], pair(segment_mass, segment_mass)),
+        "zeta_steel": (component["k_shb"], pair(segment_mass, segment_mass)),
         "zeta_ball_nut": (constants["k_ball"], 1.0 / (
             r**2 / segment_inertia + 1.0 / segment_mass + 1.0 / component["m_n"])),
         "zeta_nut_mount": (component["k_mnt"], pair(component["m_n"], component["m_stage"])),
@@ -989,7 +989,7 @@ def presliding_calibrated_axial_stiffness(
     return float(k_ax)
 
 
-def ball_closure_band(k_ax: float, k_sha: float, k_mnt: float) -> dict[str, float]:
+def ball_closure_band(k_ax: float, k_shb: float, k_mnt: float) -> dict[str, float]:
     """Report how much of k_ball is a choice of k_brg rather than a result.
 
     k_ball is a closure residual: it absorbs whatever axial compliance the
@@ -997,7 +997,7 @@ def ball_closure_band(k_ax: float, k_sha: float, k_mnt: float) -> dict[str, floa
     nothing left to absorb, and just above it the residual swings by a factor
     of two, so the reported k_ball carries the bearing assumption with it.
     """
-    residual = 1.0 / k_ax - 1.0 / k_sha - 1.0 / k_mnt
+    residual = 1.0 / k_ax - 1.0 / k_shb - 1.0 / k_mnt
     if residual <= 0.0:
         raise ValueError(
             "The screw and nut-mount compliances alone exceed the calibrated "
@@ -1020,7 +1020,7 @@ def validate_closure_band(constants: dict[str, float],
                           component: dict[str, float]) -> dict[str, float]:
     """Fail the build if the bearing assumption sits at the singular limit."""
     band = ball_closure_band(
-        constants["k_ax"], component["k_sha"], component["k_mnt"])
+        constants["k_ax"], component["k_shb"], component["k_mnt"])
     k_brg = component["k_brg"]
     limit = band["singular_limit"]
     if k_brg <= limit:
@@ -1128,10 +1128,10 @@ def modal_calibrated_axial_stiffness(
 
 
 def closure_ball_stiffness(k_ax: float, k_brg: float,
-                           k_sha: float, k_mnt: float) -> float:
+                           k_shb: float, k_mnt: float) -> float:
     """Close the four-element axial compliance chain for k_ball."""
     remaining_compliance = (
-        1.0 / k_ax - 1.0 / k_brg - 1.0 / k_sha - 1.0 / k_mnt
+        1.0 / k_ax - 1.0 / k_brg - 1.0 / k_shb - 1.0 / k_mnt
     )
     if remaining_compliance <= 0.0:
         raise ValueError("Axial compliance budget cannot yield a positive k_ball")
@@ -1146,15 +1146,15 @@ def axial_complex_link(component: dict[str, float], r: float,
     physical interface.  Taking the reciprocal of the summed complex
     compliances preserves those dependencies in the executable 2-DOF link.
     """
-    m_b, m_e = component["m_b"], component["m_e"]
+    m_e, m_f = component["m_e"], component["m_f"]
     m_n, m_stage = component["m_n"], component["m_stage"]
     ball_relative_mass = 1.0 / (
         r**2 / component["J_s2"] + 1.0 / m_e + 1.0 / m_n)
     elements = (
         (component["k_brg"], 2.0 * component["zeta_bearing"]
-         * np.sqrt(component["k_brg"] * m_b)),
-        (component["k_sha"], 2.0 * component["zeta_steel"]
-         * np.sqrt(component["k_sha"] * m_b * m_e / (m_b + m_e))),
+         * np.sqrt(component["k_brg"] * m_f)),
+        (component["k_shb"], 2.0 * component["zeta_steel"]
+         * np.sqrt(component["k_shb"] * m_e * m_f / (m_e + m_f))),
         (k_ball, 2.0 * component["zeta_ball_nut"]
          * np.sqrt(k_ball * ball_relative_mass)),
         (component["k_mnt"], 2.0 * component["zeta_nut_mount"]
@@ -1190,7 +1190,7 @@ def physical_constants() -> dict[str, float]:
     k_ax = modal_calibrated_axial_stiffness(
         m_d, m_s, k_m, axial_mode_target_hz)
     k_ball = closure_ball_stiffness(
-        k_ax, component["k_brg"], component["k_sha"], component["k_mnt"])
+        k_ax, component["k_brg"], component["k_shb"], component["k_mnt"])
     _k_ax_complex, c_ax_interface = axial_complex_link(
         component, r, k_ball, 2.0 * np.pi * axial_mode_target_hz)
     c_m = 2.0 * MODEL["zeta_m"] * np.sqrt(k_m * m_d)
@@ -1350,13 +1350,13 @@ def _axial_element_frequencies(p: dict[str, float]) -> dict[str, dict[str, float
     k_m = MODEL["rotor_teeth"] * MODEL["T_max"] / r**2
     k_ax = modal_calibrated_axial_stiffness(
         m_d, m_s, k_m, MODEL["axial_mode_target_hz"])
-    k_ball = closure_ball_stiffness(k_ax, p["k_brg"], p["k_sha"], p["k_mnt"])
+    k_ball = closure_ball_stiffness(k_ax, p["k_brg"], p["k_shb"], p["k_mnt"])
     segment_mass = p["screw_mass"] / 3.0
     segment_inertia = p["screw_inertia"] / 3.0
     pair = lambda a, b: a * b / (a + b)  # noqa: E731
     elements = {
         "zeta_bearing": (p["k_brg"], segment_mass),
-        "zeta_steel": (p["k_sha"], pair(segment_mass, segment_mass)),
+        "zeta_steel": (p["k_shb"], pair(segment_mass, segment_mass)),
         "zeta_ball_nut": (k_ball, 1.0 / (
             r**2 / segment_inertia + 1.0 / segment_mass + 1.0 / p["m_n"])),
         "zeta_nut_mount": (p["k_mnt"], pair(p["m_n"], p["m_stage"])),
@@ -1473,8 +1473,8 @@ def full_linear_matrices() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarr
         _add_pair(damping, i, j, _pair_damping(
             k_value, native_masses[i], native_masses[j], p["zeta_steel"]))
 
-    stiffness[5, 5] += p["k_brg"]
-    damping[5, 5] += 2.0 * p["zeta_bearing"] * np.sqrt(p["k_brg"] * p["m_b"])
+    stiffness[7, 7] += p["k_brg"]
+    damping[7, 7] += 2.0 * p["zeta_bearing"] * np.sqrt(p["k_brg"] * p["m_f"])
     for i, j, k_value in ((5, 6, p["k_sha"]), (6, 7, p["k_shb"]), (8, 9, p["k_mnt"])):
         _add_pair(stiffness, i, j, k_value)
         interface_zeta = p["zeta_nut_mount"] if (i, j) == (8, 9) else p["zeta_steel"]
@@ -1605,7 +1605,7 @@ def multi_route_reduction_metrics() -> dict[str, float]:
         }
 
     axial_compliance = sum(1.0 / component[key]
-                           for key in ("k_brg", "k_sha", "k_mnt")) + 1.0 / kball_p
+                           for key in ("k_brg", "k_shb", "k_mnt")) + 1.0 / kball_p
     kax_series = 1.0 / axial_compliance
     torsional_compliance = constants["r"]**2 * (
         1.0 / component["k_c1"] + 1.0 / component["k_c2"]
@@ -1630,14 +1630,14 @@ def multi_route_reduction_metrics() -> dict[str, float]:
         cb_damped_modes, key=lambda item: abs(item[0] - constants["axial_mode_target_hz"]))
     kax_c = modal_calibrated_axial_stiffness(md, ms, km, float(cb_modes[1]))
     kball_c = closure_ball_stiffness(
-        kax_c, component["k_brg"], component["k_sha"], component["k_mnt"])
+        kax_c, component["k_brg"], component["k_shb"], component["k_mnt"])
     mu = md * ms / (md + ms)
     cax_c = 2.0 * cb_upper_damped[1] * np.sqrt(kax_c * mu)
 
     m_eff = MODEL["m_eff_measured"]
     kax_m = omega_target**2 * m_eff
     kball_m = closure_ball_stiffness(
-        kax_m, component["k_brg"], component["k_sha"], component["k_mnt"])
+        kax_m, component["k_brg"], component["k_shb"], component["k_mnt"])
     mu_m = md * m_eff / (md + m_eff)
     cax_m = 2.0 * MODEL["zeta_relative_measured"] * np.sqrt(kax_m * mu_m)
 
@@ -3643,7 +3643,7 @@ def plot_kinematic_diagram() -> tuple[Path, Path, Path]:
         )
     if not np.isclose(parameters["m_d_reflected"], constants["m_d"]):
         raise ValueError("Full and reduced reflected drive masses have drifted")
-    axial_elements = ("k_brg", "k_sha", "k_ball", "k_mnt")
+    axial_elements = ("k_brg", "k_shb", "k_ball", "k_mnt")
     compliance = np.array([1.0 / parameters[key] for key in axial_elements])
     compliance_shares = compliance / np.sum(compliance)
     if not np.isclose(np.sum(compliance_shares), 1.0):
@@ -3813,9 +3813,9 @@ def plot_kinematic_diagram() -> tuple[Path, Path, Path]:
         "ground": 0.75,
         "motor": 2.25,
         "coupling": 4.05,
-        "bearing + screw drive end": 5.85,
+        "screw drive end": 5.85,
         "screw nut plane": 8.15,
-        "beyond nut": 10.15,
+        "beyond nut + support bearing": 10.15,
         "nut body": 12.05,
         "stage": 14.00,
         "guideways": 15.85,
@@ -3850,10 +3850,11 @@ def plot_kinematic_diagram() -> tuple[Path, Path, Path]:
                  fontsize=ANNO_FS, color="#7a838a")
 
     ground_baseline(
-        ax1, columns["motor"] - 0.55, columns["screw nut plane"] + 0.55,
+        ax1, columns["screw nut plane"] - 0.55,
+        columns["beyond nut + support bearing"] + 0.55,
         y_torsion_ground, "torsional ground datum")
     ground_baseline(
-        ax1, columns["bearing + screw drive end"] - 0.70,
+        ax1, columns["screw drive end"] - 0.70,
         columns["guideways"] + 0.45, y_axial_ground,
         "axial ground datum")
 
@@ -3868,17 +3869,17 @@ def plot_kinematic_diagram() -> tuple[Path, Path, Path]:
     rotational_nodes = (
         ("motor", r"$\theta_m$", "q1"),
         ("coupling", r"$\theta_c$", "q2"),
-        ("bearing + screw drive end", r"$\theta_{s1}$", "q3"),
+        ("screw drive end", r"$\theta_{s1}$", "q3"),
         ("screw nut plane", r"$\theta_{s2}$", "q4"),
-        ("beyond nut", r"$\theta_{s3}$", "q5"),
+        ("beyond nut + support bearing", r"$\theta_{s3}$", "q5"),
     )
     for column, label, index in rotational_nodes:
         node(ax1, columns[column], y_torsion, label, drive_color, index)
     rotational_springs = (
         ("motor", "coupling", r"$k_{c1}$"),
-        ("coupling", "bearing + screw drive end", r"$k_{c2}$"),
-        ("bearing + screw drive end", "screw nut plane", r"$k_{\theta a}$"),
-        ("screw nut plane", "beyond nut", r"$k_{\theta b}$"),
+        ("coupling", "screw drive end", r"$k_{c2}$"),
+        ("screw drive end", "screw nut plane", r"$k_{\theta a}$"),
+        ("screw nut plane", "beyond nut + support bearing", r"$k_{\theta b}$"),
     )
     for left, right, label in rotational_springs:
         x0 = columns[left] + 0.56
@@ -3891,7 +3892,7 @@ def plot_kinematic_diagram() -> tuple[Path, Path, Path]:
     # Hub losses use one fixed stub row; grounded losses use neutral drops.
     for left, right, label in (
         ("motor", "coupling", r"$T_{h1}$"),
-        ("coupling", "bearing + screw drive end", r"$T_{h2}$"),
+        ("coupling", "screw drive end", r"$T_{h2}$"),
     ):
         x0 = columns[left] + 0.56
         x1 = columns[right] - 0.56
@@ -3901,10 +3902,7 @@ def plot_kinematic_diagram() -> tuple[Path, Path, Path]:
                  color=ground_color, linewidth=0.9)
         friction(ax1, (x0, y_torsion_stub), (x1, y_torsion_stub), label)
     grounded_friction(
-        ax1, columns["motor"], y_torsion - 0.33,
-        y_torsion_ground, 6.83, r"$T_{mb}$")
-    grounded_friction(
-        ax1, columns["bearing + screw drive end"], y_torsion - 0.33,
+        ax1, columns["beyond nut + support bearing"], y_torsion - 0.33,
         y_torsion_ground, 6.83, r"$T_{brg}$")
     grounded_friction(
         ax1, columns["screw nut plane"], y_torsion - 0.33,
@@ -3928,24 +3926,33 @@ def plot_kinematic_diagram() -> tuple[Path, Path, Path]:
         arrowstyle="-|>", mutation_scale=8, color=ground_color,
         linewidth=1.1))
 
-    node(ax1, columns["bearing + screw drive end"], y_axial,
-         r"$u_b$", dropped_color, "q6", alpha=0.45)
+    node(ax1, columns["screw drive end"], y_axial_stub,
+         r"$u_b$", dropped_color, "q6", alpha=0.35)
     node(ax1, columns["screw nut plane"], y_axial,
          r"$u_e$", dropped_color, "q7", alpha=0.45)
-    node(ax1, columns["beyond nut"], y_axial_stub,
-         r"$u_f$", dropped_color, "q8", alpha=0.35)
+    node(ax1, columns["beyond nut + support bearing"], y_axial_stub,
+         r"$u_f$", dropped_color, "q8", alpha=0.45)
     node(ax1, columns["nut body"], y_axial,
          r"$u_n$", stage_color, "q9")
     node(ax1, columns["stage"], y_axial,
          r"$x_s$", stage_color, "q10", width=1.12)
 
+    # u_e is the only axial screw coordinate left on the main row: both
+    # neighbors hang off it as stub-row branches, ghosted where they carry no
+    # retained static force (k_sha, drive end) and full where they now carry
+    # the support-bearing reaction through to the nut (k_shb, beyond nut).
+    ax1.plot(
+        [columns["screw nut plane"], columns["screw nut plane"]],
+        [y_axial - 0.33, y_axial_stub], color=ground_color,
+        linewidth=0.9, alpha=0.45)
     spring(
-        ax1, (columns["bearing + screw drive end"] + 0.55, y_axial),
-        (columns["screw nut plane"] - 0.55, y_axial))
+        ax1, (columns["screw nut plane"] - 0.08, y_axial_stub),
+        (columns["screw drive end"] + 0.55, y_axial_stub),
+        color="#8a8a8a", amplitude=0.055, alpha=0.40)
     ax1.text(
-        (columns["bearing + screw drive end"] + columns["screw nut plane"]) / 2.0,
-        y_axial + 0.24, r"$k_{sha}$", ha="center",
-        fontsize=ANNO_FS, color="#9a5600")
+        (columns["screw drive end"] + columns["screw nut plane"]) / 2.0,
+        y_axial_stub + 0.22, r"$k_{sha}$", ha="center",
+        fontsize=ANNO_FS, color="#777777", alpha=0.75)
 
     sum_x = columns["screw nut plane"] + 0.76
     ax1.plot(
@@ -3987,10 +3994,10 @@ def plot_kinematic_diagram() -> tuple[Path, Path, Path]:
         linewidth=0.9, alpha=0.45)
     spring(
         ax1, (columns["screw nut plane"] + 0.08, y_axial_stub),
-        (columns["beyond nut"] - 0.55, y_axial_stub),
+        (columns["beyond nut + support bearing"] - 0.55, y_axial_stub),
         color="#8a8a8a", amplitude=0.055, alpha=0.40)
     ax1.text(
-        (columns["screw nut plane"] + columns["beyond nut"]) / 2.0,
+        (columns["screw nut plane"] + columns["beyond nut + support bearing"]) / 2.0,
         y_axial_stub + 0.22, r"$k_{shb}$", ha="center",
         fontsize=ANNO_FS, color="#777777", alpha=0.75)
     ax1.plot([sum_x, sum_x], [y_axial - 0.06, y_nut_friction],
@@ -4003,7 +4010,7 @@ def plot_kinematic_diagram() -> tuple[Path, Path, Path]:
         ax1, (sum_x, y_nut_friction),
         (columns["nut body"], y_nut_friction), r"$F_{f,n}$")
 
-    support_x = columns["bearing + screw drive end"]
+    support_x = columns["screw drive end"]
     spring(
         ax1, (support_x, y_axial - 0.33),
         (support_x, y_axial_ground + 0.04), amplitude=0.055)
@@ -4149,7 +4156,7 @@ def plot_kinematic_diagram() -> tuple[Path, Path, Path]:
              fontsize=BOX_FS, fontweight="bold", color="#425b6b")
     ax3.text(
         0.35, 0.54,
-        r"$\{T_{mb},T_{h1},T_{h2},T_{brg},T_{f,r}\}"
+        r"$\{T_{h1},T_{h2},T_{brg},T_{f,r}\}"
         r"\ \rightarrow\ F_{f,d}$",
         fontsize=ANNO_FS, color="#8d2936",
         bbox={"boxstyle": "round,pad=0.20", "facecolor": "#fff7f8",
@@ -4165,7 +4172,7 @@ def plot_kinematic_diagram() -> tuple[Path, Path, Path]:
     bar_left, bar_right = 9.52, 14.85
     bar_y, bar_h = 3.05, 0.32
     colors = ("#f4c27a", "#ed9f4a", "#d97800", "#b65f00")
-    labels = (r"$k_{brg}$", r"$k_{sha}$", r"$k_{ball}$", r"$k_{mnt}$")
+    labels = (r"$k_{brg}$", r"$k_{shb}$", r"$k_{ball}$", r"$k_{mnt}$")
     cursor = bar_left
     for share, label, color in zip(compliance_shares, labels, colors):
         width = (bar_right - bar_left) * float(share)
@@ -4368,7 +4375,7 @@ def plot_flowchart_provenance_structure() -> Path:
         "derived", "5-stepper-input-nonlinear-law-linearization-and-bound",
         width=2.45)
     add("series_bundle", 3.00, 6.72,
-        "Independent spring inputs\n$k_{brg}$ • $k_{sha}$ • $k_{mnt}$",
+        "Independent spring inputs\n$k_{brg}$ • $k_{shb}$ • $k_{mnt}$",
         "assumed", "4-full-ten-dof-derivation", width=3.45)
     add("k_ball", 6.35, 6.72,
         "$k_{ball}$ remainder\nclosure-derived, not measured",
@@ -4387,7 +4394,7 @@ def plot_flowchart_provenance_structure() -> Path:
         "derived", "6-reduction-from-ten-dofs-to-two",
         width=3.60, height=0.94)
     add("test_load", 13.05, 3.92,
-        "TEST 2 — load path\n$u_f$ and $\\theta_{s3}$ are stubs → drop",
+        "TEST 2 — load path\n$u_b$ and $\\theta_{s3}$ are stubs → drop",
         "derived", "6-reduction-from-ten-dofs-to-two",
         width=3.60, height=0.84)
     add("test_port", 13.05, 2.68,
@@ -5301,9 +5308,9 @@ def calibration_branches(constants: dict[str, float],
     presliding = presliding_calibrated_axial_stiffness(
         constants["m_d"], constants["m_s"], constants["K_m"],
         constants["axial_mode_target_hz"])
-    band = ball_closure_band(frictionless, component["k_sha"], component["k_mnt"])
+    band = ball_closure_band(frictionless, component["k_shb"], component["k_mnt"])
     presliding_ball = closure_ball_stiffness(
-        presliding, component["k_brg"], component["k_sha"], component["k_mnt"])
+        presliding, component["k_brg"], component["k_shb"], component["k_mnt"])
     unpowered = modal_calibrated_axial_stiffness(
         constants["m_d"], constants["m_s"], 0.0, constants["axial_mode_target_hz"])
     return {
