@@ -39,12 +39,20 @@ def load_parameters() -> dict[str, float]:
 
 
 def build_matrices(p: dict[str, float]) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Assemble M, C, K, B_u per Sec. 5 of state_space_6dof.md (recoupled model).
+    """Assemble M, C, K, B_u per Sec. 5 of state_space_6dof.md (recoupled model,
+    2026-08-18 sign correction).
 
     The screw-nut interface (k_nut, c_nut) is reflected onto theta_s through
     the lead ratio L/2*pi and enters K and C directly, coupling the
     rotational block (theta_m, theta_c, theta_s, theta_sb) to the axial
-    block (x_s, x_n). T_fric,nut is no longer an input.
+    block (x_s, x_n). T_fric,nut is no longer an input. The cross-term sign
+    is fixed so positive theta_s drives positive x_n (Sec. 1 convention);
+    F_nut = k_nut*(x_n - x_s - (L/2pi)*theta_s) + damping (Sec. 3.4).
+
+    C[0,0] includes c_EM (Sec. 5.4): plain viscous damping of theta_m against
+    a fixed frame, applied by default because mode 1 (176.7 Hz) is otherwise
+    almost undamped (c_c, c_s1, c_s2 barely engage it). No theta_dot_cmd
+    feedforward column is added to B_u -- see Sec. 5.4 for why.
     """
     k_EM = p["N_r"] * p["T_hold"]
     k_d = 4.0 * p["N_r"] * p["T_d"]
@@ -57,21 +65,21 @@ def build_matrices(p: dict[str, float]) -> tuple[np.ndarray, np.ndarray, np.ndar
     K = np.array([
         [k_c + k_EM + k_d, -k_c, 0.0, 0.0, 0.0, 0.0],
         [-k_c, k_c + k_s1, -k_s1, 0.0, 0.0, 0.0],
-        [0.0, -k_s1, k_s1 + k_s2 + lead_ratio**2 * k_nut, -k_s2, -lead_ratio * k_nut, lead_ratio * k_nut],
+        [0.0, -k_s1, k_s1 + k_s2 + lead_ratio**2 * k_nut, -k_s2, lead_ratio * k_nut, -lead_ratio * k_nut],
         [0.0, 0.0, -k_s2, k_s2, 0.0, 0.0],
-        [0.0, 0.0, -lead_ratio * k_nut, 0.0, k_brg + k_nut, -k_nut],
-        [0.0, 0.0, lead_ratio * k_nut, 0.0, -k_nut, k_nut],
+        [0.0, 0.0, lead_ratio * k_nut, 0.0, k_brg + k_nut, -k_nut],
+        [0.0, 0.0, -lead_ratio * k_nut, 0.0, -k_nut, k_nut],
     ])
 
     c_c, c_s1, c_s2 = p["c_c"], p["c_s1"], p["c_s2"]
-    c_nut, c_brg = p["c_nut"], p["c_brg"]
+    c_nut, c_brg, c_EM = p["c_nut"], p["c_brg"], p["c_EM"]
     C = np.array([
-        [c_c, -c_c, 0.0, 0.0, 0.0, 0.0],
+        [c_c + c_EM, -c_c, 0.0, 0.0, 0.0, 0.0],
         [-c_c, c_c + c_s1, -c_s1, 0.0, 0.0, 0.0],
-        [0.0, -c_s1, c_s1 + c_s2 + lead_ratio**2 * c_nut, -c_s2, -lead_ratio * c_nut, lead_ratio * c_nut],
+        [0.0, -c_s1, c_s1 + c_s2 + lead_ratio**2 * c_nut, -c_s2, lead_ratio * c_nut, -lead_ratio * c_nut],
         [0.0, 0.0, -c_s2, c_s2, 0.0, 0.0],
-        [0.0, 0.0, -lead_ratio * c_nut, 0.0, c_brg + c_nut, -c_nut],
-        [0.0, 0.0, lead_ratio * c_nut, 0.0, -c_nut, c_nut],
+        [0.0, 0.0, lead_ratio * c_nut, 0.0, c_brg + c_nut, -c_nut],
+        [0.0, 0.0, -lead_ratio * c_nut, 0.0, -c_nut, c_nut],
     ])
 
     B_u = np.array([

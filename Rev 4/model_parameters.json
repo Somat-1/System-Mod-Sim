@@ -22,7 +22,7 @@
     "c_s2": 2.0e-4,
     "c_nut": 101.0,
     "c_brg": 37.2,
-    "c_EM": 3.3e-4
+    "c_EM": 1.3283e-4
   },
   "parameter_notes": {
     "L": "Screw lead. Given. Source: BOM, KGT-F1-08-01.",
@@ -45,6 +45,6 @@
     "c_s2": "Screw torsional damping, bearing side. PLACEHOLDER, not given anywhere in the workspace. Assumed 2% of critical damping against k_s2 and the I_s/I_sb reduced inertia.",
     "c_nut": "Screw-nut axial damping. PLACEHOLDER, not given anywhere in the workspace. Assumed 2% of critical damping against k_nut and the M_screw/M_s reduced mass. As of the recoupled model (2026-08-17 update) this enters K/C directly, replacing the earlier T_fric,nut friction port.",
     "c_brg": "Support bearing axial damping. PLACEHOLDER, not given anywhere in the workspace. Assumed 2% of critical damping against k_brg and M_screw (grounded spring).",
-    "c_EM": "Electromagnetic damping (Sec 3.1/5.4 optional variant). PLACEHOLDER, not applied in the base C matrix used here. Assumed 10% of critical damping against k_EM and I_m, matching Rev 3 'electromagnetic_zeta' = 0.10."
+    "c_EM": "Electromagnetic (rotor) damping, C[0,0] += c_EM (Sec 3.1/5.4). PLACEHOLDER. As of the 2026-08-18 update this IS applied by default (not optional): mode 1 (176.7 Hz, the whole rotational chain moving nearly rigidly against k_EM) barely engages c_c, c_s1, c_s2 as a damping path and came out at zeta=4.9e-5 without it -- a ~74s settling time, impractical for the stepping simulation. Value is bisected (not the 10%-of-critical guess used previously) to hit exactly zeta=0.02 on mode 1; it barely disturbs modes 2-6 (already near 2% from the other c_* placeholders). Implemented as plain viscous damping of theta_m against a fixed frame only -- the paired theta_dot_cmd feedforward column in Sec 5.4's literal variant is intentionally omitted because theta_cmd is a staircase and its derivative is a train of Dirac impulses, ill-posed for lsim on a finite grid."
   }
 }

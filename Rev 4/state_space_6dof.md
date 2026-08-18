@@ -85,12 +85,12 @@ Each appears once as a drive torque on the downstream body and once as a reactio
 
 $$
 \begin{aligned}
-F_{nut} &= k_{nut}\,\Big(x_n - x_s + \tfrac{L}{2\pi}\theta_s\Big) \;\big[\; + \; c_{nut}\,\big(\dot{x}_n - \dot{x}_s + \tfrac{L}{2\pi}\dot{\theta}_s\big)\;\big] \\
+F_{nut} &= k_{nut}\,\Big(x_n - x_s - \tfrac{L}{2\pi}\theta_s\Big) \;\big[\; + \; c_{nut}\,\big(\dot{x}_n - \dot{x}_s - \tfrac{L}{2\pi}\dot{\theta}_s\big)\;\big] \\
 F_{ax,\text{react}} &= k_{brg}\,x_s \;\big[\; + \; c_{brg}\,\dot{x}_s\;\big]
 \end{aligned}
 $$
 
-$k_{nut}$ is the screw-nut axial contact stiffness. As of this revision it is coupled directly to screw rotation through the lead ratio $L/2\pi$, rather than injected as a separate friction port (Sec. 7, Sec. 10 items 1-3). $k_{brg}$ is the axial rigidity of the support bearing pair, grounded.
+$k_{nut}$ is the screw-nut axial contact stiffness. As of this revision it is coupled directly to screw rotation through the lead ratio $L/2\pi$, rather than injected as a separate friction port (Sec. 7, Sec. 10 items 1-3). The sign inside $F_{nut}$ is fixed by the Sec. 1 convention: $x_n - x_s - \tfrac{L}{2\pi}\theta_s$ is the nut's actual position minus the ideal no-slip position $x_s + \tfrac{L}{2\pi}\theta_s$, so positive $\theta_s$ drives positive $x_n$ (2026-08-18 correction; an earlier draft of this revision had the opposite sign on the $\theta_s$ term, which inverted the sign of the command-to-stage DC gain). $k_{brg}$ is the axial rigidity of the support bearing pair, grounded.
 
 ---
 
@@ -123,7 +123,7 @@ $$
 = I_c \ddot{\theta}_c \\[1.5ex]
 \text{(3)}\quad
 & \Big[k_{s1}(\theta_c - \theta_s) + c_{s1}(\dot{\theta}_c - \dot{\theta}_s)\Big]
-- \frac{L}{2\pi}\Big[k_{nut}\big(x_n - x_s + \tfrac{L}{2\pi}\theta_s\big) + c_{nut}\big(\dot{x}_n - \dot{x}_s + \tfrac{L}{2\pi}\dot{\theta}_s\big)\Big]
+- \frac{L}{2\pi}\Big[k_{nut}\big(x_n - x_s - \tfrac{L}{2\pi}\theta_s\big) + c_{nut}\big(\dot{x}_n - \dot{x}_s - \tfrac{L}{2\pi}\dot{\theta}_s\big)\Big]
 - \Big[k_{s2}(\theta_s - \theta_{sb}) + c_{s2}(\dot{\theta}_s - \dot{\theta}_{sb})\Big]
 = I_s \ddot{\theta}_s \\[1.5ex]
 \text{(4)}\quad
@@ -131,11 +131,11 @@ $$
 - T_{fric,sb}
 = I_{sb} \ddot{\theta}_{sb} \\[1.5ex]
 \text{(5)}\quad
-& \Big[k_{nut}\big(x_n - x_s + \tfrac{L}{2\pi}\theta_s\big) + c_{nut}\big(\dot{x}_n - \dot{x}_s + \tfrac{L}{2\pi}\dot{\theta}_s\big)\Big]
+& \Big[k_{nut}\big(x_n - x_s - \tfrac{L}{2\pi}\theta_s\big) + c_{nut}\big(\dot{x}_n - \dot{x}_s - \tfrac{L}{2\pi}\dot{\theta}_s\big)\Big]
 - \Big[k_{brg}x_s + c_{brg}\dot{x}_s\Big]
 = M_{screw} \ddot{x}_s \\[1.5ex]
 \text{(6)}\quad
-& -\Big[k_{nut}\big(x_n - x_s + \tfrac{L}{2\pi}\theta_s\big) + c_{nut}\big(\dot{x}_n - \dot{x}_s + \tfrac{L}{2\pi}\dot{\theta}_s\big)\Big]
+& -\Big[k_{nut}\big(x_n - x_s - \tfrac{L}{2\pi}\theta_s\big) + c_{nut}\big(\dot{x}_n - \dot{x}_s - \tfrac{L}{2\pi}\dot{\theta}_s\big)\Big]
 - F_{fric,way}
 = M_s \ddot{x}_n
 \end{aligned}
@@ -173,30 +173,30 @@ $$
 \begin{bmatrix}
 k_c + k_{EM} + k_d & -k_c & 0 & 0 & 0 & 0 \\
 -k_c & k_c + k_{s1} & -k_{s1} & 0 & 0 & 0 \\
-0 & -k_{s1} & k_{s1} + k_{s2} + \left(\dfrac{L}{2\pi}\right)^2 k_{nut} & -k_{s2} & -\dfrac{L}{2\pi}k_{nut} & \dfrac{L}{2\pi}k_{nut} \\
+0 & -k_{s1} & k_{s1} + k_{s2} + \left(\dfrac{L}{2\pi}\right)^2 k_{nut} & -k_{s2} & \dfrac{L}{2\pi}k_{nut} & -\dfrac{L}{2\pi}k_{nut} \\
 0 & 0 & -k_{s2} & k_{s2} & 0 & 0 \\
-0 & 0 & -\dfrac{L}{2\pi}k_{nut} & 0 & k_{brg} + k_{nut} & -k_{nut} \\
-0 & 0 & \dfrac{L}{2\pi}k_{nut} & 0 & -k_{nut} & k_{nut}
+0 & 0 & \dfrac{L}{2\pi}k_{nut} & 0 & k_{brg} + k_{nut} & -k_{nut} \\
+0 & 0 & -\dfrac{L}{2\pi}k_{nut} & 0 & -k_{nut} & k_{nut}
 \end{bmatrix}
 $$
 
-The screw-nut interface (Sec. 3.4) is now reflected through the lead ratio $L/2\pi$ directly onto $\theta_s$, coupling the rotational and axial blocks that were fully decoupled in the prior revision (Sec. 10 items 1-3).
+The screw-nut interface (Sec. 3.4) is now reflected through the lead ratio $L/2\pi$ directly onto $\theta_s$, coupling the rotational and axial blocks that were fully decoupled in the prior revision (Sec. 10 items 1-3). The sign of the four off-diagonal $L/2\pi \, k_{nut}$ terms was corrected on 2026-08-18: an earlier draft had the opposite sign here, which made the command-to-stage DC gain negative (a 180 deg phase offset at low frequency, opposite to the Sec. 1 convention that positive $\theta_s$ drives positive $x_n$). This form matches $F_{nut}$ in Sec. 3.4.
 
 ### 5.4 Damping matrix
 
 $$
 \mathbf{C} =
 \begin{bmatrix}
-c_c & -c_c & 0 & 0 & 0 & 0 \\
+c_c + c_{EM} & -c_c & 0 & 0 & 0 & 0 \\
 -c_c & c_c + c_{s1} & -c_{s1} & 0 & 0 & 0 \\
-0 & -c_{s1} & c_{s1} + c_{s2} + \left(\dfrac{L}{2\pi}\right)^2 c_{nut} & -c_{s2} & -\dfrac{L}{2\pi}c_{nut} & \dfrac{L}{2\pi}c_{nut} \\
+0 & -c_{s1} & c_{s1} + c_{s2} + \left(\dfrac{L}{2\pi}\right)^2 c_{nut} & -c_{s2} & \dfrac{L}{2\pi}c_{nut} & -\dfrac{L}{2\pi}c_{nut} \\
 0 & 0 & -c_{s2} & c_{s2} & 0 & 0 \\
-0 & 0 & -\dfrac{L}{2\pi}c_{nut} & 0 & c_{brg} + c_{nut} & -c_{nut} \\
-0 & 0 & \dfrac{L}{2\pi}c_{nut} & 0 & -c_{nut} & c_{nut}
+0 & 0 & \dfrac{L}{2\pi}c_{nut} & 0 & c_{brg} + c_{nut} & -c_{nut} \\
+0 & 0 & -\dfrac{L}{2\pi}c_{nut} & 0 & -c_{nut} & c_{nut}
 \end{bmatrix}
 $$
 
-Optional variant with electromagnetic damping retained: set $\mathbf{C}_{11} = c_c + c_{EM}$ and extend $\mathbf{B}_u$ with a $\dot{\theta}_{cmd}$ column carrying $c_{EM}$ in row 1.
+As of 2026-08-18, $\mathbf{C}_{11} = c_c + c_{EM}$ is applied by default rather than treated as an optional variant. Reason: mode 1 (176.7 Hz, the whole rotational chain moving almost rigidly against the $k_{EM}$ spring) barely engages the relative-velocity dampers $c_c, c_{s1}, c_{s2}$, so without $c_{EM}$ it comes out at $\zeta_1 \approx 5\times10^{-5}$ (a ~74 s settling time) regardless of how those placeholders are set. $c_{EM}$ acts directly on $\dot\theta_m$ and is the efficient lever on this mode; the value in Sec. 8/`model_parameters.json` is chosen to put $\zeta_1$ at 2%. Unlike the literal Sec. 3.1 relation ($T_{EM}$ depends on $\dot\theta_{cmd}-\dot\theta_m$), only the $\dot\theta_m$ half is implemented here, i.e. plain viscous damping of the rotor against a fixed frame, not against the moving command. The paired $\dot\theta_{cmd}$ feedforward column in $\mathbf{B}_u$ (below) is intentionally omitted: $\theta_{cmd}$ is a step staircase in the time-domain simulations this model feeds, and its derivative is a train of Dirac impulses, which is not representable on a finite time grid.
 
 ### 5.5 Input matrix
 
