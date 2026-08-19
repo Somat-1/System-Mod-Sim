@@ -29,6 +29,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.lines import Line2D
 from scipy.signal import StateSpace, find_peaks, lsim
 
 from build_bode_rev4 import STATE_LABELS, build_matrices, build_state_space, load_parameters
@@ -38,13 +39,27 @@ ASSET_DIR = ROOT / "rendered_assets"
 
 # Full-step-equivalent move sequence: 2 forth, 1 back, 1 forth, 1 back, 1 forth,
 # 4 back, 1 forth, 1 back, 1 forth, 1 back, 2 forth. Net zero (ends on the same line).
-MOVE_SEQUENCE = [2, -1, 1, -1, 1, -4, 1, -1, 1, -1, 2]
-assert sum(MOVE_SEQUENCE) == 0
+MOVES = [2, -1, 1, -1, 1, -4, 1, -1, 1, -1, 2]
+assert sum(MOVES) == 0
+
+FULL_STEP = np.deg2rad(1.8)  # matches full_step_angle(params) for N_r=50 (model_parameters.json);
+                              # checked against it in main() rather than assumed
+T1 = 1.0 / 176.69             # s, mode-1 period (176.69 Hz, see backlog.md issue #2);
+                              # checked against the live model's mode 1 in main()
 
 DWELL_FAST = 4.0e-3     # s, per full-step-equivalent move -- short vs. the ~176 ms
                         # settling time of the slowest mode, so ringing overlaps
 DWELL_SETTLE = 250.0e-3  # s, per full-step-equivalent move -- comfortably longer
                         # than the ~176 ms settling time of the slowest mode
+
+# Firing interval for Figure A (montage), defined relative to mode 1 rather than
+# by fixing total duration -- see backlog.md / conversation: the old approach
+# scaled the elementary dwell down by the microstep divisor to hold total move
+# duration constant, which produced a 16x "settled" case whose actual elementary
+# dwell (15.6 ms) was neither settled nor fast relative to T1. Reusing
+# DWELL_FAST/DWELL_SETTLE here is deliberate -- same two numbers, now applied as
+# the literal inter-microstep interval instead of being divided by the divisor.
+T_FIRE = {"settled": DWELL_SETTLE, "fast": DWELL_FAST}
 
 MICROSTEP_DIVISORS = {"full": 1, "micro16": 16}
 
@@ -140,7 +155,7 @@ def build_theta_cmd(divisor: int, dwell_full_step: float, dt: float, step_full: 
 
     t_cursor = dwell_full_step  # pre-roll at zero
     theta_cursor = 0.0
-    for move in MOVE_SEQUENCE:
+    for move in MOVES:
         direction = 1.0 if move > 0 else -1.0
         for _ in range(abs(move) * divisor):
             edge_times.append(t_cursor)
@@ -176,6 +191,63 @@ def run_case(A, B, C_out, D, dt, theta_cmd):
     sys = StateSpace(A, B, C_out, D)
     tout, yout, _xout = lsim(sys, U=U, T=t)
     return tout, yout
+
+
+IDX_ERR = 0  # single output row -- see build_error_system
+
+
+def build_error_system(A: np.ndarray, B: np.ndarray, lead_ratio: float) -> StateSpace:
+    """Direct tracking-error output e(t) = (L/2pi)*theta_cmd(t) - x_n(t) via
+    feedthrough, for Figure A. C has -1 at x_n; D carries theta_cmd straight
+    through scaled by the lead ratio -- that feedthrough is why theta_cmd must
+    be driven into lsim as u[:, 0] rather than subtracted from y afterwards."""
+    C_err = np.zeros((1, A.shape[0]))
+    C_err[0, STATE_LABELS.index("x_n")] = -1.0
+    D_err = np.zeros((1, B.shape[1]))
+    D_err[0, 0] = lead_ratio
+    return StateSpace(A, B, C_err, D_err)
+
+
+def edge_list(micro: int) -> np.ndarray:
+    """Expand MOVES into cumulative commanded angle after each microstep."""
+    theta, edges = 0.0, []
+    for n in MOVES:
+        for _ in range(abs(n) * micro):
+            theta += np.sign(n) * FULL_STEP / micro
+            edges.append(theta)
+    return np.array(edges)  # len = 16*micro
+
+
+def run_case_segments(sys: StateSpace, micro: int, t_fire: float, dt: float, decim: int = 20):
+    """One lsim per dwell, carrying state across segments. Bounded memory,
+    exact edge placement, and the end-of-dwell value comes for free (ends).
+
+    Returns (S, E, CMD, ends): sample times in full-step units, tracking
+    error (m), the commanded angle each sample was held at (rad, so the
+    actual position x_n = lead_ratio*CMD - E can be recovered without a
+    second lsim), and the error value at the end of each dwell."""
+    n_hold = round(t_fire / dt)
+    assert abs(t_fire / dt - n_hold) < 1e-9, "edges must land on samples"
+
+    edges = edge_list(micro)
+    t_seg = np.arange(n_hold) * dt
+    z = np.zeros(12)
+    S, E, CMD, ends = [], [], [], []
+
+    for j, theta_cmd in enumerate(edges):
+        u = np.zeros((n_hold, 3))
+        u[:, 0] = theta_cmd
+        _, y, x = lsim(sys, u, t_seg, X0=z)
+        z = x[-1]
+        s = (j + np.arange(n_hold) / n_hold) / micro  # full-step units
+        # lsim returns a 1-D yout for a single-output system, so y is already
+        # the error channel -- no column index needed despite IDX_ERR's name.
+        S.append(s[::decim])
+        E.append(y[::decim])
+        CMD.append(np.full(n_hold, theta_cmd)[::decim])
+        ends.append(y[-1])  # closure marker
+
+    return np.concatenate(S), np.concatenate(E), np.concatenate(CMD), np.array(ends)
 
 
 def main() -> None:
@@ -259,31 +331,121 @@ def main() -> None:
 
     ASSET_DIR.mkdir(exist_ok=True)
 
-    # ---- Figure A: 4-panel macro montage ----
-    fig, axes = plt.subplots(2, 2, figsize=(12.0, 8.0))
-    panel_order = [("full", "fast"), ("full", "settled"), ("micro16", "fast"), ("micro16", "settled")]
-    titles = {
-        ("full", "fast"): "Full step -- fast firing",
-        ("full", "settled"): "Full step -- settled",
-        ("micro16", "fast"): "16x microstep -- fast firing",
-        ("micro16", "settled"): "16x microstep -- settled",
-    }
-    RENDER_POINTS_TARGET = 5000  # integrate at DT, decimate only at render time
-    for ax, key in zip(axes.flat, panel_order):
-        d = cases[key]
-        stride = max(1, len(d["t"]) // RENDER_POINTS_TARGET)
-        t_ms = d["t"][::stride] * 1e3
-        x_cmd_um = (lead_ratio * d["theta_cmd"] * 1e6)[::stride]
-        x_n_um = (d["y"][:, 2] * 1e6)[::stride]
-        ax.plot(t_ms, x_cmd_um, color="#999999", linewidth=1.0, linestyle="--", label="commanded (ideal)")
-        ax.plot(t_ms, x_n_um, color="#2b6cb0", linewidth=1.1, label="x_n (actual)")
-        ax.set_title(titles[key])
-        ax.set_xlabel("Time (ms)")
-        ax.set_ylabel("Position (µm)")
-        ax.grid(True, linewidth=0.4, color="#cccccc")
-        ax.legend(fontsize=8, loc="best")
-    fig.suptitle("Rev 4 stepping sequence: 2f,1b,1f,1b,1f,4b,1f,1b,1f,1b,2f (net zero)")
-    fig.tight_layout()
+    # ---- Figure A: stepping position + error, 4x2 (firing rate x step size) ----
+    # Consistency checks: FULL_STEP/T1 are module-level literals (so edge_list
+    # and the firing-rate table read cleanly), verified here against the live
+    # model rather than just assumed.
+    assert abs(FULL_STEP - step_full) < 1e-12, (
+        "FULL_STEP module constant drifted from full_step_angle(params)"
+    )
+    freq1_hz, _zeta1 = all_mode_properties(A)[0]
+    T1_live = 1.0 / freq1_hz
+    assert abs(T1 - T1_live) / T1_live < 1e-3, (
+        f"T1={T1*1e3:.4f} ms module constant drifted from the model's mode-1 "
+        f"period {T1_live*1e3:.4f} ms ({freq1_hz:.2f} Hz)"
+    )
+
+    sys_err = build_error_system(A, B, lead_ratio)
+
+    # Grid layout, matching the (a)-(h) panel map: rows are (position, error)
+    # pairs grouped by firing rate, columns are step size.
+    #     full step        16x microstep
+    # 250ms (a) pos | (c) pos
+    #       (b) err | (d) err
+    #  4 ms (e) pos | (g) pos
+    #       (f) err | (h) err
+    ROW_GROUPS = [("settled", DWELL_SETTLE), ("fast", DWELL_FAST)]
+    COLUMNS = [("full", 1, "full step"), ("micro16", 16, "16x microstep")]
+    POSITION_YLIM = (-22.0, 22.0)  # um, locked across all four panels -- (a) overshoots
+    # to 15, (c) doesn't, and that's only visible if both share one scale
+    ERR_YLIM = (-11.0, 11.0)  # um, same for both columns -- the point of the layout
+    ERR_INSET_YLIM = {"settled": 0.5, "fast": 1.0}  # um, native-scale inset, 16x column only
+
+    CMD_COLOR = "#999999"
+    POS_COLOR = "#2b6cb0"
+    ERR_COLOR = "#2b6cb0"
+    END_COLOR = "#c05621"
+    PANEL_LABELS = [["(a)", "(c)"], ["(b)", "(d)"], ["(e)", "(g)"], ["(f)", "(h)"]]
+
+    fig, axes = plt.subplots(4, 2, sharex="col", figsize=(11.0, 13.0))
+    print("\nFigure A cases (firing rate x step size):")
+    for col_idx, (micro_name, micro, col_label) in enumerate(COLUMNS):
+        step_size_um = lead_ratio * FULL_STEP / micro * 1e6
+        for grp_idx, (fire_name, t_fire) in enumerate(ROW_GROUPS):
+            S, E, CMD, ends = run_case_segments(sys_err, micro, t_fire, dt=dt, decim=20)
+            cmd_um = lead_ratio * CMD * 1e6
+            pos_um = cmd_um - E * 1e6
+            err_um = E * 1e6
+
+            peak_um = np.max(np.abs(err_um))
+            cycles_per_step = t_fire / T1
+            print(f"  {micro_name:8s} {fire_name:8s}: {len(S):8d} samples, "
+                  f"t_fire={t_fire*1e3:6.1f} ms ({cycles_per_step:6.2f} cycles/step), "
+                  f"peak={peak_um:7.3f} um ({peak_um/step_size_um:+.2f} steps)")
+
+            lw = 1.5 if fire_name == "settled" else 0.7  # thin on fast panels --
+            # default 1.5 fills in the gaps between cycles and turns them into blocks
+
+            ax_pos = axes[grp_idx * 2, col_idx]
+            ax_err = axes[grp_idx * 2 + 1, col_idx]
+
+            ax_pos.plot(S, cmd_um, color=CMD_COLOR, linewidth=lw * 0.7, linestyle="--")
+            ax_pos.plot(S, pos_um, color=POS_COLOR, linewidth=lw)
+            if fire_name == "settled":  # end-of-dwell markers -- meaningless on fast panels
+                s_end = (np.arange(len(ends)) + 1) / micro
+                pos_end_um = lead_ratio * edge_list(micro) * 1e6 - ends * 1e6
+                ax_pos.plot(s_end, pos_end_um, ".", color=END_COLOR, markersize=4, zorder=5)
+            ax_pos.set_ylim(*POSITION_YLIM)
+            ax_pos.grid(True, linewidth=0.4, color="#cccccc")
+            ax_pos.set_title(f"{col_label} -- {fire_name} ({t_fire*1e3:.0f} ms)", fontsize=9)
+
+            ax_err.plot(S, err_um, color=ERR_COLOR, linewidth=lw)
+            ax_err.axhline(0.0, color="#333333", linestyle=":", linewidth=0.7)
+            ax_err.set_ylim(*ERR_YLIM)
+            ax_err.grid(True, linewidth=0.4, color="#cccccc")
+            # Normalised-error annotation in place of a fifth trace/extra panel.
+            ax_err.text(0.98, 0.90, f"peak = ±{peak_um:.2f} µm (±{peak_um/step_size_um:.2f} steps)",
+                        transform=ax_err.transAxes, ha="right", va="top", fontsize=7.5)
+
+            # Locked ±11 um carries the cross-column comparison; the 16x column's
+            # error is real signal, not zero, and needs its own scale to see the
+            # shape -- inset it rather than unlocking the main axis.
+            if micro_name == "micro16":
+                ins_ylim = ERR_INSET_YLIM[fire_name]
+                ins = ax_err.inset_axes([0.08, 0.62, 0.35, 0.33])
+                ins.plot(S, err_um, color=ERR_COLOR, linewidth=0.5)
+                ins.set_ylim(-ins_ylim, ins_ylim)
+                ins.tick_params(labelsize=6)
+                ins.set_title("native scale", fontsize=6)
+
+            ax_pos.text(0.02, 0.90, PANEL_LABELS[grp_idx * 2][col_idx], transform=ax_pos.transAxes,
+                        ha="left", va="top", fontsize=8, color="#555555")
+            # Bottom-left, not top-left: the 16x column's inset already occupies
+            # the error panel's top-left corner.
+            ax_err.text(0.02, 0.08, PANEL_LABELS[grp_idx * 2 + 1][col_idx], transform=ax_err.transAxes,
+                        ha="left", va="bottom", fontsize=8, color="#555555")
+
+            if col_idx == 0:
+                ax_pos.set_ylabel("Position (µm)")
+                ax_err.set_ylabel("Error (µm)")
+            if grp_idx == len(ROW_GROUPS) - 1:
+                ax_err.set_xlabel("Steps fired (full-step units)")
+
+    for ax in axes[-1, :]:
+        ax.set_xlim(0, 16)
+        ax.set_xticks(range(0, 17, 2))
+
+    legend_handles = [
+        Line2D([0], [0], color=CMD_COLOR, linestyle="--", linewidth=1.2, label="commanded (ideal)"),
+        Line2D([0], [0], color=POS_COLOR, linewidth=1.2, label="x_n (actual)"),
+        Line2D([0], [0], color=END_COLOR, marker=".", linestyle="None", markersize=8,
+               label="position at end of dwell"),
+    ]
+    fig.legend(handles=legend_handles, loc="upper center", ncol=3, frameon=False,
+               bbox_to_anchor=(0.5, 0.965), fontsize=9)
+
+    fig.suptitle("Rev 4 stepping sequence: 2f,1b,1f,1b,1f,4b,1f,1b,1f,1b,2f (net zero)", y=0.995)
+    fig.tight_layout(rect=[0.0, 0.0, 1.0, 0.94])
     montage_path = ASSET_DIR / "stepping_montage.svg"
     fig.savefig(montage_path)
     fig.savefig(montage_path.with_suffix(".png"), dpi=110)
