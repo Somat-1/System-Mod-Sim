@@ -83,7 +83,7 @@ def build_matrices(p: dict[str, float]) -> tuple[np.ndarray, np.ndarray, np.ndar
     ])
 
     B_u = np.array([
-        [k_EM, 0.0, 0.0],
+        [k_EM + k_d, 0.0, 0.0],
         [0.0, 0.0, 0.0],
         [0.0, 0.0, 0.0],
         [0.0, -1.0, 0.0],
