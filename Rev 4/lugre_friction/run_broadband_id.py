@@ -35,7 +35,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from broadband_signals import choose_rms_amplitudes
+from broadband_signals import F_HI_HZ, F_LO_HZ, choose_rms_amplitudes
 from broadband_worker import init_worker, run_one
 from lugre_model_broadband import LuGreModelNonlinearDrive
 
@@ -92,6 +92,8 @@ def main() -> None:
     chirp_results = [results_by_key[(float(A), "chirp")] for A in amplitudes]
 
     ASSET_DIR.mkdir(exist_ok=True)
+    NPZ_DIR = ASSET_DIR / "npz"
+    NPZ_DIR.mkdir(exist_ok=True)
     npz_payload = {"amplitudes": amplitudes, "breakaway_angle": a_thresh}
     for i, A in enumerate(amplitudes):
         rp, rc = prbs_results[i], chirp_results[i]
@@ -104,7 +106,7 @@ def main() -> None:
         for port in ("sb", "nut", "way"):
             npz_payload[f"prbs_sat_{port}_amp{i}"] = rp["saturation"][port]
             npz_payload[f"chirp_sat_{port}_amp{i}"] = rc["saturation"][port]
-    np.savez(ASSET_DIR / "broadband_id_data.npz", **npz_payload)
+    np.savez(NPZ_DIR / "broadband_id_data.npz", **npz_payload)
 
     # ---- Plot: magnitude, phase, coherence -- solid=PRBS, dashed=chirp ----
     cmap = plt.get_cmap("viridis")
@@ -116,37 +118,64 @@ def main() -> None:
         color = colors[i]
         rp, rc = prbs_results[i], chirp_results[i]
 
-        prbs_mag_db = 20.0 * np.log10(np.maximum(np.abs(rp["G"]), 1e-300))
-        prbs_phase_deg = np.unwrap(np.angle(rp["G"])) * 180.0 / np.pi
-        low_coh = rp["gamma2"] < COH_GATE
+        # Welch/rfft return frequencies out to the full Nyquist (fs/2 = 10 kHz),
+        # but nothing was ever excited above F_HI_HZ (2000 Hz) -- that region is
+        # pure noise floor (PRBS's sinc envelope has rolled off, chirp never
+        # swept there). Slicing to the actual excitation band BEFORE plotting
+        # (not after) also keeps that noise out of the phase display; np.unwrap
+        # is sequential, so noise-driven runaway beyond F_HI_HZ never contaminated
+        # the in-band unwrapped values themselves, but plotting the full range
+        # made the in-band data unreadable next to it.
+        mp = (rp["f"] >= F_LO_HZ) & (rp["f"] <= F_HI_HZ)
+        mc = (rc["f"] >= F_LO_HZ) & (rc["f"] <= F_HI_HZ)
+        fp, fc_ = rp["f"][mp], rc["f"][mc]
 
-        ax_mag.plot(rp["f"], np.ma.masked_where(low_coh, prbs_mag_db), color=color,
+        prbs_mag_db = 20.0 * np.log10(np.maximum(np.abs(rp["G"][mp]), 1e-300))
+        # Wrapped to (-180, 180], not raw np.unwrap: this is a broadband/nonlinear
+        # G(f), not a single smooth linear resonance chain -- unwrap's "phase
+        # changes slowly between adjacent bins" assumption doesn't hold well
+        # here, and raw unwrap accumulated into the thousands of degrees even
+        # within-band, which is unreadable and not obviously more meaningful
+        # than the wrapped value.
+        prbs_phase_deg = ((np.angle(rp["G"][mp]) * 180.0 / np.pi + 180.0) % 360.0) - 180.0
+        chirp_phase_deg = ((rc["phase_deg"][mc] + 180.0) % 360.0) - 180.0
+        low_coh = rp["gamma2"][mp] < COH_GATE
+
+        ax_mag.plot(fp, np.ma.masked_where(low_coh, prbs_mag_db), color=color,
                     linewidth=1.0, label=f"A={A*1e3:.3f} mrad RMS (PRBS)")
-        ax_mag.plot(rp["f"], np.ma.masked_where(~low_coh, prbs_mag_db), color="#bbbbbb",
+        ax_mag.plot(fp, np.ma.masked_where(~low_coh, prbs_mag_db), color="#bbbbbb",
                     linewidth=0.8, zorder=0)
-        ax_mag.plot(rc["f"], rc["mag_db"], color=color, linewidth=1.0, linestyle="--")
+        ax_mag.plot(fc_, rc["mag_db"][mc], color=color, linewidth=1.0, linestyle="--")
 
-        ax_phase.plot(rp["f"], np.ma.masked_where(low_coh, prbs_phase_deg), color=color, linewidth=1.0)
-        ax_phase.plot(rp["f"], np.ma.masked_where(~low_coh, prbs_phase_deg), color="#bbbbbb",
-                      linewidth=0.8, zorder=0)
-        ax_phase.plot(rc["f"], rc["phase_deg"], color=color, linewidth=1.0, linestyle="--")
+        ax_phase.plot(fp, np.ma.masked_where(low_coh, prbs_phase_deg), color=color,
+                      linewidth=0.0, marker=".", markersize=1.5)
+        ax_phase.plot(fp, np.ma.masked_where(~low_coh, prbs_phase_deg), color="#bbbbbb",
+                      linewidth=0.0, marker=".", markersize=1.2, zorder=0)
+        ax_phase.plot(fc_, chirp_phase_deg, color=color, linewidth=0.0,
+                      marker=".", markersize=1.5)
 
-        ax_coh.plot(rp["f"], rp["gamma2"], color=color, linewidth=1.0)
+        ax_coh.plot(fp, rp["gamma2"][mp], color=color, linewidth=1.0)
 
     ax_coh.axhline(COH_GATE, color="#333333", linestyle=":", linewidth=1.0)
 
     ax_mag.set_xscale("log")
+    ax_mag.set_xlim(F_LO_HZ, F_HI_HZ)
     ax_mag.set_ylabel("Magnitude (dB)")
     ax_mag.set_title("x_n / theta_cmd magnitude -- solid=PRBS (grey where coherence<0.9), dashed=chirp")
     ax_mag.grid(True, which="both", linewidth=0.4, color="#cccccc")
     ax_mag.legend(fontsize=7, ncol=2)
 
     ax_phase.set_xscale("log")
-    ax_phase.set_ylabel("Phase (deg)")
-    ax_phase.set_title("x_n / theta_cmd phase")
+    ax_phase.set_xlim(F_LO_HZ, F_HI_HZ)
+    ax_phase.set_ylim(-180.0, 180.0)
+    ax_phase.set_yticks([-180, -90, 0, 90, 180])
+    ax_phase.set_ylabel("Phase (deg, wrapped)")
+    ax_phase.set_title("x_n / theta_cmd phase -- wrapped to (-180, 180] (dots: PRBS + chirp, "
+                        "not a continuous unwrap -- see caption)")
     ax_phase.grid(True, which="both", linewidth=0.4, color="#cccccc")
 
     ax_coh.set_xscale("log")
+    ax_coh.set_xlim(F_LO_HZ, F_HI_HZ)
     ax_coh.set_xlabel("Frequency (Hz)")
     ax_coh.set_ylabel("Coherence gamma^2 (PRBS only)")
     ax_coh.set_title("Coherence -- <1 is nonlinear distortion, not measurement noise (noiseless sim)")
@@ -156,12 +185,11 @@ def main() -> None:
     fig.suptitle("Rev 4 LuGre nonlinear-drive broadband ID: chirp + PRBS, "
                   f"{len(amplitudes)} RMS amplitudes")
     fig.tight_layout(rect=[0.0, 0.0, 1.0, 0.97])
-    montage_path = ASSET_DIR / "broadband_id_montage.svg"
-    fig.savefig(montage_path)
-    fig.savefig(montage_path.with_suffix(".png"), dpi=110)
+    montage_path = ASSET_DIR / "broadband_id_montage.png"
+    fig.savefig(montage_path, dpi=110)
     plt.close(fig)
     print(f"\nWrote {montage_path}")
-    print(f"Wrote {ASSET_DIR / 'broadband_id_data.npz'}")
+    print(f"Wrote {NPZ_DIR / 'broadband_id_data.npz'}")
 
     # ---- Summary ----
     print("\nPer-port peak |z| / (Fs-or-Ts/sigma0) (static breakaway, all three ports):")

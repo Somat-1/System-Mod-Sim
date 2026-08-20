@@ -168,7 +168,9 @@ def main():
     phase_deg = np.unwrap(np.angle(response)) * 180.0 / np.pi
 
     ASSET_DIR.mkdir(exist_ok=True)
-    np.savez(ASSET_DIR / "local_linearization_bode_data.npz",
+    npz_dir = ASSET_DIR / "npz"
+    npz_dir.mkdir(exist_ok=True)
+    np.savez(npz_dir / "local_linearization_bode_data.npz",
              freq_hz=freq_hz, magnitude_db=magnitude_db, phase_deg=phase_deg)
 
     fig, (ax_mag, ax_phase) = plt.subplots(2, 1, figsize=(9.0, 7.0), sharex=True)
@@ -185,9 +187,8 @@ def main():
     ax_phase.grid(True, linewidth=0.4, color="#cccccc")
 
     fig.tight_layout()
-    out_path = ASSET_DIR / "local_linearization_bode.svg"
-    fig.savefig(out_path)
-    fig.savefig(out_path.with_suffix(".png"), dpi=110)
+    out_path = ASSET_DIR / "local_linearization_bode.png"
+    fig.savefig(out_path, dpi=110)
     plt.close(fig)
     print(f"Wrote {out_path}")
 

@@ -137,8 +137,10 @@ def main() -> None:
     phase_deg = np.unwrap(np.angle(response)) * 180.0 / np.pi
 
     ASSET_DIR.mkdir(exist_ok=True)
+    npz_dir = ASSET_DIR / "npz"
+    npz_dir.mkdir(exist_ok=True)
     np.savez(
-        ASSET_DIR / "bode_rev4_data.npz",
+        npz_dir / "bode_rev4_data.npz",
         frequencies_hz=frequencies_hz,
         magnitude=magnitude,
         magnitude_db=magnitude_db,
@@ -161,12 +163,12 @@ def main() -> None:
 
     fig.tight_layout()
 
-    out_path = ASSET_DIR / "bode_rev4.svg"
-    fig.savefig(out_path)
+    out_path = ASSET_DIR / "bode_rev4.png"
+    fig.savefig(out_path, dpi=110)
     plt.close(fig)
 
     print(f"Wrote {out_path}")
-    print(f"Wrote {ASSET_DIR / 'bode_rev4_data.npz'}")
+    print(f"Wrote {npz_dir / 'bode_rev4_data.npz'}")
 
 
 if __name__ == "__main__":

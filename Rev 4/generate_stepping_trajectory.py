@@ -18,8 +18,8 @@ pulses at divisor=16, same net travel and same total move duration either
 way -- only the graduation gets finer).
 
 Outputs two figures in rendered_assets/:
-  stepping_montage.svg     -- 4-panel macro overview (all four runs)
-  stepping_diagnostics.svg -- 3-panel zoom (rotor snap / structural lag /
+  stepping_montage.png     -- 4-panel macro overview (all four runs)
+  stepping_diagnostics.png -- 3-panel zoom (rotor snap / structural lag /
                                axial bounce), from the full-step, settled run
 """
 
@@ -446,9 +446,8 @@ def main() -> None:
 
     fig.suptitle("Rev 4 stepping sequence: 2f,1b,1f,1b,1f,4b,1f,1b,1f,1b,2f (net zero)", y=0.995)
     fig.tight_layout(rect=[0.0, 0.0, 1.0, 0.94])
-    montage_path = ASSET_DIR / "stepping_montage.svg"
-    fig.savefig(montage_path)
-    fig.savefig(montage_path.with_suffix(".png"), dpi=110)
+    montage_path = ASSET_DIR / "stepping_montage.png"
+    fig.savefig(montage_path, dpi=110)
     plt.close(fig)
     print(f"Wrote {montage_path}")
 
@@ -642,9 +641,8 @@ def main() -> None:
         f"({peak_x_s_um:.3f} µm) is {peak_force_lo_n:.1f}–{peak_force_hi_n:.1f} N across the range.",
         ha="center", va="bottom", fontsize=7.5, color="#555555",
     )
-    diag_path = ASSET_DIR / "stepping_diagnostics.svg"
-    fig2.savefig(diag_path)
-    fig2.savefig(diag_path.with_suffix(".png"), dpi=110)
+    diag_path = ASSET_DIR / "stepping_diagnostics.png"
+    fig2.savefig(diag_path, dpi=110)
     plt.close(fig2)
     print(f"Wrote {diag_path}")
 
@@ -677,9 +675,8 @@ def main() -> None:
     ax_spec.grid(True, linewidth=0.4, color="#cccccc")
     ax_spec.legend(fontsize=8, loc="upper right")
     fig3.tight_layout(rect=[0.0, 0.0, 1.0, 0.88])
-    spec_path = ASSET_DIR / "stepping_xs_spectrum.svg"
-    fig3.savefig(spec_path)
-    fig3.savefig(spec_path.with_suffix(".png"), dpi=110)
+    spec_path = ASSET_DIR / "stepping_xs_spectrum.png"
+    fig3.savefig(spec_path, dpi=110)
     plt.close(fig3)
     print(f"Wrote {spec_path}")
 

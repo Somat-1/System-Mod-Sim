@@ -191,8 +191,10 @@ def main():
     mags_large, phases_large, example_large = run_sweep(model, A_LARGE, "large")
 
     ASSET_DIR.mkdir(exist_ok=True)
+    npz_dir = ASSET_DIR / "npz"
+    npz_dir.mkdir(exist_ok=True)
     np.savez(
-        ASSET_DIR / "sinusoidal_sweep_data.npz",
+        npz_dir / "sinusoidal_sweep_data.npz",
         freq_hz=FREQ_HZ, omega=OMEGA, mags_small=mags_small, phases_small=phases_small,
         mags_large=mags_large, phases_large=phases_large,
         A_small=A_SMALL, A_large=A_LARGE,
@@ -235,9 +237,8 @@ def main():
 
     fig.suptitle("Rev 4 LuGre sub-branch: sinusoidal describing-function sweep")
     fig.tight_layout()
-    montage_path = ASSET_DIR / "sinusoidal_sweep_montage.svg"
-    fig.savefig(montage_path)
-    fig.savefig(montage_path.with_suffix(".png"), dpi=110)
+    montage_path = ASSET_DIR / "sinusoidal_sweep_montage.png"
+    fig.savefig(montage_path, dpi=110)
     plt.close(fig)
     print(f"Wrote {montage_path}")
 

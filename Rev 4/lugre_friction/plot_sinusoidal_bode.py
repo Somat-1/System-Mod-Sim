@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Standalone Bode-style plot (magnitude + phase, linear frequency axis in
 Hz -- matching the dense linear 0-2000 Hz grid the sweep now runs on, and
-the same axis convention as the linear model's ../rendered_assets/bode_rev4.svg)
+the same axis convention as the linear model's ../rendered_assets/bode_rev4.png)
 from the sinusoidal describing-function sweep. Reads the data saved by
 run_sinusoidal_sweep.py rather than re-running the (long) simulation.
-Companion to sinusoidal_sweep_montage.svg, which additionally shows two
+Companion to sinusoidal_sweep_montage.png, which additionally shows two
 example time-domain traces.
 """
 
@@ -17,7 +17,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parent
 ASSET_DIR = ROOT / "rendered_assets"
-DATA_FILE = ASSET_DIR / "sinusoidal_sweep_data.npz"
+DATA_FILE = ASSET_DIR / "npz" / "sinusoidal_sweep_data.npz"
 
 
 def main() -> None:
@@ -46,9 +46,8 @@ def main() -> None:
     ax_phase.grid(True, linewidth=0.4, color="#cccccc")
 
     fig.tight_layout()
-    out_path = ASSET_DIR / "sinusoidal_bode.svg"
-    fig.savefig(out_path)
-    fig.savefig(out_path.with_suffix(".png"), dpi=110)
+    out_path = ASSET_DIR / "sinusoidal_bode.png"
+    fig.savefig(out_path, dpi=110)
     plt.close(fig)
     print(f"Wrote {out_path}")
 
