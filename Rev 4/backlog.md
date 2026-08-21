@@ -142,6 +142,54 @@ the six modes, but practical — this is what set `DWELL_SETTLE = 250 ms` in
 
 ---
 
+## Resolved — 2026-08-21
+
+### 3. Does the frozen LuGre linearization reference velocity (`V_STAGE`) affect the Bode/Co-MAC results?
+
+**Question.** `run_local_linearization_bode.py` freezes the LuGre bristle at a
+single operating point, `V_STAGE = 5 mm/s`, to get `K_eq`/`C_eq` for the
+Co-MAC Set B matrices (`lugre_friction/rendered_assets/temp/Co-MAC/`). Raised
+while reviewing the Co-MAC derivation: would a different reference velocity
+choice change `K_eq`/`C_eq`, and therefore the Bode plot and the Co-MAC
+numbers?
+
+**Finding.** No. `sigma1_nut = sigma1_sb = sigma1_way = 0.0` for every port in
+the current parameter set (confirmed directly from
+`lugre_model.load_parameters()`), which makes the LuGre force law
+`F(z, v) = sigma0*z + sigma2*v` — exactly linear in `(z, v)`, with no term
+coupling the tangent stiffness/damping to the operating point. So
+`K_eq = dF/dz = sigma0` and `C_eq = dF/dv = sigma2` are mathematically
+invariant to `v0`, for every port, at every velocity including zero.
+
+**Verification.** `plot_lugre_velocity_sensitivity.py` (writes
+`rendered_assets/temp/lugre_velocity_sensitivity.png`):
+- Swept `v0` directly through `equivalent_stiffness_damping()` from 1e-6 to
+  1 m/s for all three ports: `K_eq/sigma0` stays at exactly 1.0 throughout
+  (what actually moves with `v0` is `z0`, the frozen bristle deflection,
+  following the Stribeck curve — not the tangent stiffness evaluated there).
+- Rebuilt the full `K`, `C`, and Bode response from scratch at five
+  different `V_STAGE` choices (0.05, 0.5, 5, 50, 500 mm/s): residual against
+  the 5 mm/s reference tops out at 2.7e-5 dB across 0-2000 Hz — floating-
+  point noise, not a real dependence.
+
+**Implication for Co-MAC.** The `V_STAGE = 5 mm/s` choice used throughout
+`Co-MAC/` is provably inconsequential — any velocity, including 0, gives
+bit-identical `K1`/`C1`. The substantive assumption isn't "which velocity to
+freeze at," it's `sigma1 = 0`: this removes any sliding-regime softening of
+the *tangent* stiffness from the model entirely, so Set B's `K_eq` is the
+same "stuck/presliding" tangent stiffness (`sigma0`) at every velocity,
+including full sliding. Not an error in the Co-MAC derivation as done, but a
+scope caveat worth flagging — if the intended physical picture requires
+sliding friction to present a different dynamic stiffness than presliding
+contact, that behavior isn't present in this parameterization at all.
+
+**Where:** `lugre_friction/scripts/plot_lugre_velocity_sensitivity.py` (new);
+`lugre_friction/scripts/run_local_linearization_bode.py` (already disclosed
+this in its own module docstring, not previously verified numerically);
+`lugre_friction/rendered_assets/temp/Co-MAC/comac_km_matrices.md`.
+
+---
+
 ## Open / next
 
 - **LuGre friction is implemented as a sub-branch, not yet merged.**
@@ -164,3 +212,11 @@ the six modes, but practical — this is what set `DWELL_SETTLE = 250 ms` in
   mode 1 once they're live in the main line (not just the sub-branch),
   `c_EM`'s value should be revisited rather than assumed to still be
   correct.
+- **Revisit `sigma1 = 0` if sliding-regime stiffness softening matters.**
+  Confirmed 2026-08-21 (Resolved section above) that the current
+  parameterization gives velocity-invariant `K_eq`/`C_eq` at all three
+  friction ports specifically because `sigma1 = 0` everywhere. If the thesis
+  needs the Co-MAC/Bode comparison to reflect a genuinely different dynamic
+  stiffness during sliding vs. presliding contact, `sigma1` would need a
+  nonzero value at the relevant port(s) — the "frozen at `V_STAGE`"
+  linearization step would then actually matter, unlike today.
