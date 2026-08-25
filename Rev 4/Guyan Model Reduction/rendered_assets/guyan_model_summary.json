@@ -1,0 +1,143 @@
+{
+  "model": "classical two-master Guyan reduction",
+  "masters": [
+    "theta_m",
+    "x_n"
+  ],
+  "slaves": [
+    "theta_c",
+    "theta_s",
+    "theta_sb",
+    "x_s"
+  ],
+  "mass_tuning_applied": false,
+  "irs_applied": false,
+  "command_vector_convention": "b=[k_EM,0]^T exactly as supplied",
+  "ratios": {
+    "ell": 0.00015915494309189535,
+    "beta": 0.8976660682226212,
+    "kappa": 10233393.17773788,
+    "k_ch": 51.85433422698838,
+    "nu": 0.004974039991834299,
+    "mu": 0.7542448614834674,
+    "k_ax": 10182491.870819647,
+    "gamma": 0.10182491870819647
+  },
+  "transformation": [
+    [
+      1.0,
+      0.0
+    ],
+    [
+      0.9962483558953457,
+      23.572275116130736
+    ],
+    [
+      0.9950259600081657,
+      31.252814994016937
+    ],
+    [
+      0.9950259600081657,
+      31.252814994016937
+    ],
+    [
+      -0.00014215736089771827,
+      0.8932010412999691
+    ],
+    [
+      0.0,
+      1.0
+    ]
+  ],
+  "reduced_mass": [
+    [
+      2.8211925046172127e-06,
+      4.159582465274705e-05
+    ],
+    [
+      4.159582465274705e-05,
+      0.46686793779995034
+    ]
+  ],
+  "reduced_damping": [
+    [
+      0.00013361222091955538,
+      -0.00491483898871903
+    ],
+    [
+      -0.0049148389887190315,
+      30.880844121072766
+    ]
+  ],
+  "reduced_stiffness": [
+    [
+      3.8579255321949946,
+      -1620.5939142339878
+    ],
+    [
+      -1620.593914233989,
+      10182491.870819645
+    ]
+  ],
+  "reduced_command": [
+    3.0,
+    0.0
+  ],
+  "reduced_ports": {
+    "way": [
+      0.0,
+      1.0
+    ],
+    "nut": [
+      1.6205939142339862e-05,
+      -0.10182491870819654
+    ],
+    "sb": [
+      0.9950259600081657,
+      31.252814994016937
+    ]
+  },
+  "reduced_modes_hz": [
+    178.93660263252082,
+    747.2938620913876
+  ],
+  "full_modes_hz": [
+    176.68640993970277,
+    745.9623033729538,
+    1650.2236893110603,
+    3429.34926999551,
+    6536.123378818721,
+    6863.444914694301
+  ],
+  "fixed_interface_modes_hz": [
+    924.6406762187273,
+    3409.5349863815186,
+    6099.780454372739,
+    6849.909358201491
+  ],
+  "dc_gain_reduced_m_per_rad": 0.0001326291192432458,
+  "dc_gain_full_m_per_rad": 0.000132629119243247,
+  "closed_form_transformation_max_error": 1.602273869139026e-12,
+  "closed_form_stiffness_max_error": 1.862645149230957e-09,
+  "closed_form_mass_max_error": 1.3552527156068805e-20,
+  "port_dependency_max_error": 5.551115123125783e-17,
+  "requested_display_limit_hz": 1300.0,
+  "rendered_display_limit_hz": 1350.0,
+  "significance_threshold_db": -110.0,
+  "post_resonance_threshold_crossing_hz": 1328.554178655273,
+  "baseline_post_resonance_threshold_crossing_hz": 1169.7168011478686,
+  "overlay_shading_start_hz": 1328.554178655273,
+  "labelled_resonance_peak_frequencies_hz": [
+    178.9,
+    747.2
+  ],
+  "baseline_labelled_resonance_peak_frequencies_hz": [
+    176.60000000000002,
+    745.9000000000001
+  ],
+  "figure": "guyan_bode.png",
+  "data": "rendered_assets\\npz\\guyan_bode_data.npz",
+  "overlay_figure": "guyan_vs_frictionless_bode.png",
+  "overlay_data": "rendered_assets\\npz\\guyan_vs_frictionless_bode_data.npz",
+  "overlay_status": "generated with documented b=[k_EM,0,...]^T"
+}

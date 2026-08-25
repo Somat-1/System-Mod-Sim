@@ -1,13 +1,17 @@
 {
   "status": "preliminary",
-  "checkpoint_cases_used": 31,
+  "checkpoint_cases_used": 61,
   "required_realizations_per_group": 7,
   "group_realization_counts": {
     "RK45_5pct": 7,
     "RK45_10pct": 7,
-    "RK45_20pct": 6,
+    "RK45_20pct": 7,
+    "RK45_35pct": 7,
+    "RK45_50pct": 5,
     "Radau_5pct": 7,
-    "Radau_10pct": 4
+    "Radau_10pct": 7,
+    "Radau_20pct": 7,
+    "Radau_35pct": 7
   },
   "figure": "multisine_bode_preliminary.png",
   "warning": "Groups with fewer than seven realizations are provisional and will change as the background sweep completes."
