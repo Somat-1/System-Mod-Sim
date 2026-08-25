@@ -30,6 +30,7 @@ from lugre_model_rev42 import (
     PORTS,
     LuGreModelRev42,
     lugre_terms,
+    lugre_terms_exact,
     _port_values,
 )
 
@@ -89,7 +90,10 @@ def sampled_interface_power(model: LuGreModelRev42, states: np.ndarray) -> np.nd
     for index, port in enumerate(PORTS):
         v = velocity @ model.jacobians[port]
         z = states[2 * N_Q + index]
-        force = lugre_terms(v, z, *_port_values(model.p, port))[0]
+        term_function = (
+            lugre_terms_exact if model.regularization == 'exact' else lugre_terms
+        )
+        force = term_function(v, z, *_port_values(model.p, port))[0]
         power += force * v
     return power
 
@@ -111,6 +115,10 @@ def simulate_rev42(
     state_parts: list[np.ndarray] = []
     nfev = njev = nlu = 0
     start = time.perf_counter()
+    jacobian = (
+        None if model.regularization == 'exact'
+        else lambda _t, y: model.analytical_linearization(y)[0]
+    )
 
     for segment, command in enumerate(commands):
         solution = solve_ivp(
@@ -118,7 +126,7 @@ def simulate_rev42(
             (0.0, firing_interval),
             state,
             method="Radau",
-            jac=lambda _t, y: model.analytical_linearization(y)[0],
+            jac=jacobian,
             t_eval=local_time,
             rtol=rtol,
             atol=ATOL,
@@ -429,9 +437,13 @@ def main() -> None:
     ASSET_DIR.mkdir(parents=True, exist_ok=True)
     NPZ_DIR.mkdir(parents=True, exist_ok=True)
     model = LuGreModelRev42(enforce_interface_power=False)
+    exact_model = LuGreModelRev42(
+        enforce_interface_power=False, regularization='exact'
+    )
     baseline_parts = baseline_system()
     lead = model.p["L"] / (2.0 * np.pi)
     nonlinear_cases: dict[tuple[str, str], dict] = {}
+    exact_cases: dict[tuple[str, str], dict] = {}
     baseline_cases: dict[tuple[str, str], dict] = {}
     total_start = time.perf_counter()
 
@@ -442,8 +454,10 @@ def main() -> None:
             flush=True,
         )
         nonlinear = simulate_rev42(model, micro, firing_interval, PLOT_DT)
+        exact = simulate_rev42(exact_model, micro, firing_interval, PLOT_DT)
         baseline = simulate_baseline(baseline_parts, micro, firing_interval, PLOT_DT)
         nonlinear_cases[(step_name, speed)] = nonlinear
+        exact_cases[(step_name, speed)] = exact
         baseline_cases[(step_name, speed)] = baseline
         print(
             f"  done in {nonlinear['elapsed_s']:.1f}s; "
@@ -476,6 +490,9 @@ def main() -> None:
         for field in ("time_s", "theta_cmd", "theta_m", "x_s", "x_n", "error"):
             data[f"{prefix}_{field}"] = np.asarray(case[field])
     data_path = NPZ_DIR / "stepping_rev42_and_frictionless.npz"
+    for (step_name, speed), case in exact_cases.items():
+        for field in ('s', 'time_s', 'theta_cmd', 'theta_m', 'x_s', 'x_n', 'error'):
+            data[f'exact_{step_name}_{speed}_{field}'] = np.asarray(case[field])
     np.savez_compressed(data_path, **data)
 
     case_summary = {}
@@ -493,7 +510,20 @@ def main() -> None:
             "solver_elapsed_s": float(nonlinear["elapsed_s"]),
             "solver_nfev": int(nonlinear["nfev"]),
         }
+    for key, exact in exact_cases.items():
+        name = f'{key[0]}_{key[1]}'
+        smoothed = nonlinear_cases[key]
+        case_summary[name].update({
+            'peak_absolute_error_exact_um': float(np.max(np.abs(exact['error'])) * 1e6),
+            'final_error_exact_nm': float(exact['error'][-1] * 1e9),
+            'maximum_exact_vs_smoothed_difference_nm': float(
+                np.max(np.abs(exact['error'] - smoothed['error'])) * 1e9
+            ),
+            'exact_solver_elapsed_s': float(exact['elapsed_s']),
+            'exact_solver_nfev': int(exact['nfev']),
+        })
     summary = {
+        'exact_method': 'piecewise Radau, exact abs(v), numerical Jacobian',
         "method": "piecewise Radau with analytical Rev 4.2 Jacobian",
         "plot_output_dt_s": PLOT_DT,
         "diagnostic_output_dt_s": DIAGNOSTIC_DT,

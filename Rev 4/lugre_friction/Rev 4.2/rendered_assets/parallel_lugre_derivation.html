@@ -1,0 +1,78 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content=width=device-width,initial-scale=1>
+<meta name=report-build content=rev4.2-parallel-lugre-20260825><title>Rev 4.2 — Parallel LuGre friction derivation</title>
+<script>window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]},svg:{fontCache:'global'}};</script>
+<script defer src=https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js></script>
+<style>
+:root{--ink:#172635;--muted:#657584;--paper:#fff;--bg:#edf2f6;--line:#d7e0e8;--soft:#f5f9fb;--blue:#176b87;--blue2:#e7f3f7;--green:#24755c;--green2:#eaf6f0;--amber:#99610d;--amber2:#fff5df}
+main{width:min(1080px,calc(100% - 2rem));margin:1.5rem auto 3rem;padding:clamp(1.3rem,4vw,3.5rem);background:var(--paper);border:1px solid var(--line);border-radius:18px;box-shadow:0 18px 45px #1c304212}.eyebrow{color:var(--blue);font-size:.74rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase}h1,h2,h3{line-height:1.2}h1{margin:0;font-size:clamp(2.1rem,5vw,3.6rem)}h2{margin:3.4rem 0 1rem;font-size:clamp(1.45rem,3vw,2rem)}h3{color:var(--blue);font-size:1rem}.lede{max-width:820px;color:var(--muted);font-size:1.08rem}
+.metrics,.ports,.cards,.keys{display:grid;gap:.8rem}.metrics{grid-template-columns:repeat(4,1fr);margin:1.6rem 0 2rem}.metric,.card,.port,.key{padding:1rem;border:1px solid var(--line);border-radius:11px;background:var(--soft)}.metric strong{display:block;color:var(--blue);font-size:1.3rem}.metric span,.card p,.port p,.key span{color:var(--muted);font-size:.85rem}.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem}.flow div{padding:.7rem;border-top:3px solid var(--blue);color:var(--muted);font-size:.84rem}
+.eq{margin:.9rem 0;padding:.7rem 1rem;overflow:auto;border:1px solid var(--line);border-radius:9px;background:var(--soft)}.eq.main{border-left:4px solid var(--blue);background:var(--blue2)}.eq mjx-container[display=true]{margin:.35rem 0!important}.note{margin:1rem 0;padding:.85rem 1rem;border:1px solid #b9dce6;border-left:4px solid var(--blue);border-radius:9px;background:var(--blue2)}.note strong{color:var(--blue)}.note.warn{border-color:#ecd19e;border-left-color:var(--amber);background:var(--amber2)}.note.warn strong{color:var(--amber)}
+details{margin:1rem 0;padding:.2rem 1rem .8rem;border:1px solid var(--line);border-radius:9px}summary{padding:.7rem 0;cursor:pointer;color:var(--blue);font-weight:750}.ports{grid-template-columns:repeat(3,1fr)}.port{border-top:4px solid var(--blue);background:white}.cards{grid-template-columns:1fr 1fr}.compare{display:grid;grid-template-columns:1fr auto 1fr;gap:.7rem}.plus{display:grid;place-items:center;color:var(--blue);font-size:1.8rem;font-weight:800}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.9rem}th,td{padding:.6rem .7rem;border:1px solid var(--line);text-align:left}th{color:var(--blue);background:var(--soft)}code{padding:.08rem .25rem;border:1px solid var(--line);border-radius:4px;background:var(--soft);font-family:Consolas,monospace}.keys{grid-template-columns:repeat(3,1fr)}.key{background:var(--green2);border-color:#bfe0d2}.key strong{display:block;color:var(--green)}footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--line);color:var(--muted);font-size:.8rem}
+@media(max-width:760px){.metrics,.ports,.keys,.flow,.cards{grid-template-columns:1fr 1fr}.bar a{display:none}}@media(max-width:520px){main{width:calc(100% - .7rem);padding:1rem}.metrics,.ports,.keys,.flow,.cards,.compare{grid-template-columns:1fr}}@media print{body{background:white}.bar{display:none}main{width:100%;margin:0;padding:0;border:0;box-shadow:none}}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:15.5px/1.62 Inter,Segoe UI,system-ui,sans-serif}
+.bar{position:sticky;top:0;z-index:3;display:flex;gap:1rem;align-items:center;padding:.7rem 2rem;border-bottom:1px solid var(--line);background:#fffffff2}
+.bar strong{margin-right:auto}.bar a{color:var(--muted);font-size:.84rem;text-decoration:none}
+figure{margin:1.2rem 0;padding:.7rem;border:1px solid var(--line);border-radius:11px;background:var(--soft)}figure img{display:block;width:100%;height:auto}figcaption{padding:.6rem .3rem 0;color:var(--muted);font-size:.84rem}
+</style></head><body>
+<header class=bar><strong>Rev 4.2 · derivation note</strong><a href=#base>Baseline</a><a href=#ports>Ports</a><a href=#law>LuGre law</a><a href=#model>Assembly</a><a href=#jacobian>Jacobian</a></header><main><p class=eyebrow>6-DOF ball-screw stage · nonlinear extension</p><h1>From frictionless structure to parallel LuGre friction</h1><!-- BODY_CONTINUE -->
+<p class=lede>Rev 4.2 preserves the baseline load-bearing matrices and injects friction through three kinematic ports. Each port measures one relative velocity, evolves one bristle state, and returns the correct generalized reaction.</p>
+<div class=metrics><div class=metric><strong>6</strong><span>mechanical coordinates</span></div><div class=metric><strong>3</strong><span>LuGre ports</span></div><div class=metric><strong>12 → 15</strong><span>first-order states</span></div><div class=metric><strong>parallel</strong><span>nut contact topology</span></div></div>
+<div class=flow><div>Retain structural backbone</div><div>Define port Jacobians</div><div>Attach LuGre laws</div><div>Inject and linearize</div></div><section id=base><h2>1. Retain the frictionless structural backbone</h2>
+<p>The retained plant is \(\mathbf M\ddot{\mathbf q}+\mathbf C\dot{\mathbf q}+\mathbf K\mathbf q=\mathbf b\theta_{cmd}\), with</p><div class=eq>\[\mathbf M=\operatorname{diag}(I_m,I_c,I_s,I_{sb},M_{screw},M_s),\quad \mathbf b=\begin{bmatrix}k_{EM}&0&0&0&0&0\end{bmatrix}^{\mathsf T}.\]</div>
+<details><summary>Full retained stiffness and damping matrices</summary><div class=eq>\[\mathbf K=\begin{bmatrix}k_c+k_{EM}&-k_c&0&0&0&0\\-k_c&k_c+k_{s1}&-k_{s1}&0&0&0\\0&-k_{s1}&k_{s1}+k_{s2}+\ell^2k_{nut}&-k_{s2}&\ell k_{nut}&-\ell k_{nut}\\
+0&0&-k_{s2}&k_{s2}&0&0\\0&0&\ell k_{nut}&0&k_{brg}+k_{nut}&-k_{nut}\\0&0&-\ell k_{nut}&0&-k_{nut}&k_{nut}\end{bmatrix}\]</div>
+<div class=eq>\[\mathbf C=\begin{bmatrix}c_c+c_{EM}&-c_c&0&0&0&0\\-c_c&c_c+c_{s1}&-c_{s1}&0&0&0\\0&-c_{s1}&c_{s1}+c_{s2}+\ell^2c_{nut}&-c_{s2}&\ell c_{nut}&-\ell c_{nut}\\
+0&0&-c_{s2}&c_{s2}&0&0\\0&0&\ell c_{nut}&0&c_{brg}+c_{nut}&-c_{nut}\\0&0&-\ell c_{nut}&0&-c_{nut}&c_{nut}\end{bmatrix}.\]</div></details>
+<div class=note><strong>Purpose.</strong> Keeping \(k_{nut}\) and \(c_{nut}\) preserves the stiff rolling-contact path that transmits thrust. Nut LuGre adds pre-rolling drag; it does not replace or cap that contact force.</div>
+</section><section id=ports><h2>2. Define the three kinematic ports</h2><p>A row Jacobian measures scalar port velocity, \(v_p=\mathbf J_p\dot{\mathbf q}\). Its transpose returns the reaction: \(\mathbf Q_p=-\mathbf J_p^{\mathsf T}F_p\).</p><div class=ports>
+<article class=port><h3>Guideway · grounded</h3><div class=eq>\[\mathbf J_{way}=\begin{bmatrix}0&0&0&0&0&1\end{bmatrix},\quad v_{way}=\dot x_n\]</div><p>Stage velocity relative to ground.</p></article>
+<article class=port><h3>Nut · internal</h3><div class=eq>\[\mathbf J_{nut}=\begin{bmatrix}0&0&\ell&0&1&-1\end{bmatrix}\]\[v_{nut}=\ell\dot\theta_s+\dot x_s-\dot x_n=-\dot\delta_n\]</div><p>Slip across the retained nut contact.</p></article>
+<article class=port><h3>Support bearing · grounded</h3><div class=eq>\[\mathbf J_{sb}=\begin{bmatrix}0&0&0&1&0&0\end{bmatrix},\quad v_{sb}=\dot\theta_{sb}\]</div><p>Bearing-ring rotation relative to ground.</p></article></div>
+<div class=note><strong>Purpose.</strong> One \(\mathbf J_p\) definition fixes both the observed relative velocity and all reaction signs. The internal nut port automatically produces its force pair and lead-reflected screw torque.</div></section>
+<section id=law><h2>3. Attach one smoothed LuGre law per port</h2><p>For \(p\in\{way,nut,sb\}\), define</p><div class=eq>\[g_p(v)=F_{c,p}+(F_{s,p}-F_{c,p})e^{-(v/v_{s,p})^2},\quad s_p=\sqrt{v_p^2+\varepsilon^2},\quad \lambda_p=\frac{\sigma_{0,p}s_p}{g_p(v_p)}.\]</div>
+<div class=eq>\[\dot z_p=v_p-\lambda_pz_p,\quad F_p=\sigma_{0,p}z_p+\sigma_{1,p}\dot z_p+\sigma_{2,p}v_p.\]</div>
+<div class=cards><article class=card><h3>Bristle state</h3><p>\(z_p\) stores average deflection: presliding stiffness and reversal memory at small travel, then decay toward sliding.</p></article>
+<article class=card><h3>Smooth speed</h3><p>\(\sqrt{v_p^2+\varepsilon^2}\) removes the derivative kink at zero speed so the stiff solver can use an analytical Jacobian.</p></article></div>
+<table><thead><tr><th>Term</th><th>Purpose</th></tr></thead><tbody><tr><td>\(\sigma_0z\)</td><td>Presliding stiffness and memory</td></tr><tr><td>\(\sigma_1\dot z\)</td><td>Bristle microdamping</td></tr><tr><td>\(\sigma_2v\)</td><td>Viscous sliding drag</td></tr><tr><td>\(F_s,F_c,v_s\)</td><td>Stribeck transition</td></tr></tbody></table></section>
+<section id=model><h2>4. Assemble the 15-state nonlinear model</h2><div class=compare><div class=card><h3>Load path retained</h3><p>\(F_{struct}=k_{nut}\delta_n+c_{nut}\dot\delta_n\), already in \(\mathbf K,\mathbf C\).</p></div><div class=plus>+</div>
+<div class=card><h3>Pre-rolling drag added</h3><p>\(F_{nut}=\sigma_{0,n}z_n+\sigma_{1,n}\dot z_n+\sigma_{2,n}v_n\), injected through \(-\mathbf J_{nut}^{\mathsf T}F_{nut}\).</p></div></div>
+<div class=eq>\[\dot z_p=\mathbf J_p\mathbf v-\frac{\sigma_{0,p}\sqrt{(\mathbf J_p\mathbf v)^2+\varepsilon^2}}{g_p(\mathbf J_p\mathbf v)}z_p,\qquad p\in\{way,nut,sb\}.\]</div>
+<div class=note><strong>Result.</strong> Friction is a nonlinear feedback layer around the retained structure. Setting \(F_p=0\) recovers that backbone; the three bristle states add reversal memory, Stribeck behavior and velocity-dependent drag.</div></section>
+<div class=eq>\[\mathbf q=[\theta_m,\theta_c,\theta_s,\theta_{sb},x_s,x_n]^{\mathsf T},\quad \mathbf x=[\mathbf q^{\mathsf T},\mathbf v^{\mathsf T},z_{way},z_{nut},z_{sb}]^{\mathsf T}.\]</div>
+<div class=eq>\[Q_f=[0,0,-\ell F_{nut},-T_{sb},-F_{nut},F_{nut}-F_{way}]^{\mathsf T}.\]</div>
+<div class=eq>\[M\dot v=b\theta_{cmd}-Cv-Kq-e_mT_d\sin(4N_r\theta_m)+Q_f.\]</div>
+<div class=eq>\[\ell=L/(2\pi),\quad k_{EM}=N_rT_{hold},\quad \delta_n=x_n-x_s-\ell\theta_s.\]</div>
+<section id=jacobian><h2>5. Differentiate the same ports for the solver and Bode model</h2><p>At each operating point, first differentiate the scalar port law:</p>
+<div class=eq>\[g'_p=-\frac{2v_p}{v_{s,p}^2}(F_{s,p}-F_{c,p})e^{-(v_p/v_{s,p})^2},\quad s'_p=\frac{v_p}{s_p},\quad \lambda'_p=\sigma_{0,p}\left(\frac{s'_p}{g_p}-\frac{s_pg'_p}{g_p^2}\right).\]</div>
+<div class=eq>\[a_p=\frac{\partial\dot z_p}{\partial v_p}=1-\lambda'_pz_p,\quad b_p=\frac{\partial\dot z_p}{\partial z_p}=-\lambda_p,\]
+\[c_p=\frac{\partial F_p}{\partial v_p}=\sigma_{1,p}a_p+\sigma_{2,p},\quad d_p=\frac{\partial F_p}{\partial z_p}=\sigma_{0,p}+\sigma_{1,p}b_p.\]</div>
+<div class=eq>\[A_{vz_p}=-M^{-1}J_p^{\mathsf T}d_p,\quad A_{z_pv}=a_pJ_p,\quad A_{z_pz_p}=b_p,\quad B_v=M^{-1}b.\]</div>
+<div class=note><strong>Purpose.</strong> Each scalar derivative becomes a rank-one mechanical update \(c_pJ_p^{\mathsf T}J_p\). This analytical Jacobian accelerates Radau integration and supplies the frozen local Bode model.</div></section>
+<div class=eq>\[D_d=4N_rT_d\cos(4N_r\theta_m)e_me_m^{\mathsf T},\quad A_{vq}=-M^{-1}(K+D_d).\]</div>
+<div class=eq>\[A_{vv}=-M^{-1}\left(C+\sum_pc_pJ_p^{\mathsf T}J_p\right).\]</div>
+<section id=exact-law><h2>6. Exact base LuGre comparison</h2>
+<p>The comparison replaces only the speed magnitude in the decay law:</p>
+<div class=eq>\[\dot z_p=v_p-\sigma_{0,p}|v_p|z_p/g_p(v_p).\]</div>
+<div class=note><strong>Physics retained at rest.</strong> At \(v_p=0\), exact LuGre gives \(\dot z_p=0\): stored bristle deflection is held. The smoothed law instead gives \(\dot z_p=-(\sigma_{0,p}\varepsilon/F_{s,p})z_p\).</div>
+<table><thead><tr><th>Port</th><th>Artificial smoothed rest-decay time</th></tr></thead><tbody><tr><td>Nut</td><td>375 s</td></tr><tr><td>Guideway</td><td>5,920 s</td></tr><tr><td>Support bearing</td><td>2.9×10⁶ s</td></tr></tbody></table>
+<p>For \(v_p\ne0\), the exact decay derivative is</p><div class=eq>\[\lambda'_p=\sigma_{0,p}\left(\frac{\operatorname{sign}(v_p)}{g_p}-\frac{|v_p|g'_p}{g_p^2}\right).\]</div>
+<div class=cards><article class=card><h3>Valid zero-speed tangent</h3><p>At \((v_p,z_p)=(0,0)\): \(a_p=1, b_p=0, c_p=\sigma_{1,p}+\sigma_{2,p}, d_p=\sigma_{0,p}\).</p></article>
+<article class=card><h3>True nonsmooth point</h3><p>At \(v_p=0,z_p\ne0\), no classical Jacobian exists. The implementation keeps the exact nonlinear RHS and rejects that analytical tangent.</p></article></div>
+<p>The exact nut-memory tangent has one neutral mode. Its plotted zero-frequency point is therefore evaluated at \(10^{-6}\) Hz; every positive-frequency sample uses the exact tangent directly.</p>
+<div class=note><strong>Interpretation.</strong> The local Bode result is insensitive because \(\varepsilon=10^{-9}\) is far below the active port velocities. The material difference appears in nonlinear zero-speed dwell and reversal memory, not this cruise-point small-signal response.</div></section>
+<div class=eq>\[F_p=\sigma_{0,p}z_p+\sigma_{1,p}\dot z_p+\sigma_{2,p}v_p.\]</div>
+<figure><img src=bode_rev42_vs_frictionless.png alt=local-Bode-overlay><figcaption>Frictionless baseline and smoothed Rev 4.2 local tangent.</figcaption></figure>
+<p><strong>Resolved difference:</strong> exact versus smoothed is below 5.8×10⁻⁷ dB and 3.9×10⁻⁶° over 0–8 kHz at this operating point.</p>
+<h3>Nonlinear stepping comparison</h3>
+<figure><img src=stepping_overlay_frictionless.png alt=stepping-LuGre-overlay><figcaption>Tracking error for the frictionless baseline and smoothed Rev 4.2 LuGre across all four stepping cases.</figcaption></figure>
+<p><strong>Resolved stepping difference:</strong> the maximum exact-versus-smoothed deviation is 2.63 pm, occurring in the 4 ms full-step case. The 250 ms cases remain below 1.24 pm.</p>
+<section><h2>Key takeaways</h2><div class=keys><div class=key><strong>Parallel means additive</strong><span>The structural nut spring-damper remains; LuGre adds drag across the same relative motion.</span></div>
+<div class=key><strong>Jacobians own the signs</strong><span>\(v_p=J_p\dot q\) and \(Q_p=-J_p^TF_p\) give consistent grounded and internal reactions.</span></div>
+<div class=key><strong>Three states add the physics</strong><span>Each bristle state contributes presliding stiffness, reversal memory and sliding transition.</span></div>
+<div class=key><strong>Smoothing enables derivatives</strong><span>\(\sqrt{v^2+\varepsilon^2}\) makes the zero-speed decay differentiable.</span></div>
+<div class=key><strong>Detent stays nonlinear</strong><span>Rev 4.2 evaluates periodic motor torque directly instead of using the baseline tangent stiffness.</span></div>
+<div class=key><strong>Parameters are provisional</strong><span>Retained \(c_{nut}\) overlaps LuGre dissipation; the split still requires identification.</span></div></div></section>
+<footer>Derived from <code>scripts/lugre_model_rev42.py</code>, <code>model_parameters.json</code>, and the Rev 4 frictionless matrix builder. \(F_{sb}\) is written \(T_{sb}\) where rotational units matter.</footer></main>
+</body></html>

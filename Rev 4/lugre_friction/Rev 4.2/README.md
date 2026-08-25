@@ -10,9 +10,10 @@ structural matrices. The nut LuGre element is therefore parasitic pre-rolling
 drag in parallel with the load-bearing rolling contact; it cannot cap the
 transmitted thrust at the LuGre breakaway force.
 
-The state is `[q(6), qdot(6), z_way, z_nut, z_sb]`. The LuGre law uses
-`sqrt(v^2 + epsilon^2)` instead of `abs(v)`, and the model supplies an
-analytical 15-state Jacobian. `sigma1` is sized with
+The state is `[q(6), qdot(6), z_way, z_nut, z_sb]`. The default LuGre law
+uses `sqrt(v^2 + epsilon^2)`; the comparison branch selects exact `abs(v)`
+with `regularization='exact'`. Both supply an analytical 15-state tangent
+where it exists. `sigma1` is sized with
 `2*zeta*sqrt(sigma0*m_eff)` for `zeta=0.7`. The motor detent is evaluated as
 `T_d*sin(4*N_r*theta_m)` rather than embedded as `k_d` in the structural K
 matrix.

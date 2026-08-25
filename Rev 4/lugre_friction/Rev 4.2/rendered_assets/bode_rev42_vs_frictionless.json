@@ -1,4 +1,26 @@
 {
+  "maximum_exact_vs_smoothed_magnitude_delta_db": 5.713667974305281e-07,
+  "maximum_exact_vs_smoothed_phase_delta_deg": 3.897740498359781e-06,
+  "maximum_real_eigenvalue_exact_lugre_per_s": -4.4509513545287565e-14,
+  "dc_limit_exact_lugre_m_per_rad": 0.00013262911924324605,
+  "exact_lugre_regularization": "abs(v)",
+  "exact_zero_frequency_evaluation_hz": 1e-06,
+  "exact_lugre_modes_hz": [
+    176.68927879961484,
+    746.527333137688,
+    1650.2286991154074,
+    3429.3297679861303,
+    6617.715163787986,
+    6841.001360959085
+  ],
+  "exact_lugre_damping_ratios": [
+    0.021631337268895368,
+    0.008233419720088907,
+    0.02190823786374341,
+    0.020246552534002232,
+    0.11692887492010479,
+    0.02365924184488215
+  ],
   "formulation": "15-state LuGre; v=J*qdot; generalized friction=-J.T*F",
   "stage_operating_velocity_m_per_s": 0.005,
   "frequency_range_hz": [
@@ -9,48 +31,48 @@
   "c_nut_N_s_per_m": 101.0,
   "sigma1_target_zeta": 0.7,
   "baseline_modes_hz": [
-    176.68953191583282,
-    745.9652107515453,
-    1650.2289226846012,
-    3429.3215774015976,
-    6536.222994985908,
-    6863.225948493636
+    176.68953191583537,
+    745.9652107515444,
+    1650.2289226846026,
+    3429.321577401591,
+    6536.222994985915,
+    6863.225948493649
   ],
   "rev42_modes_hz": [
-    176.68927879960506,
-    746.527332783105,
-    1650.2286991153346,
-    3429.3297679818706,
-    6617.715124204384,
+    176.68927879959318,
+    746.5273327831094,
+    1650.2286991153364,
+    3429.329767981875,
+    6617.715124204388,
     6841.001361454314
   ],
   "baseline_damping_ratios": [
-    0.01999931252755983,
-    0.007266832176020061,
-    0.021761986059962088,
-    0.019944878692177488,
-    0.024016175113816627,
-    0.02186806265393816
+    0.019999312527550685,
+    0.0072668321760208454,
+    0.02176198605996196,
+    0.019944878692177294,
+    0.024016175113815052,
+    0.021868062653938855
   ],
   "rev42_damping_ratios": [
-    0.021631337269335436,
-    0.008233420154392358,
-    0.021908237863766656,
-    0.02024655253462547,
-    0.11692887626734258,
-    0.02365924177743042
+    0.02163133726933652,
+    0.008233420154395177,
+    0.02190823786376681,
+    0.020246552534626077,
+    0.11692887626734233,
+    0.023659241777430187
   ],
-  "maximum_real_eigenvalue_rev42_per_s": -0.0026143791185385366,
-  "interface_power_at_cruise_W": 0.029591993381473766,
+  "maximum_real_eigenvalue_rev42_per_s": -0.0026143791185169072,
+  "interface_power_at_cruise_W": 0.02959199338147377,
   "analytical_jacobian_max_absolute_error": 3.814697265625e-06,
-  "analytical_jacobian_max_relative_error": 3.0616798624106514e-16,
-  "zero_friction_maximum_mode_error_hz": 1.3642420526593924e-11,
-  "jacobian_virtual_power_identity_error": 0.0,
+  "analytical_jacobian_max_relative_error": 1.2637983912375844e-15,
+  "zero_friction_maximum_mode_error_hz": 1.6370904631912708e-11,
+  "jacobian_virtual_power_identity_error": 6.938893903907228e-18,
   "dc_gain_baseline_m_per_rad": 0.0001591549430918952,
   "dc_gain_rev42_m_per_rad": 0.00013262911924324605,
-  "maximum_absolute_magnitude_delta_db": 14.679226310485518,
+  "maximum_absolute_magnitude_delta_db": 14.679226310477134,
   "frequency_of_maximum_magnitude_delta_hz": 6531.700000000001,
-  "maximum_absolute_phase_delta_deg": 54.83618734433185,
+  "maximum_absolute_phase_delta_deg": 54.83618734433287,
   "figure": "bode_rev42_vs_frictionless.png",
   "data": "rendered_assets\\npz\\bode_rev42_vs_frictionless.npz"
 }

@@ -4,7 +4,8 @@
 State: x = [q(6), qdot(6), z_way, z_nut, z_sb].  Each port is defined by
 v_p = J_p qdot and contributes -J_p.T F_p to the generalized force.  The
 baseline k_nut/c_nut path remains in K/C; the nut LuGre force is parallel
-pre-rolling drag, not the load-transmission element.
+pre-rolling drag, not the load-transmission element.  The default smooth
+speed can be replaced by exact abs(v) with regularization='exact'.
 """
 
 from __future__ import annotations
@@ -121,14 +122,37 @@ def lugre_terms(
     return force, z_dot, dforce_dv, dforce_dz, dzdot_dv, dzdot_dz
 
 
+def _exact_decay(v, sigma0, fc, fs, vs):
+    exp_term = np.exp(-(v / vs) ** 2)
+    g = fc + (fs - fc) * exp_term
+    g_prime = (fs - fc) * exp_term * (-2.0 * v / vs**2)
+    speed, speed_prime = abs(v), np.sign(v)
+    decay = sigma0 * speed / g
+    decay_prime = sigma0 * (speed_prime / g - speed * g_prime / g**2)
+    return decay, decay_prime
+
+
+def lugre_terms_exact(v, z, sigma0, sigma1, sigma2, fc, fs, vs, _epsilon):
+    decay, decay_prime = _exact_decay(v, sigma0, fc, fs, vs)
+    z_dot = v - decay * z
+    dzdot_dv, dzdot_dz = 1.0 - decay_prime * z, -decay
+    force = sigma0 * z + sigma1 * z_dot + sigma2 * v
+    return (force, z_dot, sigma1 * dzdot_dv + sigma2,
+            sigma0 + sigma1 * dzdot_dz, dzdot_dv, dzdot_dz)
+
+
 class LuGreModelRev42:
     def __init__(
         self,
         parameters: dict[str, float] | None = None,
         enforce_interface_power: bool = True,
         power_tolerance: float = 1.0e-12,
+        regularization: str = 'smooth',
     ) -> None:
         self.p = dict(parameters) if parameters is not None else load_parameters()
+        if regularization not in {'smooth', 'exact'}:
+            raise ValueError('regularization must be smooth or exact')
+        self.regularization = regularization
         self.mass, self.damping, self.stiffness, self.command = (
             build_structural_matrices(self.p)
         )
@@ -145,7 +169,10 @@ class LuGreModelRev42:
         for index, port in enumerate(PORTS):
             v = self.jacobians[port] @ velocity
             z = state[2 * N_Q + index]
-            terms = lugre_terms(v, z, *_port_values(self.p, port))
+            term_function = (
+                lugre_terms_exact if self.regularization == 'exact' else lugre_terms
+            )
+            terms = term_function(v, z, *_port_values(self.p, port))
             observations[port] = {
                 "velocity": v,
                 "z": z,
@@ -207,6 +234,10 @@ class LuGreModelRev42:
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Return the exact tangent A/B/C matrices at a real 15-state point."""
         observations = self.port_observables(state)
+        if self.regularization == 'exact' and any(
+            o['velocity'] == 0.0 and o['z'] != 0.0 for o in observations.values()
+        ):
+            raise ValueError('Exact tangent undefined at v=0 with z!=0')
         system = np.zeros((N_STATES, N_STATES))
         system[:N_Q, N_Q:2 * N_Q] = np.eye(N_Q)
 
@@ -243,14 +274,21 @@ class LuGreModelRev42:
         """Frozen tangent point with ideal screw tracking at stage_velocity."""
         state = np.zeros(N_STATES)
         omega = stage_velocity * 2.0 * np.pi / self.p["L"]
-        state[N_Q:2 * N_Q] = [omega, omega, omega, omega, 0.0, stage_velocity]
+        tracked_velocity = self.p['L'] / (2.0 * np.pi) * omega
+        state[N_Q:2 * N_Q] = [
+            omega, omega, omega, omega, 0.0, tracked_velocity
+        ]
         for index, port in enumerate(PORTS):
             v = self.jacobians[port] @ state[N_Q:2 * N_Q]
             sigma0, _, _, fc, fs, vs, epsilon = _port_values(self.p, port)
             g = fc + (fs - fc) * np.exp(-(v / vs) ** 2)
+            speed = (
+                abs(v) if self.regularization == 'exact'
+                else np.sqrt(v**2 + epsilon**2)
+            )
             state[2 * N_Q + index] = (
-                v * g / (sigma0 * np.sqrt(v**2 + epsilon**2))
-                if sigma0 > 0.0 else 0.0
+                v * g / (sigma0 * speed)
+                if sigma0 > 0.0 and speed > 0.0 else 0.0
             )
         return state
 

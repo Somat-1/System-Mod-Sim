@@ -32,10 +32,14 @@ from build_bode_rev4 import (  # noqa: E402
 )
 
 
-def response(A: np.ndarray, b: np.ndarray, c: np.ndarray) -> np.ndarray:
+def response(
+    A: np.ndarray, b: np.ndarray, c: np.ndarray, replace_zero: bool = False
+) -> np.ndarray:
     identity = np.eye(A.shape[0])
     result = np.empty(FREQUENCY_HZ.size, dtype=complex)
     for index, frequency in enumerate(FREQUENCY_HZ):
+        if replace_zero and frequency == 0.0:
+            frequency = 1.0e-6
         result[index] = (
             c @ np.linalg.solve(1j * 2.0 * np.pi * frequency * identity - A, b)
         )[0]
@@ -61,6 +65,11 @@ def main() -> None:
     model = LuGreModelRev42(enforce_interface_power=False)
     operating_state = model.cruise_state(STAGE_VELOCITY)
     A_lugre, b_lugre, c_lugre = model.analytical_linearization(operating_state)
+    exact_model = LuGreModelRev42(
+        enforce_interface_power=False, regularization='exact'
+    )
+    exact_state = exact_model.cruise_state(STAGE_VELOCITY)
+    A_exact, b_exact, c_exact = exact_model.analytical_linearization(exact_state)
 
     complex_step = 1.0e-30
     complex_jacobian = np.column_stack([
@@ -87,11 +96,14 @@ def main() -> None:
     b0 = B0[:, INPUT_LABELS.index("theta_cmd")]
 
     lugre_response = response(A_lugre, b_lugre, c_lugre)
+    exact_response = response(A_exact, b_exact, c_exact, replace_zero=True)
     baseline_response = response(A0, b0, c0)
     lugre_magnitude, lugre_phase = bode_arrays(lugre_response)
+    exact_magnitude, exact_phase = bode_arrays(exact_response)
     baseline_magnitude, baseline_phase = bode_arrays(baseline_response)
 
     eig_lugre, modes_lugre, damping_lugre = modal_data(A_lugre)
+    eig_exact, modes_exact, damping_exact = modal_data(A_exact)
     eig_baseline, modes_baseline, damping_baseline = modal_data(A0)
     if np.max(np.real(eig_lugre)) >= 0.0:
         raise RuntimeError(
@@ -140,14 +152,21 @@ def main() -> None:
         frequency_hz=FREQUENCY_HZ,
         baseline_response=baseline_response,
         lugre_response=lugre_response,
+        exact_lugre_response=exact_response,
         baseline_magnitude_db=baseline_magnitude,
         lugre_magnitude_db=lugre_magnitude,
+        exact_lugre_magnitude_db=exact_magnitude,
         baseline_phase_deg=baseline_phase,
         lugre_phase_deg=lugre_phase,
+        exact_lugre_phase_deg=exact_phase,
         baseline_eigenvalues=eig_baseline,
         lugre_eigenvalues=eig_lugre,
+        exact_lugre_eigenvalues=eig_exact,
         baseline_modes_hz=modes_baseline,
         lugre_modes_hz=modes_lugre,
+        exact_lugre_modes_hz=modes_exact,
+        exact_lugre_damping_ratios=damping_exact,
+        exact_lugre_operating_state=exact_state,
         baseline_damping_ratios=damping_baseline,
         lugre_damping_ratios=damping_lugre,
         operating_state=operating_state,
@@ -191,6 +210,20 @@ def main() -> None:
     magnitude_delta = lugre_magnitude - baseline_magnitude
     phase_delta = lugre_phase - baseline_phase
     summary = {
+        'maximum_exact_vs_smoothed_magnitude_delta_db': float(
+            np.max(np.abs(exact_magnitude - lugre_magnitude))
+        ),
+        'maximum_exact_vs_smoothed_phase_delta_deg': float(
+            np.max(np.abs(exact_phase - lugre_phase))
+        ),
+        'maximum_real_eigenvalue_exact_lugre_per_s': float(
+            np.max(np.real(eig_exact))
+        ),
+        'dc_limit_exact_lugre_m_per_rad': float(np.real(exact_response[0])),
+        'exact_lugre_regularization': 'abs(v)',
+        'exact_zero_frequency_evaluation_hz': 1.0e-6,
+        'exact_lugre_modes_hz': modes_exact.tolist(),
+        'exact_lugre_damping_ratios': damping_exact.tolist(),
         "formulation": "15-state LuGre; v=J*qdot; generalized friction=-J.T*F",
         "stage_operating_velocity_m_per_s": STAGE_VELOCITY,
         "frequency_range_hz": [float(FREQUENCY_HZ[0]), float(FREQUENCY_HZ[-1])],
