@@ -1,0 +1,61 @@
+{
+  "build_id": "rev4.2-jacobian-lugre-parallel-nut-20260824",
+  "schema": "rev4.2-lugre-model-parameters-v1",
+  "parent_baseline": "../../model_parameters.json",
+  "reused_friction_parameters": "../Rev 4.1/model_parameters.json",
+  "parameters": {
+    "L": 1.0e-3,
+    "N_r": 50,
+    "T_hold": 0.06,
+    "T_d": 3.0e-3,
+    "I_m": 9.0e-7,
+    "I_c": 1.18e-6,
+    "I_s": 6.06e-7,
+    "I_sb": 1.5e-7,
+    "M_screw": 0.0758,
+    "M_s": 0.405,
+    "k_c": 68.75,
+    "k_s1": 211.0,
+    "k_s2": 211.0,
+    "k_nut": 1.0e8,
+    "k_brg": 1.14e7,
+    "c_c": 2.4e-4,
+    "c_s1": 3.7e-4,
+    "c_s2": 2.0e-4,
+    "c_nut": 101.0,
+    "c_brg": 37.2,
+    "c_EM": 1.3283e-4,
+
+    "sigma0_nut": 2.0e6,
+    "sigma1_nut": 500.2912629196554,
+    "sigma2_nut": 0.25,
+    "Fc_nut": 0.5,
+    "Fs_nut": 0.75,
+    "vs_nut": 2.0e-4,
+
+    "sigma0_sb": 0.076,
+    "sigma1_sb": 1.4947909552843835e-4,
+    "sigma2_sb": 1.0e-5,
+    "Tc_sb": 1.5e-4,
+    "Ts_sb": 2.2e-4,
+    "vs_sb": 0.1,
+
+    "sigma0_way": 7.6e5,
+    "sigma1_way": 776.716164374091,
+    "sigma2_way": 0.4,
+    "Fc_way": 3.0,
+    "Fs_way": 4.5,
+    "vs_way": 2.5e-4,
+
+    "smooth_velocity_epsilon": 1.0e-9,
+    "sigma1_target_zeta": 0.7
+  },
+  "parameter_notes": {
+    "topology": "k_nut/c_nut remain in K/C. The nut LuGre port is a parasitic pre-rolling friction path in parallel across the same relative coordinate.",
+    "friction_source": "sigma0, sigma2, breakaway/Coulomb levels and Stribeck velocities are reused from Rev 4.1. Rev 4.1's current corrected support-bearing values are used.",
+    "sigma1": "Set to 2*zeta*sqrt(sigma0*m_eff), zeta=0.7. m_eff is M_screw||M_s for nut, M_s for guideway and I_sb for support bearing.",
+    "c_nut_caveat": "The baseline c_nut=101 N*s/m is retained for a direct topology comparison. It overlaps dissipation represented by sigma1/sigma2 and should be identified or repartitioned before claiming a calibrated model.",
+    "detent": "The linear k_d term is absent from the structural K matrix. T_d*sin(4*N_r*theta_m) is evaluated as a nonlinear generalized torque.",
+    "smooth_abs": "The LuGre decay law uses sqrt(v^2+epsilon^2) with epsilon=1e-9 in the port velocity units."
+  }
+}

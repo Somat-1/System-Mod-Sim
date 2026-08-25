@@ -1,0 +1,56 @@
+{
+  "formulation": "15-state LuGre; v=J*qdot; generalized friction=-J.T*F",
+  "stage_operating_velocity_m_per_s": 0.005,
+  "frequency_range_hz": [
+    0.0,
+    8000.0
+  ],
+  "k_nut_N_per_m": 100000000.0,
+  "c_nut_N_s_per_m": 101.0,
+  "sigma1_target_zeta": 0.7,
+  "baseline_modes_hz": [
+    176.68953191583282,
+    745.9652107515453,
+    1650.2289226846012,
+    3429.3215774015976,
+    6536.222994985908,
+    6863.225948493636
+  ],
+  "rev42_modes_hz": [
+    176.68927879960506,
+    746.527332783105,
+    1650.2286991153346,
+    3429.3297679818706,
+    6617.715124204384,
+    6841.001361454314
+  ],
+  "baseline_damping_ratios": [
+    0.01999931252755983,
+    0.007266832176020061,
+    0.021761986059962088,
+    0.019944878692177488,
+    0.024016175113816627,
+    0.02186806265393816
+  ],
+  "rev42_damping_ratios": [
+    0.021631337269335436,
+    0.008233420154392358,
+    0.021908237863766656,
+    0.02024655253462547,
+    0.11692887626734258,
+    0.02365924177743042
+  ],
+  "maximum_real_eigenvalue_rev42_per_s": -0.0026143791185385366,
+  "interface_power_at_cruise_W": 0.029591993381473766,
+  "analytical_jacobian_max_absolute_error": 3.814697265625e-06,
+  "analytical_jacobian_max_relative_error": 3.0616798624106514e-16,
+  "zero_friction_maximum_mode_error_hz": 1.3642420526593924e-11,
+  "jacobian_virtual_power_identity_error": 0.0,
+  "dc_gain_baseline_m_per_rad": 0.0001591549430918952,
+  "dc_gain_rev42_m_per_rad": 0.00013262911924324605,
+  "maximum_absolute_magnitude_delta_db": 14.679226310485518,
+  "frequency_of_maximum_magnitude_delta_hz": 6531.700000000001,
+  "maximum_absolute_phase_delta_deg": 54.83618734433185,
+  "figure": "bode_rev42_vs_frictionless.png",
+  "data": "rendered_assets\\npz\\bode_rev42_vs_frictionless.npz"
+}

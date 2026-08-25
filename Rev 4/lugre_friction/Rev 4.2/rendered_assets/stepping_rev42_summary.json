@@ -1,0 +1,74 @@
+{
+  "method": "piecewise Radau with analytical Rev 4.2 Jacobian",
+  "plot_output_dt_s": 0.0001,
+  "diagnostic_output_dt_s": 5e-06,
+  "solver_rtol": 1e-06,
+  "instantaneous_power_note": "F*v may be negative while a LuGre bristle returns stored energy; sign validation uses the exact -J.T*F virtual-power identity.",
+  "cases": {
+    "full_settled": {
+      "duration_s": 4.0,
+      "peak_absolute_error_rev42_um": 5.000030429033428,
+      "peak_absolute_error_baseline_um": 5.278879984419025,
+      "final_error_rev42_nm": 0.029720489941339613,
+      "final_error_baseline_nm": 12.967600679707866,
+      "minimum_instantaneous_interface_power_W": -1.6832519009465143e-05,
+      "net_sampled_interface_work_J": 0.006512495011582103,
+      "solver_elapsed_s": 49.59057100000791,
+      "solver_nfev": 670108
+    },
+    "micro16_settled": {
+      "duration_s": 64.0,
+      "peak_absolute_error_rev42_um": 0.4952730942153168,
+      "peak_absolute_error_baseline_um": 0.32993003552312566,
+      "final_error_rev42_nm": 25.404080167144233,
+      "final_error_baseline_nm": 0.8104365674897311,
+      "minimum_instantaneous_interface_power_W": -3.982183617197612e-05,
+      "net_sampled_interface_work_J": 0.000855916017188487,
+      "solver_elapsed_s": 338.5121388999978,
+      "solver_nfev": 3901959
+    },
+    "full_fast": {
+      "duration_s": 0.064,
+      "peak_absolute_error_rev42_um": 11.561290491093704,
+      "peak_absolute_error_baseline_um": 10.721242708668083,
+      "final_error_rev42_nm": -8340.280602952907,
+      "final_error_baseline_nm": -5240.218709279837,
+      "minimum_instantaneous_interface_power_W": -0.0012067389089888973,
+      "net_sampled_interface_work_J": 0.0022642393648703986,
+      "solver_elapsed_s": 2.7299501999514177,
+      "solver_nfev": 36322
+    },
+    "micro16_fast": {
+      "duration_s": 1.024,
+      "peak_absolute_error_rev42_um": 0.659612999547223,
+      "peak_absolute_error_baseline_um": 0.6645408353182025,
+      "final_error_rev42_nm": 138.31174595720955,
+      "final_error_baseline_nm": -230.5074053835156,
+      "minimum_instantaneous_interface_power_W": -0.0002945985914673166,
+      "net_sampled_interface_work_J": 0.00022778420370044638,
+      "solver_elapsed_s": 39.08604750002269,
+      "solver_nfev": 497492
+    }
+  },
+  "single_step_relative_convergence": {
+    "theta_m": 2.1379854934882387e-08,
+    "x_s": 1.3551005437708272e-06,
+    "x_n": 7.99927293205782e-08
+  },
+  "rev42_tangent_modes_hz": [
+    176.68927879960503,
+    746.5273327831051,
+    1650.2286991153346,
+    3429.3297679818706,
+    6617.715124204384,
+    6841.001361454315
+  ],
+  "total_wall_time_s": 449.8550678999163,
+  "figures": [
+    "stepping_montage_rev42.png",
+    "stepping_diagnostics_rev42.png",
+    "stepping_overlay_frictionless.png",
+    "stepping_xs_spectrum_rev42.png"
+  ],
+  "data": "rendered_assets\\npz\\stepping_rev42_and_frictionless.npz"
+}
