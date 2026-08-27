@@ -1,0 +1,42 @@
+{
+  "model": "Rev 4 frictionless six-coordinate Lagrangian model",
+  "parameter_source": "lugre_friction/Rev 4.2/model_parameters.json",
+  "nonlinear_friction_states": 0,
+  "detent_treatment": "small-signal tangent k_d=4*N_r*T_d at theta_m=0",
+  "frequency_range_hz": [
+    0.0,
+    8000.0
+  ],
+  "matrix_max_abs_residual_vs_rev42_frictionless_tangent": {
+    "M": 0.0,
+    "C": 0.0,
+    "K_tangent": 0.0,
+    "G": 0.0
+  },
+  "response_max_abs_residual_vs_rev42_frictionless_tangent": 0.0,
+  "root_rev4_matrix_residuals": {
+    "M": 0.0,
+    "C": 0.0,
+    "K": 0.0,
+    "G": 0.6000000000000001
+  },
+  "root_rev4_command_note": "Root build_bode_rev4.py uses G[0]=k_EM+k_d; the Lagrange and Rev 4.2 grounded-detent convention uses G[0]=k_EM.",
+  "dc_gain_m_per_rad": 0.00013262911924324686,
+  "ideal_lead_ratio_m_per_rad": 0.00015915494309189535,
+  "modes_hz": [
+    176.68953191584447,
+    745.9652107515451,
+    1650.228922684602,
+    3429.321577401595,
+    6536.222994985907,
+    6863.225948493634
+  ],
+  "damping_ratios": [
+    0.01999931252755652,
+    0.007266832176019981,
+    0.021761986059962192,
+    0.019944878692177852,
+    0.024016175113813227,
+    0.021868062653940878
+  ]
+}
