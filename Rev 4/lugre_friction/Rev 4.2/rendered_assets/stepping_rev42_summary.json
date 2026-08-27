@@ -9,9 +9,9 @@
     "full_settled": {
       "duration_s": 4.0,
       "peak_absolute_error_rev42_um": 5.000030443304453,
-      "peak_absolute_error_baseline_um": 5.278879984373198,
+      "peak_absolute_error_baseline_um": 5.842585254204242,
       "final_error_rev42_nm": 0.029717748380139596,
-      "final_error_baseline_nm": 12.96760067121342,
+      "final_error_baseline_nm": 10.806333892677804,
       "minimum_instantaneous_interface_power_W": -1.683247467585456e-05,
       "net_sampled_interface_work_J": 0.0065124950374754985,
       "solver_elapsed_s": 68.027162599843,
@@ -25,9 +25,9 @@
     "micro16_settled": {
       "duration_s": 64.0,
       "peak_absolute_error_rev42_um": 0.4952730560551196,
-      "peak_absolute_error_baseline_um": 0.3299300355303915,
+      "peak_absolute_error_baseline_um": 1.9276596786424667,
       "final_error_rev42_nm": 25.40403100834002,
-      "final_error_baseline_nm": 0.8104365673314664,
+      "final_error_baseline_nm": 0.6753638061104626,
       "minimum_instantaneous_interface_power_W": -3.982187171734472e-05,
       "net_sampled_interface_work_J": 0.0008559160198039178,
       "solver_elapsed_s": 406.46970589994453,
@@ -41,9 +41,9 @@
     "full_fast": {
       "duration_s": 0.064,
       "peak_absolute_error_rev42_um": 11.561290481167077,
-      "peak_absolute_error_baseline_um": 10.72124270864814,
+      "peak_absolute_error_baseline_um": 9.141628911248445,
       "final_error_rev42_nm": -8340.28067161427,
-      "final_error_baseline_nm": -5240.218709260408,
+      "final_error_baseline_nm": -4366.848924383431,
       "minimum_instantaneous_interface_power_W": -0.0012067387403577325,
       "net_sampled_interface_work_J": 0.002264239370347437,
       "solver_elapsed_s": 3.9322511998470873,
@@ -57,9 +57,9 @@
     "micro16_fast": {
       "duration_s": 1.024,
       "peak_absolute_error_rev42_um": 0.6596129495600936,
-      "peak_absolute_error_baseline_um": 0.6645408353222928,
+      "peak_absolute_error_baseline_um": 2.0636827978929086,
       "final_error_rev42_nm": 138.311722794702,
-      "final_error_baseline_nm": -230.5074053818687,
+      "final_error_baseline_nm": -192.08950448490103,
       "minimum_instantaneous_interface_power_W": -0.0002945986719147821,
       "net_sampled_interface_work_J": 0.0002277842079865399,
       "solver_elapsed_s": 50.2609217998106,
@@ -91,5 +91,6 @@
     "stepping_overlay_frictionless.png",
     "stepping_xs_spectrum_rev42.png"
   ],
-  "data": "rendered_assets\\npz\\stepping_rev42_and_frictionless.npz"
+  "data": "rendered_assets\\npz\\stepping_rev42_and_frictionless.npz",
+  "frictionless_baseline_convention": "fixed rotor-stator detent: k_d in K[0,0], theta_cmd column contains k_EM only"
 }

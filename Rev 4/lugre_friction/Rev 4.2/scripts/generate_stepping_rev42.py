@@ -178,6 +178,10 @@ def simulate_rev42(
 def baseline_system() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]:
     parameters = load_baseline_parameters()
     mass, damping, stiffness, input_matrix = build_baseline_matrices(parameters)
+    command_column = INPUT_LABELS.index('theta_cmd')
+    input_matrix[0, command_column] = (
+        parameters['N_r'] * parameters['T_hold']
+    )
     A, B, _ = build_baseline_state_space(mass, damping, stiffness, input_matrix)
     output = np.zeros((3, A.shape[0]))
     output[0, 0] = 1.0
@@ -433,6 +437,63 @@ def render_spectrum(case: dict, model: LuGreModelRev42) -> tuple[Path, list[floa
     return path, modes
 
 
+def refresh_frictionless_baseline_assets() -> None:
+    '''Rebuild only the corrected LTI baseline from saved LuGre trajectories.'''
+    data_path = NPZ_DIR / 'stepping_rev42_and_frictionless.npz'
+    summary_path = ASSET_DIR / 'stepping_rev42_summary.json'
+    if not data_path.exists() or not summary_path.exists():
+        raise FileNotFoundError(
+            'Run the complete stepping generator before baseline refresh'
+        )
+    with np.load(data_path) as payload:
+        data = {name: payload[name].copy() for name in payload.files}
+
+    nonlinear_cases: dict[tuple[str, str], dict] = {}
+    baseline_cases: dict[tuple[str, str], dict] = {}
+    baseline_parts = baseline_system()
+    fields = ('s', 'time_s', 'theta_cmd', 'theta_m', 'x_s', 'x_n', 'error')
+    for step_name, micro, speed, firing_interval in CASES:
+        key = (step_name, speed)
+        prefix = f'rev42_{step_name}_{speed}'
+        nonlinear_cases[key] = {
+            field: data[f'{prefix}_{field}'] for field in fields
+        }
+        baseline = simulate_baseline(
+            baseline_parts, micro, firing_interval, PLOT_DT
+        )
+        baseline_cases[key] = baseline
+        baseline_prefix = f'baseline_{step_name}_{speed}'
+        for field in fields:
+            data[f'{baseline_prefix}_{field}'] = np.asarray(baseline[field])
+
+    np.savez_compressed(data_path, **data)
+    render_overlay(nonlinear_cases, baseline_cases)
+
+    summary = json.loads(summary_path.read_text(encoding='utf-8'))
+    summary['frictionless_baseline_convention'] = (
+        'fixed rotor-stator detent: k_d in K[0,0], '
+        'theta_cmd column contains k_EM only'
+    )
+    for key, baseline in baseline_cases.items():
+        name = f'{key[0]}_{key[1]}'
+        summary['cases'][name].update({
+            'peak_absolute_error_baseline_um': float(
+                np.max(np.abs(baseline['error'])) * 1.0e6
+            ),
+            'final_error_baseline_nm': float(
+                baseline['error'][-1] * 1.0e9
+            ),
+        })
+    summary_path.write_text(
+        json.dumps(summary, indent=2) + '\n', encoding='utf-8'
+    )
+    print(json.dumps({
+        'status': 'corrected frictionless baseline refreshed',
+        'convention': summary['frictionless_baseline_convention'],
+        'data': str(data_path.relative_to(ROOT)),
+    }, indent=2))
+
+
 def main() -> None:
     ASSET_DIR.mkdir(parents=True, exist_ok=True)
     NPZ_DIR.mkdir(parents=True, exist_ok=True)
@@ -552,4 +613,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    if '--baseline-only' in sys.argv:
+        refresh_frictionless_baseline_assets()
+    else:
+        main()

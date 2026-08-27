@@ -1,0 +1,92 @@
+{
+  "model": "Rev 4.2 smoothed parallel LuGre settled stepping",
+  "move_sequence": [
+    2,
+    -1,
+    1,
+    -1,
+    1,
+    -4,
+    1,
+    -1,
+    1,
+    -1,
+    2
+  ],
+  "step_travel_um": 0.3,
+  "substeps_per_sequence_unit": 16,
+  "command_edges": 256,
+  "nominal_sequence_unit_travel_um": 4.8,
+  "firing_interval_s": 0.25,
+  "total_duration_s": 64.0,
+  "output_dt_s": 0.0001,
+  "solver": "piecewise Radau with analytical Rev 4.2 Jacobian",
+  "solver_rtol": 1e-06,
+  "solver_elapsed_s": 387.35126490006223,
+  "solver_nfev": 3860907,
+  "solver_njev": 634,
+  "solver_nlu": 320882,
+  "baseline_conventions": {
+    "newton": "documented fixed-frame detent: k_d in K[0,0], G[0]=k_EM",
+    "lagrange": "G[0]=k_EM with grounded k_d in K[0,0]"
+  },
+  "kd0_baseline_conventions": {
+    "newton": "k_d=0 in K, G[0]=k_EM",
+    "lagrange": "k_d=0 in K, G[0]=k_EM"
+  },
+  "kd_in_command_convention": "diagnostic moving-detent well: k_d removed from K[0,0] and added to G[0], so G[0]=k_EM+k_d",
+  "full_detent_frictionless_convention": "otherwise frictionless Newton/Lagrange dynamics with k_d removed from K[0,0] and replaced by the exact fixed-frame T_d*sin(4*N_r*theta_m) restoring torque",
+  "detent_convention": "fixed rotor-stator tooth well: k_d is grounded in K[0,0] and absent from the theta_cmd input column",
+  "results": {
+    "lugre": {
+      "peak_absolute_error_um": 0.486114806076986,
+      "final_error_nm": 26.002414999798003,
+      "maximum_stage_position_um": 9.841231993216859,
+      "minimum_stage_position_um": -9.841232020791448
+    },
+    "newton_frictionless": {
+      "peak_absolute_error_um": 1.8505532914899754,
+      "final_error_nm": 0.6483492539669634,
+      "maximum_stage_position_um": 8.263940833035221,
+      "minimum_stage_position_um": -8.263940833035186
+    },
+    "lagrange_frictionless": {
+      "peak_absolute_error_um": 1.8505532914899754,
+      "final_error_nm": 0.6483492539669634,
+      "maximum_stage_position_um": 8.263940833035221,
+      "minimum_stage_position_um": -8.263940833035186
+    },
+    "newton_frictionless_kd0": {
+      "peak_absolute_error_um": 0.3009999708771279,
+      "final_error_nm": -0.8638740249546702,
+      "maximum_stage_position_um": 9.896865001948477,
+      "minimum_stage_position_um": -9.896865001948447
+    },
+    "lagrange_frictionless_kd0": {
+      "peak_absolute_error_um": 0.3009999708771279,
+      "final_error_nm": -0.8638740249546702,
+      "maximum_stage_position_um": 9.896865001948477,
+      "minimum_stage_position_um": -9.896865001948447
+    },
+    "frictionless_kd_in_command": {
+      "peak_absolute_error_um": 2.2762380023376765,
+      "final_error_nm": -1.0366488299455165,
+      "maximum_stage_position_um": 11.876238002337676,
+      "minimum_stage_position_um": -11.876238002337612
+    },
+    "frictionless_full_periodic_detent": {
+      "peak_absolute_error_um": 0.46593572037329845,
+      "final_error_nm": 0.6735419092948398,
+      "maximum_stage_position_um": 9.933713369567025,
+      "minimum_stage_position_um": -9.933713371977817
+    }
+  },
+  "maximum_newton_vs_lagrange_stage_difference_um": 0.0,
+  "maximum_newton_vs_lagrange_kd0_stage_difference_um": 0.0,
+  "maximum_fixed_kd_vs_kd0_stage_difference_um": 1.9082479812358073,
+  "maximum_fixed_kd_vs_kd_in_command_stage_difference_um": 3.8616531683952324,
+  "maximum_linear_tangent_vs_full_detent_stage_difference_um": 1.9127420037172043,
+  "figure": "stepping_montage_0p3um_settled.png",
+  "kd0_figure": "stepping_montage_0p3um_settled_kd0.png",
+  "data": "rendered_assets\\npz\\stepping_0p3um_settled.npz"
+}
