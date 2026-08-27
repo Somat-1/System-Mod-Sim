@@ -1,27 +1,33 @@
-# Rev 4 LuGre friction sub-branch
+# Rev 4.1 — LuGre replacement approach
 
 Sub-branch of `Rev 4/`. Does not modify anything in the parent directory
 (`state_space_6dof.md`, `model_parameters.json`, `build_bode_rev4.py`,
-`generate_stepping_trajectory.py` are all untouched -- see backlog.md for
-why that baseline is being kept intact). This directory is self-contained:
+`generate_stepping_trajectory.py` are all untouched). The parent is retained
+as the common frictionless comparison plant. This directory is self-contained:
 its own `model_parameters.json` is a standalone copy, not an import.
+
+## Model scope
+
+Rev 4.1 is the **replacement experiment**. At the screw–nut interface, the
+LuGre element replaces the structural `k_nut` and `c_nut` branch. The root
+Rev 4 documents do not prescribe this topology; they define only the common
+frictionless comparison plant. Rev 4.2 tests the distinct alternative in
+which the structural contact remains and LuGre acts in parallel.
 
 ## What changed vs. the frictionless baseline
 
 The baseline (`../../model_parameters.json`, `../../scripts/build_bode_rev4.py`) embeds
-the screw-nut interface as a rigid, non-slipping linear spring/damper
-(`k_nut`, `c_nut`) directly in `K`/`C`. That was always a stand-in --
-Sec. 10 item 3 of `state_space_6dof.md` flags it as a tradeoff, not a
-resolution, since it assumes the nut interface never slips.
+the screw-nut interface as a linear structural spring/damper (`k_nut`,
+`c_nut`) directly in `K`/`C`. The frictionless reference makes no claim
+about slip; selecting a nonlinear interface interpretation is the purpose of
+the separate Rev 4.1 and Rev 4.2 experiments.
 
 This sub-branch removes that assumption. `k_nut` and `c_nut` are dropped
-entirely (keeping them alongside a LuGre port at the same interface would
-double-count the same physical compliance -- the "interface double path"
-problem from the original, pre-recoupled derivation, Sec. 10 item 2). In
-their place: three independent LuGre friction ports (screw-nut, support
-bearing, guideway), each with its own internal bristle state, replacing the
-previously-frozen `T_fric,sb`/`F_fric,way` inputs and the rigid nut spring
-alike.
+entirely because Rev 4.1 deliberately interprets the LuGre bristle as the
+complete screw–nut contact compliance as well as its friction law. In their
+place are three independent LuGre friction ports: screw–nut, support bearing
+and guideway. This replacement is a Rev 4.1 modelling hypothesis, not a
+general requirement and not the topology later adopted by Rev 4.2.
 
 State vector grows from 12 to 15:
 
@@ -113,17 +119,14 @@ sets (`n_*` for nut, `g_*` for guideway, `d_*` for support bearing by
 elimination); `Fc`/`Fs`/`Tc`/`Ts` are derived or guessed where no workspace
 reference existed.
 
-One correction worth flagging explicitly: `sigma0_sb` was originally
-reused directly from Rev 3's `d_sigma0` = 3.0e6, which paired with
-`I_sb` = 1.5e-7 kg*m^2 gives a bristle natural frequency of ~712 kHz --
-three orders of magnitude past every structural mode in this system (max
-~6863 Hz). This wasn't just implausible, it was numerically fatal: it's
-what made both Radau and BDF diverge to NaN during solver testing,
-regardless of tolerance or step-size tuning. Revised down to 500 N*m/rad
-(~9.2 kHz bristle mode, comparable to `k_s1`/`k_s2` = 211 N*m/rad), after
-which LSODA's runtime on the same case dropped from 230s to 71s and Radau/
-BDF's failure mode changed (still fail, but for a different, non-smoothness
--related reason -- see below), confirming the stiffness mismatch was real.
+One correction worth flagging explicitly: `sigma0_sb` was originally reused
+directly from Rev 3's `d_sigma0 = 3.0e6 N m/rad`. With
+`I_sb = 1.5e-7 kg m^2`, that gives a bristle natural frequency of roughly
+712 kHz, far beyond every structural mode and severe enough to make the
+solver trials fail. An intermediate trial used `500 N m/rad`; the executed
+Rev 4.1 parameter was subsequently reduced to **`0.076 N m/rad`**. The
+chronology matters: 500 is a superseded diagnostic value, not the current
+Rev 4.1 model parameter. All of these values remain unmeasured placeholders.
 
 ## Solver
 

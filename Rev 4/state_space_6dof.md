@@ -1,7 +1,19 @@
-# Simplified 6-Coordinate Drivetrain Model: State-Space Derivation
+# Rev 4 Frictionless Six-Coordinate Drivetrain: State-Space Derivation
 
-Reduced lumped model of the open-loop stepper-driven positioning axis.
+Reduced, frictionless lumped model of the open-loop stepper-driven positioning axis.
 Retained degrees of freedom: motor rotation, coupling rotation, screw rotation, support-bearing rotation, screw axial translation, nut/stage axial translation.
+
+An independent energy-based reconstruction and its frictionless Bode result
+are provided in `Lagrange Derivation/README.md`.
+
+This document derives the structural Rev 4 reference plant only. Nonlinear
+friction laws, friction states, port Jacobians and alternative screw–nut
+topologies belong to the LuGre sub-revisions:
+
+- `lugre_friction/Rev 4.1/README.md`: LuGre replaces the structural
+  `k_nut`/`c_nut` branch.
+- `lugre_friction/Rev 4.2/README.md`: LuGre is added in parallel while the
+  structural `k_nut`/`c_nut` branch is retained.
 
 ---
 
@@ -16,7 +28,7 @@ x = \frac{L}{2\pi}\,\theta , \qquad
 $$
 
 All stiffness and damping elements are linear and act on relative coordinates.
-All friction elements are treated as **ports**. Their outputs enter the model as generalized forces, not as constitutive matrix entries.
+Friction forces are zero in this reference model.
 
 ---
 
@@ -90,7 +102,14 @@ F_{ax,\text{react}} &= k_{brg}\,x_s \;\big[\; + \; c_{brg}\,\dot{x}_s\;\big]
 \end{aligned}
 $$
 
-$k_{nut}$ is the screw-nut axial contact stiffness. As of this revision it is coupled directly to screw rotation through the lead ratio $L/2\pi$, rather than injected as a separate friction port (Sec. 7, Sec. 10 items 1-3). The sign inside $F_{nut}$ is fixed by the Sec. 1 convention: $x_n - x_s - \tfrac{L}{2\pi}\theta_s$ is the nut's actual position minus the ideal no-slip position $x_s + \tfrac{L}{2\pi}\theta_s$, so positive $\theta_s$ drives positive $x_n$ (2026-08-18 correction; an earlier draft of this revision had the opposite sign on the $\theta_s$ term, which inverted the sign of the command-to-stage DC gain). $k_{brg}$ is the axial rigidity of the support bearing pair, grounded.
+$k_{nut}$ and $c_{nut}$ form the linear structural screw–nut contact used by
+the frictionless reference plant. They are coupled to screw rotation through
+the lead ratio $L/2\pi$. The sign inside $F_{nut}$ is fixed by the Sec. 1
+convention: $x_n-x_s-\tfrac{L}{2\pi}\theta_s$ is the nut's actual position
+minus the ideal no-slip position $x_s+\tfrac{L}{2\pi}\theta_s$, so positive
+$\theta_s$ drives positive $x_n$. The 2026-08-18 correction established this
+sign after an earlier draft produced a negative command-to-stage DC gain.
+$k_{brg}$ is the grounded axial rigidity of the support-bearing pair.
 
 ---
 
@@ -103,9 +122,9 @@ $$
 \text{(1) Motor rotor:} && T_{EM} - T_{det} - T_{c,\text{react}} &= I_m \ddot{\theta}_m \\
 \text{(2) Coupling:} && T_{c,\text{drive}} - T_{s1,\text{react}} &= I_c \ddot{\theta}_c \\
 \text{(3) Screw rotation:} && T_{s1,\text{drive}} - \tfrac{L}{2\pi}F_{nut} - T_{s2,\text{react}} &= I_s \ddot{\theta}_s \\
-\text{(4) Support bearing:} && T_{s2,\text{drive}} - T_{fric,sb} &= I_{sb} \ddot{\theta}_{sb} \\
+\text{(4) Support bearing:} && T_{s2,\text{drive}} &= I_{sb} \ddot{\theta}_{sb} \\
 \text{(5) Screw axial:} && F_{nut} - F_{ax,\text{react}} &= M_{screw} \ddot{x}_s \\
-\text{(6) Nut and stage:} && -F_{nut} - F_{fric,way} &= M_s \ddot{x}_n
+\text{(6) Nut and stage:} && -F_{nut} &= M_s \ddot{x}_n
 \end{aligned}
 $$
 
@@ -128,7 +147,6 @@ $$
 = I_s \ddot{\theta}_s \\[1.5ex]
 \text{(4)}\quad
 & \Big[k_{s2}(\theta_s - \theta_{sb}) + c_{s2}(\dot{\theta}_s - \dot{\theta}_{sb})\Big]
-- T_{fric,sb}
 = I_{sb} \ddot{\theta}_{sb} \\[1.5ex]
 \text{(5)}\quad
 & \Big[k_{nut}\big(x_n - x_s - \tfrac{L}{2\pi}\theta_s\big) + c_{nut}\big(\dot{x}_n - \dot{x}_s - \tfrac{L}{2\pi}\dot{\theta}_s\big)\Big]
@@ -136,7 +154,6 @@ $$
 = M_{screw} \ddot{x}_s \\[1.5ex]
 \text{(6)}\quad
 & -\Big[k_{nut}\big(x_n - x_s - \tfrac{L}{2\pi}\theta_s\big) + c_{nut}\big(\dot{x}_n - \dot{x}_s - \tfrac{L}{2\pi}\dot{\theta}_s\big)\Big]
-- F_{fric,way}
 = M_s \ddot{x}_n
 \end{aligned}
 $$
@@ -152,13 +169,11 @@ $$
 ### 5.1 Input vector
 
 $$
-\mathbf{u} =
-\begin{bmatrix}
-\theta_{cmd} & T_{fric,sb} & F_{fric,way}
-\end{bmatrix}^{\mathsf{T}}
+\mathbf{u}=\theta_{cmd}
 $$
 
-As of this revision the screw-nut interface is no longer an independent input; it is embedded directly in $\mathbf{K}$ and $\mathbf{C}$ (Sec. 3.4, Sec. 5.3-5.4). See Sec. 7 and Sec. 10 items 1-3.
+The baseline has one command input. The structural screw–nut contact is
+embedded directly in $\mathbf K$ and $\mathbf C$; it is not an input.
 
 ### 5.2 Mass matrix
 
@@ -180,7 +195,10 @@ k_c + k_{EM} + k_d & -k_c & 0 & 0 & 0 & 0 \\
 \end{bmatrix}
 $$
 
-The screw-nut interface (Sec. 3.4) is now reflected through the lead ratio $L/2\pi$ directly onto $\theta_s$, coupling the rotational and axial blocks that were fully decoupled in the prior revision (Sec. 10 items 1-3). The sign of the four off-diagonal $L/2\pi \, k_{nut}$ terms was corrected on 2026-08-18: an earlier draft had the opposite sign here, which made the command-to-stage DC gain negative (a 180 deg phase offset at low frequency, opposite to the Sec. 1 convention that positive $\theta_s$ drives positive $x_n$). This form matches $F_{nut}$ in Sec. 3.4.
+The screw–nut structural contact is reflected through $L/2\pi$ onto
+$\theta_s$, coupling the rotational and axial blocks. The four off-diagonal
+$L/2\pi\,k_{nut}$ signs enforce the convention that positive $\theta_s$
+drives positive $x_n$. This form matches $F_{nut}$ in Sec. 3.4.
 
 ### 5.4 Damping matrix
 
@@ -203,12 +221,12 @@ As of 2026-08-18, $\mathbf{C}_{11} = c_c + c_{EM}$ is applied by default rather 
 $$
 \mathbf{B}_u =
 \begin{bmatrix}
-k_{EM} & 0 & 0 \\
-0 & 0 & 0 \\
-0 & 0 & 0 \\
-0 & -1 & 0 \\
-0 & 0 & 0 \\
-0 & 0 & -1
+k_{EM}\\
+0\\
+0\\
+0\\
+0\\
+0
 \end{bmatrix}
 $$
 
@@ -241,7 +259,7 @@ $$
 \qquad
 \mathbf{B} =
 \begin{bmatrix}
-\mathbf{0}_{6\times4} \\[0.5ex]
+\mathbf{0}_{6\times1} \\[0.5ex]
 \mathbf{M}^{-1}\mathbf{B}_u
 \end{bmatrix}
 $$
@@ -261,33 +279,26 @@ $$
 
 ---
 
-## 7. Friction ports
+## 7. Scope boundary for friction extensions
 
-Two of the three inputs are friction outputs (support bearing and guideway). As of this revision, the screw-nut interface is no longer a frozen-friction port: it is embedded directly in $\mathbf{K}$ and $\mathbf{C}$ as a linear reflected coupling between $\theta_s$ and the axial coordinates, scaled by the lead ratio $L/2\pi$ (Sec. 3.4, Sec. 5.3-5.4). This removes $T_{fric,nut}$ from $\mathbf{u}$ and resolves Sec. 10 items 1-3, at the cost of treating the nut contact as always-stuck (no slip). The remaining two friction outputs are functions of the states, so the system is linear only when they are frozen. In simulation the plant is evaluated as an LTI core wrapped by nonlinear feedback from these two ports.
+No friction state or friction generalized force belongs to the Rev 4
+reference equations above. The reference transfer function is evaluated with
+all friction forces equal to zero. The implementation retains two zeroed
+legacy input columns for support-bearing torque and guideway force so older
+analysis scripts remain compatible; those columns are not part of the
+one-input frictionless derivation.
 
-| Port | Output | Relative velocity argument | Element |
-|---|---|---|---|
-| Support bearing | $T_{fric,sb}$ | $\omega_{sb} = \dot{\theta}_{sb}$ (grounded ring) | GMS or LuGre, rotational |
-| Guideway | $F_{fric,way}$ | $v_{way} = \dot{x}_n$ | GMS or LuGre, translational |
+The two nonlinear alternatives are documented independently:
 
-Corresponding relative displacements, needed for presliding state propagation:
+1. **Rev 4.1 — replacement experiment.** The nut LuGre port replaces
+   $k_{nut}$ and $c_{nut}$. This tests the interpretation that LuGre carries
+   the complete screw–nut contact compliance and friction.
+2. **Rev 4.2 — parallel experiment.** The structural $k_{nut}/c_{nut}$ path
+   remains load-bearing and the nut LuGre port supplies an additional
+   pre-rolling friction force across the same relative coordinate.
 
-$$
-\delta_{sb} = \theta_{sb}, \qquad
-\delta_{way} = x_n
-$$
-
-The former screw-nut relative displacement, $x_n - x_s + \tfrac{L}{2\pi}\theta_s$, is retained only as the argument of the linear elastic/damping coupling in $\mathbf{K}$ and $\mathbf{C}$ (Sec. 3.4); it is no longer a friction-port state and does not need presliding propagation.
-
-### 7.1 Simulation form
-
-$$
-\dot{\mathbf{z}} = \mathbf{A}\mathbf{z} + \mathbf{B}\,\mathbf{u}\big(\theta_{cmd}(t),\,\mathbf{z},\,\mathbf{w}\big),
-\qquad
-\dot{\mathbf{w}} = f_{GMS}(\mathbf{z}, \mathbf{w})
-$$
-
-where $\mathbf{w}$ collects the internal friction states, that is the $N$ Maxwell-slip element deflections $z_i$ per port together with their stick/slip flags. Integration requires a switched or stiff solver because each element toggles between stick and slip.
+Neither alternative changes the definition of the frictionless reference
+plant in this document.
 
 ---
 
@@ -321,9 +332,8 @@ where $\mathbf{w}$ collects the internal friction states, that is the $N$ Maxwel
 1. Build $\mathbf{M}$, $\mathbf{C}$, $\mathbf{K}$, $\mathbf{B}_u$ as separate functions of a single parameter dictionary. Assemble $\mathbf{A}$ and $\mathbf{B}$ from them rather than hard-coding entries.
 2. Keep $\mathbf{M}^{-1}$ as an explicit diagonal inverse. The mass matrix is diagonal by construction, so no factorization is needed.
 3. Scale the state vector before eigenanalysis. Rotational and translational entries differ by roughly $2\pi/L \approx 6.28\times10^3$, and the raw $\mathbf{A}$ is badly conditioned.
-4. Verify the rigid-body check first. With all friction ports zeroed, $k_d = 0$ and $k_{brg} = 0$, the axial block should show a free rigid-body mode.
-5. Validate against the linearized detent case before enabling friction. The motor-only mode should appear near $\sqrt{(k_{EM}+k_d+k_c)/I_m}$.
-6. Log the friction port outputs and the relative velocities alongside the states. The port signals are the quantities that later get compared to the identification data.
+4. Verify the rigid-body check first. With $k_d=0$ and $k_{brg}=0$, the axial block should show a free rigid-body mode.
+5. Validate the optional linearized-detent case separately. The motor-only mode should appear near $\sqrt{(k_{EM}+k_d+k_c)/I_m}$.
 
 ---
 
@@ -331,9 +341,11 @@ where $\mathbf{w}$ collects the internal friction states, that is the $N$ Maxwel
 
 These are unresolved points in the model as written, not transcription errors.
 
-1. ~~Axial reaction pair at the screw-nut interface.~~ **Resolved, this revision.** The screw-nut traction is no longer an independently-injected port force; embedding it in $\mathbf{K}$ and $\mathbf{C}$ (Sec. 3.4) makes the reaction on $\theta_s$ and the reaction on $x_s$ symmetric by construction (both matrices are symmetric), so the force/torque balance closes automatically instead of needing a manual $\mathbf{B}_u$ patch.
-2. ~~Interface double path.~~ **Resolved, this revision.** There is now exactly one screw-nut element: the linear coupling in $\mathbf{K}$/$\mathbf{C}$ between $\theta_s$, $x_s$, and $x_n$. The traction no longer exists as a separate path in parallel with $k_{nut}$.
-3. ~~No kinematic constraint between $\theta_s$ and $x_n$.~~ **Resolved, with a new tradeoff.** $\theta_s$ and the axial block are now coupled directly through $\mathbf{K}$ and $\mathbf{C}$. This is only a stiff reflected spring/damper ($k_{nut}$, $c_{nut}$ scaled by $L/2\pi$), not a rigid constraint, but it assumes the nut interface never slips. The microslip/gross-slip behavior the original friction-port formulation was meant to capture at that interface is no longer represented anywhere in the model. If nut slip is significant, the port formulation should be restored for this interface specifically, and the direct $\mathbf{K}$/$\mathbf{C}$ coupling removed to avoid double-counting the compliance.
-4. **Electromagnetic damping.** $c_{EM}$ appears in the constitutive relation but not in $\mathbf{C}$ or $\mathbf{B}_u$. Either drop it from Section 3.1 or add it per the variant in Section 5.4.
-5. **Detent linearization validity.** $\sin(4N_r\theta_m) \approx 4N_r\theta_m$ holds only for $\theta_m \ll 1/(4N_r) \approx 5$ mrad, roughly a quarter step. For any motion larger than a single step the nonlinear form must be retained and $k_d$ removed from $\mathbf{K}$.
-6. **Lead value.** The derivation notes reference a 2 mm lead. The BOM part number gives 1 mm. All numerical evaluation should use $L = 1$ mm.
+1. **Structural nut-contact identification.** $k_{nut}$ and $c_{nut}$ remain
+   placeholders until identified from contact data or an assembled-axis test.
+2. **Detent linearization validity.** $\sin(4N_r\theta_m) \approx
+   4N_r\theta_m$ holds only for $\theta_m \ll 1/(4N_r) \approx 5$ mrad,
+   roughly a quarter step. For larger motion the nonlinear form must be
+   retained and $k_d$ removed from $\mathbf K$.
+3. **Lead value.** The derivation notes reference a 2 mm lead. The BOM part
+   number gives 1 mm. All numerical evaluation uses $L=1$ mm.
