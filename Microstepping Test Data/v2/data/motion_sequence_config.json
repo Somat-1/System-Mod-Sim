@@ -1,0 +1,126 @@
+{
+  "status": "command preview; not executable controller instructions",
+  "full_step_travel_m": 5e-06,
+  "mres": [
+    {
+      "label": "1/16",
+      "microsteps_per_full_step": 16,
+      "u_per_driver_pulse": 1,
+      "burst_pulse_rate_hz": 4000.0
+    },
+    {
+      "label": "1/4",
+      "microsteps_per_full_step": 4,
+      "u_per_driver_pulse": 4,
+      "burst_pulse_rate_hz": 1000.0
+    },
+    {
+      "label": "1/2",
+      "microsteps_per_full_step": 2,
+      "u_per_driver_pulse": 8,
+      "burst_pulse_rate_hz": 500.0
+    },
+    {
+      "label": "1/1",
+      "microsteps_per_full_step": 1,
+      "u_per_driver_pulse": 16,
+      "burst_pulse_rate_hz": 250.0
+    }
+  ],
+  "outer_loop": {
+    "holding_currents": [
+      "I_lo",
+      "I_mid",
+      "I_hi"
+    ],
+    "executions": 12,
+    "stage_start": "same fixed starting position for every execution"
+  },
+  "execution": {
+    "dwell_ladder_s": 0.4,
+    "ladder_repeats": 25,
+    "loop_repeats": 10,
+    "doublet_repeats": 20,
+    "loop_dwell_s": 0.3,
+    "doublet_dwell_s": 1.0,
+    "conditioning_full_steps": 4,
+    "conditioning_rate_full_steps_s": 150.0,
+    "plateau_rates_full_steps_s": [
+      0.125,
+      0.375,
+      1.25,
+      3.5,
+      9.5,
+      27.5,
+      70.0,
+      200.0
+    ],
+    "plateau_duration": "clip(200/f_fs, 5, 20) seconds",
+    "plateau_ramp_s": 0.5,
+    "plateau_ramp_rule": "enabled only for f_fs >= 10"
+  },
+  "preview": {
+    "ladder_repeats": 3,
+    "loop_repeats": 2,
+    "doublet_repeats": 3,
+    "current_traces": "not plotted; command is current-independent"
+  },
+  "reference_moves_driver_pulses": [
+    16,
+    -16,
+    4,
+    -4,
+    1,
+    -1,
+    -16,
+    16,
+    -4,
+    4,
+    -1,
+    1
+  ],
+  "nested_patterns_driver_pulses": {
+    "descending": [
+      32,
+      -16,
+      8,
+      -4,
+      2,
+      -1,
+      1,
+      -2,
+      4,
+      -8,
+      16,
+      -32
+    ],
+    "asymmetric": [
+      8,
+      -3,
+      2,
+      -5,
+      6,
+      -8,
+      4,
+      -4
+    ],
+    "minor": [
+      64,
+      -16,
+      2,
+      -2,
+      -16,
+      2,
+      -2,
+      -16,
+      2,
+      -2,
+      -16
+    ]
+  },
+  "unresolved_for_hardware": [
+    "I_lo, I_mid, I_hi",
+    "pilot confirmation of dwell_ladder",
+    "pilot confirmation of execution repeat count"
+  ]
+}

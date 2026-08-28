@@ -35,8 +35,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]  # .../Sytem Mod & Sim
-DATA_DIR = PROJECT_ROOT / "Microstepping Test Data"
+VERSION_ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = VERSION_ROOT
 OUT_DIR = DATA_DIR / "rendered_assets"
 
 STEP_SIZES = [1, 2, 16]

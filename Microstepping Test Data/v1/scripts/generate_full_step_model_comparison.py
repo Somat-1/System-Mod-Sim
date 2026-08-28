@@ -1,6 +1,6 @@
 ﻿#!/usr/bin/env python3
 """Reproduce the REAL hardware back-and-forth stepping sequence from each
-"Microstepping Test Data/StepSize{1,2,16}.csv" run (command edge times and
+"Microstepping Test Data/v1/StepSize{1,2,16}.csv" run (command edge times and
 directions detected directly from the encoder trace, not an idealized
 sequence), then run that exact per-file edge timing through all three Rev 4
 model families and overlay the result against the real IDS interferometer
@@ -58,10 +58,11 @@ import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.signal import StateSpace, lsim, medfilt, find_peaks
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]         # .../Sytem Mod & Sim
+VERSION_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = VERSION_ROOT.parents[1]                    # .../Sytem Mod & Sim
 REV4 = PROJECT_ROOT / "Rev 4"
 LUGRE_REV42_SCRIPTS = REV4 / "lugre_friction" / "Rev 4.2" / "scripts"
-DATA_DIR = PROJECT_ROOT / "Microstepping Test Data"
+DATA_DIR = VERSION_ROOT
 OUT_DIR = DATA_DIR / "rendered_assets"
 FIGURE = OUT_DIR / "full_step_model_comparison.png"
 DATA = OUT_DIR / "full_step_model_comparison.npz"
