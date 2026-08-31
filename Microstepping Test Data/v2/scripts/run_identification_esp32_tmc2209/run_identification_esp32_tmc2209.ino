@@ -46,6 +46,9 @@ constexpr uint16_t MOTOR_FULL_STEPS_PER_REV = 200;
 constexpr uint32_t RMT_RESOLUTION_HZ = 1000000;
 constexpr uint32_t RMT_HIGH_TICKS = 2;
 constexpr size_t RMT_MAX_SYMBOLS = 64;
+// ESP32-S3 has 48 RMT symbols per hardware memory block. Two blocks avoid
+// an exact-fit boundary for the largest 64-pulse campaign batch.
+constexpr size_t RMT_MEM_BLOCK_SYMBOLS = 96;
 constexpr uint32_t DIR_SETUP_US = 5;
 
 constexpr float BURST_FULL_STEPS_S = 250.0F;
@@ -176,7 +179,7 @@ bool initialiseRmt() {
   channelConfig.gpio_num = static_cast<gpio_num_t>(STEP_PIN);
   channelConfig.clk_src = RMT_CLK_SRC_DEFAULT;
   channelConfig.resolution_hz = RMT_RESOLUTION_HZ;
-  channelConfig.mem_block_symbols = RMT_MAX_SYMBOLS;
+  channelConfig.mem_block_symbols = RMT_MEM_BLOCK_SYMBOLS;
   channelConfig.trans_queue_depth = 2;
   channelConfig.flags.invert_out = false;
   channelConfig.flags.with_dma = false;
@@ -207,6 +210,7 @@ bool initialiseRmt() {
 bool configureDriver() {
   DriverSerial.begin(DRIVER_BAUD, SERIAL_8N1, UART_RX_PIN, UART_TX_PIN);
   driver.begin();
+  driver.toff(5);
   driver.pdn_disable(true);
   driver.mstep_reg_select(true);
   driver.I_scale_analog(false);
@@ -334,7 +338,8 @@ bool pulseBatch(int32_t signedPulses, float pulseRateHz, const char *label) {
     return false;
   }
 
-  // submit_us + k*period_ticks reconstructs every commanded rising edge.
+  // RMT ticks reconstruct every relative rising-edge time exactly.
+  // submitUs/doneUs bracket the transaction in the console clock domain.
   logEvent("PULSE_BATCH", label, direction, pulseCount, pulseRateHz,
            periodTicks, submitUs, doneUs);
   pollAbort();

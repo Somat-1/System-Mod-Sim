@@ -7,8 +7,9 @@ physical stage. Record displacement with the interferometric sensor and
 compare the measured response against the frictionless tangent, exact-detent
 frictionless, and Rev 4.2 LuGre models.
 
-No file in v2 currently issues hardware commands. Motion generation must
-remain a preview/export step until the safety and pilot gates below pass.
+Two hardware runners now implement the sequence. Live execution remains
+explicitly armed and must not proceed until the safety and pilot gates below
+pass.
 
 ## Revision layout
 
@@ -35,7 +36,25 @@ All burst and doublet moves therefore use 250 full-steps/s. The outer loop is
 four MRES settings by three holding-current settings, for 12 executions.
 Every execution starts from the same fixed physical stage position; no
 position sweep is included.
-The numerical values of I_lo, I_mid, and I_hi remain to be supplied.
+
+| Level | TMC set RMS | TMC measured RMS | Dedicated controller SC peak |
+|---|---:|---:|---:|
+| I_lo | 360 mA | approximately 355 mA | 502 mA |
+| I_mid | 600 mA | 556 mA | 786 mA |
+| I_hi | 750 mA | 715 mA | 1011 mA |
+
+Hold current equals run current for every level. On the TMC2209 this is
+enforced with IHOLD = IRUN, IHOLDDELAY = 0, and TPOWERDOWN = 0.
+
+The ESP32-S3/TMC2209 runner executes timing-critical Blocks A1, A2, B, and E.
+The dedicated controller executes Blocks C and D. Each runner also executes
+Block 0, conditioning, and a final Block 0 around its assigned measurements.
+Each runner covers all 12 MRES/current combinations.
+
+Thus there are 12 physical operating conditions, but 24 hardware acquisition
+segments: 12 partial executions on the ESP32 runner and 12 partial executions
+on the dedicated-controller runner. Each runner is launched once and advances
+through its 12 configurations automatically.
 
 ## Authoritative block definitions
 
@@ -109,10 +128,16 @@ Use the following MRES-invariant full-step rates:
 
 Run both directions. Plateau duration is
 clip(200 full steps / f_fs, 5 s, 20 s), excluding ramps. This is one motor
-revolution when the cap does not bind. Use a 0.5 s trapezoidal ramp in and
-out only when f_fs is at least 10 full-steps/s; below 10 full-steps/s use no
-ramp. Discard ramp intervals during identification. Pulse rate is the
-full-step rate multiplied by the loaded microsteps per full step.
+revolution when the cap does not bind. The command preview retains the ideal
+0.5 s ramp above 10 full-steps/s.
+
+On the dedicated controller, software-pace 0.125, 0.375, and 1.25
+full-steps/s as individual absolute microstep moves and timestamp every
+acknowledgement. Execute 3.5, 9.5, 27.5, 70, and 200 full-steps/s with
+ACCEL = DECEL = 628 and RAMPTYPE = 1. Include acceleration/deceleration
+distance in the absolute target table so the requested plateau duration
+excludes the ramps. Mark the first 0.5 s of every plateau as discarded
+identification data.
 
 The slow plateaus below 10 full-steps/s are local friction measurements.
 Execute them from the same fixed stage starting position as every other run.
@@ -153,7 +178,6 @@ and velocity and doublets.
 - Step-loss pilot: 100 repetitions of +32, -32 at MRES 1/16 and again at
   MRES 1/1. Reject monotonic interferometer endpoint drift.
 - Verify conditioning produces no sustained low-speed resonance.
-- Supply I_lo, I_mid, and I_hi.
 - Confirm stage travel, direction convention, limit-switch behavior, pulse
   timing limits, enable sequencing, and emergency-stop procedure.
 - Log actual pulse timestamps, MRES, current, enable state, and interferometer
@@ -161,7 +185,6 @@ and velocity and doublets.
 
 ## Remaining inputs before hardware execution
 
-1. Supply I_lo, I_mid, and I_hi.
-2. Replace dwell_ladder if required by the damping-ratio pilot.
-3. Revisit the execution repeat count if the 200-repeat breakaway pilot gives
+1. Replace dwell_ladder if required by the damping-ratio pilot.
+2. Revisit the execution repeat count if the 200-repeat breakaway pilot gives
    a coefficient of variation above 25 percent.

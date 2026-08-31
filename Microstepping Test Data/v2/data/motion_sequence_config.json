@@ -34,7 +34,50 @@
       "I_hi"
     ],
     "executions": 12,
+    "executions_per_runner": 12,
+    "hardware_acquisition_segments_total": 24,
     "stage_start": "same fixed starting position for every execution"
+  },
+  "current_levels": [
+    {
+      "name": "I_lo",
+      "tmc_set_rms_ma": 360,
+      "tmc_measured_rms_ma": 355,
+      "dedicated_controller_sc_peak_ma": 502,
+      "hold_equals_run": true
+    },
+    {
+      "name": "I_mid",
+      "tmc_set_rms_ma": 600,
+      "tmc_measured_rms_ma": 556,
+      "dedicated_controller_sc_peak_ma": 786,
+      "hold_equals_run": true
+    },
+    {
+      "name": "I_hi",
+      "tmc_set_rms_ma": 750,
+      "tmc_measured_rms_ma": 715,
+      "dedicated_controller_sc_peak_ma": 1011,
+      "hold_equals_run": true
+    }
+  ],
+  "hardware_runners": {
+    "esp32_s3_tmc2209": [
+      "block_0",
+      "conditioning",
+      "block_A1",
+      "block_A2",
+      "block_B",
+      "block_E",
+      "block_0_end"
+    ],
+    "dedicated_controller_axis_X": [
+      "block_0",
+      "conditioning",
+      "block_C",
+      "block_D",
+      "block_0_end"
+    ]
   },
   "execution": {
     "dwell_ladder_s": 0.4,
@@ -57,7 +100,27 @@
     ],
     "plateau_duration": "clip(200/f_fs, 5, 20) seconds",
     "plateau_ramp_s": 0.5,
-    "plateau_ramp_rule": "enabled only for f_fs >= 10"
+    "plateau_ramp_rule": "enabled only for f_fs >= 10",
+    "dedicated_controller_plateau_execution": {
+      "software_paced_rates_full_steps_s": [
+        0.125,
+        0.375,
+        1.25
+      ],
+      "software_pacing_command": "absolute MA microsteps",
+      "timestamp": "every command acknowledgement",
+      "controller_paced_rates_full_steps_s": [
+        3.5,
+        9.5,
+        27.5,
+        70.0,
+        200.0
+      ],
+      "accel_code": 628,
+      "decel_code": 628,
+      "ramp_type": 1,
+      "identification_head_discard_s": 0.5
+    }
   },
   "preview": {
     "ladder_repeats": 3,
@@ -119,7 +182,6 @@
     ]
   },
   "unresolved_for_hardware": [
-    "I_lo, I_mid, I_hi",
     "pilot confirmation of dwell_ladder",
     "pilot confirmation of execution repeat count"
   ]

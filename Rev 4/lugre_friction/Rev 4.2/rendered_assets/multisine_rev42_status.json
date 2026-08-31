@@ -1,8 +1,8 @@
 {
-  "requested_cases": 168,
-  "completed_cases": 79,
-  "cached_cases": 31,
+  "requested_cases": 420,
+  "completed_cases": 420,
+  "cached_cases": 280,
   "failed_cases": [],
-  "orchestrator_wall_s": 8249.945548000047,
-  "last_update_local": "2026-08-25 17:05:01"
+  "orchestrator_wall_s": 42533.37142889993,
+  "last_update_local": "2026-08-30 03:38:00"
 }

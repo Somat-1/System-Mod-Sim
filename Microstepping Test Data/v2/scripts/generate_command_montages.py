@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -303,8 +304,21 @@ def render_montage(
     temporary = output.with_name(f'{output.stem}.tmp{output.suffix}')
     fig.savefig(temporary, dpi=150)
     plt.close(fig)
-    temporary.replace(output)
+    replace_with_retry(temporary, output)
     return output, metadata
+
+
+def replace_with_retry(
+    temporary: Path, output: Path, attempts: int = 8,
+) -> None:
+    for attempt in range(attempts):
+        try:
+            temporary.replace(output)
+            return
+        except PermissionError:
+            if attempt + 1 == attempts:
+                raise
+            time.sleep(0.15 * (attempt + 1))
 
 
 def write_json(path: Path, payload: dict) -> None:
@@ -312,7 +326,7 @@ def write_json(path: Path, payload: dict) -> None:
     temporary.write_text(
         json.dumps(payload, indent=2) + '\n', encoding='utf-8'
     )
-    temporary.replace(path)
+    replace_with_retry(temporary, path)
 
 
 def motion_config() -> dict:
@@ -328,7 +342,42 @@ def motion_config() -> dict:
         'outer_loop': {
             'holding_currents': ['I_lo', 'I_mid', 'I_hi'],
             'executions': 12,
+            'executions_per_runner': 12,
+            'hardware_acquisition_segments_total': 24,
             'stage_start': 'same fixed starting position for every execution',
+        },
+        'current_levels': [
+            {
+                'name': 'I_lo',
+                'tmc_set_rms_ma': 360,
+                'tmc_measured_rms_ma': 355,
+                'dedicated_controller_sc_peak_ma': 502,
+                'hold_equals_run': True,
+            },
+            {
+                'name': 'I_mid',
+                'tmc_set_rms_ma': 600,
+                'tmc_measured_rms_ma': 556,
+                'dedicated_controller_sc_peak_ma': 786,
+                'hold_equals_run': True,
+            },
+            {
+                'name': 'I_hi',
+                'tmc_set_rms_ma': 750,
+                'tmc_measured_rms_ma': 715,
+                'dedicated_controller_sc_peak_ma': 1011,
+                'hold_equals_run': True,
+            },
+        ],
+        'hardware_runners': {
+            'esp32_s3_tmc2209': [
+                'block_0', 'conditioning', 'block_A1', 'block_A2',
+                'block_B', 'block_E', 'block_0_end',
+            ],
+            'dedicated_controller_axis_X': [
+                'block_0', 'conditioning', 'block_C', 'block_D',
+                'block_0_end',
+            ],
         },
         'execution': {
             'dwell_ladder_s': DWELL_LADDER,
@@ -345,6 +394,18 @@ def motion_config() -> dict:
             'plateau_duration': 'clip(200/f_fs, 5, 20) seconds',
             'plateau_ramp_s': PLATEAU_RAMP_S,
             'plateau_ramp_rule': 'enabled only for f_fs >= 10',
+            'dedicated_controller_plateau_execution': {
+                'software_paced_rates_full_steps_s': [0.125, 0.375, 1.25],
+                'software_pacing_command': 'absolute MA microsteps',
+                'timestamp': 'every command acknowledgement',
+                'controller_paced_rates_full_steps_s': [
+                    3.5, 9.5, 27.5, 70.0, 200.0,
+                ],
+                'accel_code': 628,
+                'decel_code': 628,
+                'ramp_type': 1,
+                'identification_head_discard_s': 0.5,
+            },
         },
         'preview': {
             'ladder_repeats': PREVIEW_LADDER_REPEATS,
@@ -359,7 +420,6 @@ def motion_config() -> dict:
             'minor': list(NEST_MINOR),
         },
         'unresolved_for_hardware': [
-            'I_lo, I_mid, I_hi',
             'pilot confirmation of dwell_ladder',
             'pilot confirmation of execution repeat count',
         ],

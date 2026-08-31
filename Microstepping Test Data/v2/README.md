@@ -8,6 +8,10 @@ archived v1 analysis workflow.
   and the later measured-response plotting plan.
 - `scripts/generate_command_montages.py`: deterministic command-preview
   generator. It does not issue hardware commands.
+- `scripts/run_identification_esp32_tmc2209/`: Arduino-ESP32/TMCStepper/RMT
+  runner for Blocks A, B, and E.
+- `scripts/run_identification_dedicated_controller.py`: host-side serial
+  runner for Blocks C and D.
 - `data/motion_sequence_config.json`: machine-readable execution and preview
   parameters.
 - `rendered_assets/trajectory_visualization_plots/`: command montages grouped
@@ -15,6 +19,8 @@ archived v1 analysis workflow.
 - `rendered_assets/command_montage_summary.json`: cell-level validation metadata
   and paths to every trajectory figure.
 - `docs/`: reserved for derivations, conventions, and run notes.
+- `docs/HARDWARE_RUNNERS.md`: wiring, safety gates, backend responsibilities,
+  dry-run checks, and live invocation.
 
 Regenerate from this directory with:
 
@@ -22,7 +28,6 @@ Regenerate from this directory with:
 python .\scripts\generate_command_montages.py
 ```
 
-All 12 executions start from the same fixed stage position. Hardware execution
-remains gated on the holding-current values and pilot confirmation of the
-ladder dwell and execution repeat count. See `BACKLOG.md` before converting
-this preview into a controller-specific motion program.
+All executions start from the same fixed stage position. Hardware execution
+remains gated on pilot confirmation of the ladder dwell/repeat count and the
+live safety arguments documented in `docs/HARDWARE_RUNNERS.md`.
