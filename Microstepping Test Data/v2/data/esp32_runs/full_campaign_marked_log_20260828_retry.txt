@@ -1,0 +1,26 @@
+Monitor port settings:
+  baudrate=115200
+  bits=8
+  dtr=on
+  parity=none
+  rts=on
+  stop_bits=1
+
+Connecting to /dev/cu.usbmodem1101. Press CTRL-C to exit.
+CHECK
+# Validated ESP32 campaign plan
+# backends: Block 0 + conditioning + A1 + A2 + B + E
+# MRES: 16,4,2,1
+# currents RMS set/readback mA: 360/355,600/556,750/715
+# executions: 4 MRES x 3 currents = 12
+# per execution: Block 0 start, A1, A2, B, E, Block 0 end
+# A1/A2 N: 1,2,4,8,16,32 pulses; B: all 3 loop patterns
+# E N: 1,2,4,8,16 pulses (all protocol-defined E sizes)
+# campaign marker: +40,-40,+20,-20,+40,-40 full steps
+# configuration marker: positive-first, 20 + 5*run_index full steps
+# phase markers: negative-first 10,20,30,40,50,60 full steps
+# C and D are not ESP tests; run them with the dedicated-controller runner
+# all blocks and every execution are net zero
+# maximum planned excursion: 12800 units of 1/16 full step
+# CHECK complete; motor remains disabled.
+^C

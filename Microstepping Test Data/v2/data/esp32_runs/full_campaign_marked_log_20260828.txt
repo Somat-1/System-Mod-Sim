@@ -1,0 +1,17 @@
+Monitor port settings:
+  baudrate=115200
+  bits=8
+  dtr=on
+  parity=none
+  rts=on
+  stop_bits=1
+
+Connecting to /dev/cu.usbmodem1101. Press CTRL-C to exit.
+
+# ESP32-S3/TMC2209 identification runner
+TMC2209 connection test: 2 (0 means OK)
+43051,SAFE_STOP,0,NA,16,IDLE,INITIALISATION_FAILED,0,0,0,0,0,-1,0
+# Correct the hardware connection before issuing RUN.
+RECOVER38
+# RECOVER38 rejected: TMC2209 initialisation did not pass.
+^C

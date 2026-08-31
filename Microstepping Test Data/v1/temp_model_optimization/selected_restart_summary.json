@@ -1,0 +1,99 @@
+{
+  "selection": "lowest consistent weighted SSE among all logged starts/group endpoints",
+  "source_event": "START",
+  "best_start": 2,
+  "optimized_cost": 7.886061531878528,
+  "physical_rmse_um_by_step_size": {
+    "1": 1.0352427061215483,
+    "2": 0.5634033482750553,
+    "16": 0.12880446088881944
+  },
+  "variables": {
+    "T_d": -1.3041583528716945,
+    "sigma0_way": -0.9958745662942533,
+    "sigma1_way": -1.0259145828523206,
+    "sigma2_way": -1.3248478870351919,
+    "Fc_way": -0.7981443316618946,
+    "Fs_gap_way": -0.752074187397023,
+    "vs_way": -0.5372770439015722,
+    "sigma0_nut": 1.4649701377389395,
+    "sigma1_nut": 0.3983316115242198,
+    "sigma2_nut": -0.10140649404906282,
+    "Fc_nut": 0.5678435867572111,
+    "Fs_gap_nut": -0.0382287499730018,
+    "vs_nut": 0.45940514684074457,
+    "sigma0_sb": -0.9328493589407604,
+    "sigma1_sb": -0.05916754762925046,
+    "sigma2_sb": -0.1593014300741199,
+    "Tc_sb": 0.5184589224629444,
+    "Ts_gap_sb": -0.39058644558017475,
+    "vs_sb": -0.6618029912271356
+  },
+  "optimized_parameters": {
+    "T_d": 0.0008142025881095298,
+    "sigma0_nut": 8654828.02400863,
+    "sigma1_nut": 745.1027036924434,
+    "sigma2_nut": 0.22589141603972598,
+    "Fc_nut": 0.8822290226594387,
+    "Fs_nut": 1.12285220903888,
+    "vs_nut": 0.0003166263947573925,
+    "sigma0_sb": 0.029900762488095048,
+    "sigma1_sb": 0.00014089134721325606,
+    "sigma2_sb": 8.527392789611929e-06,
+    "Tc_sb": 0.0002519156266479206,
+    "Ts_sb": 0.00029928182202022043,
+    "vs_sb": 0.05159202956495264,
+    "sigma0_way": 280744.18105824926,
+    "sigma1_way": 278.42825221321016,
+    "sigma2_way": 0.10633735769614633,
+    "Fc_way": 1.350490631284045,
+    "Fs_way": 2.0575723183970362,
+    "vs_way": 0.00014608430315859444,
+    "sigma1_target_zeta": 0.7
+  },
+  "locked_structural_parameters": {
+    "k_c": 68.75,
+    "k_s1": 211.0,
+    "k_s2": 211.0,
+    "k_nut": 100000000.0,
+    "k_brg": 11400000.0,
+    "c_c": 0.00024,
+    "c_s1": 0.00037,
+    "c_s2": 0.0002,
+    "c_nut": 101.0,
+    "c_brg": 37.2,
+    "c_EM": 0.00013283
+  },
+  "config": {
+    "step_sizes": [
+      1,
+      2,
+      16
+    ],
+    "fit_cycles": 3,
+    "number_of_starts": 3,
+    "alternating_passes": 2,
+    "max_function_evaluations_per_group": 8,
+    "initialize_from_previous_best": true,
+    "restart_log_perturbation": 0.35,
+    "trajectory_weighting": "inverse_robust_range",
+    "robust_loss": "linear",
+    "robust_f_scale": 0.2,
+    "random_seed": 42017,
+    "log_multiplier_bounds": [
+      -2.302585092994046,
+      2.302585092994046
+    ],
+    "detent_log_multiplier_bounds": [
+      -2.302585092994046,
+      1.0986122886681098
+    ],
+    "regularization_weight": 0.01,
+    "optimizer_tolerances": {
+      "ftol": 0.0001,
+      "xtol": 0.0001,
+      "gtol": 0.0001
+    }
+  },
+  "warning": "terminal soft-L1 points were rejected when their weighted squared physical residual increased"
+}

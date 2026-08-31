@@ -1,0 +1,12 @@
+block,condition,decision,reason
+A2,N1_alternating,timing/shape only,"coherent reversals, but plateau amplitude fails N-scaling check"
+A2,N2_alternating,timing/shape only,"coherent reversals, but plateau amplitude fails N-scaling check"
+A2,N4_alternating,timing/shape only,"coherent reversals, but plateau amplitude fails N-scaling check"
+A2,N8_alternating,timing/shape only,"coherent reversals, but plateau amplitude fails N-scaling check"
+A2,N16_alternating,timing/shape only,"coherent reversals, but plateau amplitude fails N-scaling check"
+A2,N32_alternating,timing/shape only,"coherent reversals, but plateau amplitude fails N-scaling check"
+B,descending,secondary,repeatable but switching artifacts and weaker command-shape agreement
+B,minor,secondary,repeatable but not clean enough for primary model-fit claims
+A1,all,rejected,creep/drift dominates; weak monotonic command tracking
+E,all,rejected,isolated spikes dominate; doublet duration approaches acquisition resolution
+BLOCK_0,start/end,diagnostic only,repeatable fingerprint but not a clean gain comparison

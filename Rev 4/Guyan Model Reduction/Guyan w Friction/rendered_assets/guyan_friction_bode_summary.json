@@ -1,0 +1,22 @@
+{
+  "model": "two-master Guyan + exact periodic detent + parallel Rev 4.2 LuGre",
+  "coordinates": [
+    "theta_m",
+    "x_n"
+  ],
+  "nonlinear_state_count": 7,
+  "friction_ports": [
+    "way",
+    "nut",
+    "sb"
+  ],
+  "nut_k_c_retained": true,
+  "detent_in_nonlinear_rhs": "T_d*sin(4*N_r*theta_m)",
+  "bode_definition": "analytical local linearization at zero rest equilibrium",
+  "frequency_range_hz": [
+    0.01,
+    8000.000000000004
+  ],
+  "equilibrium_rhs_max_abs": 0.0,
+  "figure": "guyan_friction_bode.png"
+}
