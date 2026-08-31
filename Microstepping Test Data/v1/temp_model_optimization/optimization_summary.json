@@ -1,0 +1,104 @@
+{
+  "best_start": 0,
+  "initial_cost": 7.886061531878528,
+  "optimized_cost": 7.885668097375445,
+  "elapsed_s": 4083.142886161804,
+  "physical_rmse_um_by_step_size": {
+    "1": 1.0352171653216564,
+    "2": 0.5634014256443359,
+    "16": 0.12880142545990952
+  },
+  "trajectory_scales_um": {
+    "1": 5.0961186000000005,
+    "2": 2.46095955,
+    "16": 0.48285049999999996
+  },
+  "variables": {
+    "T_d": -1.3046604265242663,
+    "sigma0_way": -0.9959381033660176,
+    "sigma1_way": -1.0260294114408224,
+    "sigma2_way": -1.3248316386745451,
+    "Fc_way": -0.7982216412081264,
+    "Fs_gap_way": -0.7521542298959735,
+    "vs_way": -0.537178754507677,
+    "sigma0_nut": 1.459237637903099,
+    "sigma1_nut": 0.3973736291878635,
+    "sigma2_nut": -0.10228799082921762,
+    "Fc_nut": 0.559849453520924,
+    "Fs_gap_nut": -0.03694747249414922,
+    "vs_nut": 0.4592578063484277,
+    "sigma0_sb": -0.932474486536795,
+    "sigma1_sb": -0.05880206930572252,
+    "sigma2_sb": -0.16034181076753545,
+    "Tc_sb": 0.5199203660731799,
+    "Ts_gap_sb": -0.38891423103356243,
+    "vs_sb": -0.6620409557086526
+  },
+  "optimized_parameters": {
+    "T_d": 0.0008137939010462726,
+    "sigma0_nut": 8605356.15799048,
+    "sigma1_nut": 744.3892502559928,
+    "sigma2_nut": 0.2256923812209864,
+    "Fc_nut": 0.8752044812765019,
+    "Fs_nut": 1.1161361703220951,
+    "vs_nut": 0.0003165797463051958,
+    "sigma0_sb": 0.029911973560038815,
+    "sigma1_sb": 0.00014094284935752053,
+    "sigma2_sb": 8.518525668179226e-06,
+    "Tc_sb": 0.00025228405628479814,
+    "Ts_sb": 0.00029972952436002815,
+    "vs_sb": 0.0515797539550243,
+    "sigma0_way": 280726.3439617344,
+    "sigma1_way": 278.3962825255617,
+    "sigma2_way": 0.10633908551792148,
+    "Fc_way": 1.3503862295018292,
+    "Fs_way": 2.0574113222946275,
+    "vs_way": 0.0001460986624018786,
+    "sigma1_target_zeta": 0.7
+  },
+  "locked_structural_parameters": {
+    "k_c": 68.75,
+    "k_s1": 211.0,
+    "k_s2": 211.0,
+    "k_nut": 100000000.0,
+    "k_brg": 11400000.0,
+    "c_c": 0.00024,
+    "c_s1": 0.00037,
+    "c_s2": 0.0002,
+    "c_nut": 101.0,
+    "c_brg": 37.2,
+    "c_EM": 0.00013283
+  },
+  "config": {
+    "step_sizes": [
+      1,
+      2,
+      16
+    ],
+    "fit_cycles": 3,
+    "number_of_starts": 1,
+    "alternating_passes": 1,
+    "max_function_evaluations_per_group": 5,
+    "initialize_from_previous_best": true,
+    "initial_summary_file": "selected_restart_summary.json",
+    "restart_log_perturbation": 0.35,
+    "trajectory_weighting": "inverse_robust_range",
+    "robust_loss": "linear",
+    "robust_f_scale": 0.2,
+    "random_seed": 42017,
+    "log_multiplier_bounds": [
+      -2.302585092994046,
+      2.302585092994046
+    ],
+    "detent_log_multiplier_bounds": [
+      -2.302585092994046,
+      1.0986122886681098
+    ],
+    "regularization_weight": 0.01,
+    "optimizer_tolerances": {
+      "ftol": 0.0001,
+      "xtol": 0.0001,
+      "gtol": 0.0001
+    }
+  }
+}

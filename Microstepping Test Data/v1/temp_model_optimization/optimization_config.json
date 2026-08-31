@@ -1,0 +1,18 @@
+{
+  "step_sizes": [1, 2, 16],
+  "fit_cycles": 3,
+  "number_of_starts": 1,
+  "alternating_passes": 1,
+  "max_function_evaluations_per_group": 5,
+  "initialize_from_previous_best": true,
+  "initial_summary_file": "selected_restart_summary.json",
+  "restart_log_perturbation": 0.35,
+  "trajectory_weighting": "inverse_robust_range",
+  "robust_loss": "linear",
+  "robust_f_scale": 0.2,
+  "random_seed": 42017,
+  "log_multiplier_bounds": [-2.302585092994046, 2.302585092994046],
+  "detent_log_multiplier_bounds": [-2.302585092994046, 1.0986122886681098],
+  "regularization_weight": 0.01,
+  "optimizer_tolerances": {"ftol": 0.0001, "xtol": 0.0001, "gtol": 0.0001}
+}
