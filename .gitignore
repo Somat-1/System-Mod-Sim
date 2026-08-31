@@ -3,3 +3,11 @@
 # Rev 4/lugre_friction/Rev 4.2/scripts/run_multisine_rev42.py.
 Rev 4/lugre_friction/Rev 4.2/rendered_assets/npz/multisine_checkpoints/
 Rev 4/lugre_friction/Rev 4.2/rendered_assets/npz/multisine_rev42_results.npz
+
+# Files over 50 MB kept local-only (not pushed). Re-run the corresponding
+# simulation scripts to regenerate the two npz files below. The raw
+# SteppingSequenceID.csv is NOT regenerable -- it is a direct Dewesoft
+# hardware export; keep a backup of it outside git.
+Rev 4/lugre_friction/Rev 4.2/rendered_assets/npz/stepping_rev42_and_frictionless.npz
+Rev 4/lugre_friction/Rev 4.2/rendered_assets/npz/stepping_0p3um_settled.npz
+Microstepping Test Data/v3/data/raw_local/SteppingSequenceID.csv
