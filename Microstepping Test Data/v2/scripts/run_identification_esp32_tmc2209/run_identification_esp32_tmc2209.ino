@@ -18,6 +18,7 @@
  * Serial commands at 115200 baud:
  *   CHECK  validate and print the campaign without enabling the motor
  *   VISIBLE move +100 full steps, dwell, and return -100 full steps
+ *   QUICK12 representative A1/A2/B/E diagnostic at 1/2 and full step
  *   RECOVER38 one-time recovery of the known interrupted-run offset
  *   RUN    execute all 12 MRES/current combinations
  *   ABORT  stop at the next safe batch/dwell boundary
@@ -117,6 +118,7 @@ uint32_t runIndex = 0;
 uint32_t completedRuns = 0;
 uint32_t completedMeasuredPhases = 0;
 uint32_t completedStepConditions = 0;
+uint8_t quickLogicalPulseScale = 1;
 char activeBlock[48] = "IDLE";
 
 void printCsvHeader() {
@@ -268,18 +270,42 @@ bool applyRunConfiguration(const CurrentLevel &current, uint16_t mres) {
   driver.ihold(configuredIrun);
   driver.iholddelay(0);
   driver.TPOWERDOWN(0);
-  driver.microsteps(mres);
+  // Write TMC2209 CHOPCONF.MRES bits 27:24 by explicit raw mask. The mixed-type
+  // bitfield in TMCStepper 0.7.3 loses bit 3 on this ESP32 toolchain: codes
+  // 0..7 work, but full-step code 8 is emitted as code 0 (1/256).
+  const uint8_t requestedMresCode =
+      mres == 16 ? 4 : mres == 4 ? 6 : mres == 2 ? 7 : 8;
   driver.en_spreadCycle(true);
   driver.intpol(false);
+  constexpr uint32_t MRES_MASK = 0x0F000000UL;
+  uint32_t chopconf = driver.CHOPCONF();
+  chopconf = (chopconf & ~MRES_MASK) |
+             (static_cast<uint32_t>(requestedMresCode) << 24);
+  driver.CHOPCONF(chopconf);
+
+  const uint32_t chopconfReadback = driver.CHOPCONF();
+  const uint8_t readbackMresCode =
+      static_cast<uint8_t>((chopconfReadback & MRES_MASK) >> 24);
+  const uint16_t readbackMres =
+      readbackMresCode <= 8 ? (256U >> readbackMresCode) : 0;
+  if (readbackMresCode != requestedMresCode || readbackMres != mres) {
+    Serial.printf("MRES configuration failed: requested=%u code=%u "
+                  "readback=%u code=%u\n", mres, requestedMresCode,
+                  readbackMres, readbackMresCode);
+    digitalWrite(EN_PIN, HIGH);
+    aborted = true;
+    return false;
+  }
 
   digitalWrite(EN_PIN, LOW);
   delay(10);
   logEvent("RUN_CONFIG", "SpreadCycle_intpol_off_hold_equals_run");
   Serial.printf(
       "# current=%s set_rms_mA=%u measured_rms_mA=%u IRUN=%u IHOLD=%u "
-      "MRES=%u readback_MRES=%u\n",
+      "MRES=%u MRES_code=%u readback_MRES=%u readback_code=%u\n",
       current.name, current.setRmsMa, current.measuredRmsMa, configuredIrun,
-      driver.ihold(), mres, driver.microsteps());
+      driver.ihold(), mres, requestedMresCode, readbackMres,
+      readbackMresCode);
   return true;
 }
 
@@ -371,6 +397,7 @@ bool burst(int32_t pulses, const char *label) {
 }
 
 bool checkAtOrigin(const char *where);
+void safeStop(const char *reason);
 
 bool physicalMove(int32_t fullSteps, float fullStepRate, const char *label) {
   int32_t remaining = fullSteps * static_cast<int32_t>(activeMres);
@@ -561,6 +588,107 @@ bool runOneConfiguration() {
   return true;
 }
 
+// Short IDS-validation sequence. It deliberately uses the same burst rates and
+// dwell times as the long campaign, but only representative subsets and fewer
+// repeats. QUICK12 runs it at MRES=2 and MRES=1, where one STEP pulse represents
+// 2.5 um and 5 um nominal travel respectively.
+bool runQuickA1() {
+  constexpr int16_t values[] = {1, 4, 16};
+  if (!beginBlock("QUICK_A1")) return false;
+  for (const int16_t n : values) {
+    char label[24];
+    snprintf(label, sizeof(label), "N%d_positive", n);
+    for (uint8_t repeat = 0; repeat < 5; ++repeat)
+      if (!burst(n * quickLogicalPulseScale, label) || !dwellMs(DWELL_LADDER_MS, label)) return false;
+    snprintf(label, sizeof(label), "N%d_negative", n);
+    for (uint8_t repeat = 0; repeat < 5; ++repeat)
+      if (!burst(-n * quickLogicalPulseScale, label) || !dwellMs(DWELL_LADDER_MS, label)) return false;
+  }
+  endBlock();
+  return checkAtOrigin("QUICK_A1");
+}
+
+bool runQuickA2() {
+  constexpr int16_t values[] = {1, 4, 16};
+  if (!beginBlock("QUICK_A2")) return false;
+  for (const int16_t n : values) {
+    char label[24];
+    snprintf(label, sizeof(label), "N%d_alternating", n);
+    for (uint8_t repeat = 0; repeat < 5; ++repeat) {
+      if (!burst(n * quickLogicalPulseScale, label) || !dwellMs(DWELL_LADDER_MS, label) ||
+          !burst(-n * quickLogicalPulseScale, label) || !dwellMs(DWELL_LADDER_MS, label)) return false;
+    }
+  }
+  endBlock();
+  return checkAtOrigin("QUICK_A2");
+}
+
+bool runQuickB() {
+  if (!beginBlock("QUICK_B")) return false;
+  for (size_t index = 0; index < sizeof(NEST_DESC) / sizeof(NEST_DESC[0]); ++index)
+    if (!burst(NEST_DESC[index] * quickLogicalPulseScale, "descending") ||
+        !dwellMs(LOOP_DWELL_MS, "descending")) return false;
+  endBlock();
+  return checkAtOrigin("QUICK_B");
+}
+
+bool runQuickE() {
+  if (!beginBlock("QUICK_E")) return false;
+  constexpr int16_t values[] = {1, 4, 16};
+  for (const int16_t n : values) {
+    char label[24];
+    snprintf(label, sizeof(label), "N%d_doublet", n);
+    for (uint8_t repeat = 0; repeat < 5; ++repeat)
+      if (!burst(n * quickLogicalPulseScale, label) ||
+          !burst(-n * quickLogicalPulseScale, label) ||
+          !dwellMs(DOUBLET_DWELL_MS, label)) return false;
+  }
+  endBlock();
+  return checkAtOrigin("QUICK_E");
+}
+
+void runQuick12Diagnostic() {
+  aborted = false;
+  positionU16 = 0;
+  runIndex = 0;
+  printCsvHeader();
+  logEvent("QUICK12_START", "MRES2_then_MRES1");
+  constexpr uint16_t logicalMres[] = {2, 1};
+  // Native full-step code 8 does not persist on the attached module. Verify
+  // half-step once, then create whole-step endpoints with two contiguous,
+  // verified half-step pulses. This is explicit in the serial labels.
+  if (!applyRunConfiguration(CURRENT_LEVELS[1], 2)) {
+    safeStop("QUICK12_PREFLIGHT_FAILED");
+    return;
+  }
+  digitalWrite(EN_PIN, HIGH);
+  logEvent("QUICK12_PREFLIGHT_OK", "HALF_STEP_NATIVE_FULL_ENDPOINT_PAIRED");
+  for (const uint16_t logicalResolution : logicalMres) {
+    ++runIndex;
+    quickLogicalPulseScale = logicalResolution == 1 ? 2 : 1;
+    if (!applyRunConfiguration(CURRENT_LEVELS[1], 2)) {
+      safeStop(aborted ? "QUICK12_ABORTED" : "QUICK12_FAILED");
+      return;
+    }
+    logEvent("QUICK12_CONFIG_START", logicalResolution == 2
+                 ? "HALF_STEP_NATIVE" : "FULL_STEP_ENDPOINT_PAIRED_HALF");
+    if (!runMarker(logicalResolution == 2 ? "HALF_STEP_START" : "FULL_ENDPOINT_START",
+                   logicalResolution == 2 ? 20 : 30, true) ||
+        !runQuickA1() || !runMarker("QUICK_A2", 10, false) ||
+        !runQuickA2() || !runMarker("QUICK_B", 15, false) ||
+        !runQuickB() || !runMarker("QUICK_E", 20, false) ||
+        !runQuickE() || !checkAtOrigin("QUICK_CONFIG_COMPLETE")) {
+      safeStop(aborted ? "QUICK12_ABORTED" : "QUICK12_FAILED");
+      return;
+    }
+    logEvent("QUICK12_CONFIG_COMPLETE", logicalResolution == 2
+                 ? "HALF_STEP_NATIVE" : "FULL_STEP_ENDPOINT_PAIRED_HALF");
+  }
+  quickLogicalPulseScale = 1;
+  logEvent("QUICK12_COMPLETE", "origin_verified");
+  safeStop("QUICK12_COMPLETE");
+}
+
 void safeStop(const char *reason) {
   digitalWrite(TRIG_OUT_PIN, LOW);
   digitalWrite(EN_PIN, HIGH);
@@ -728,7 +856,7 @@ void setup() {
     return;
   }
   printPlan();
-  Serial.println("# Enter CHECK, VISIBLE, RECOVER38, or RUN. Motion commands enable the motor.");
+  Serial.println("# Enter CHECK, VISIBLE, QUICK12, RECOVER38, or RUN. Motion commands enable the motor.");
 }
 
 void loop() {
@@ -750,6 +878,13 @@ void loop() {
       runVisibleMotion();
       Serial.println("# Enter CHECK, VISIBLE, or RUN.");
     }
+  } else if (command == "QUICK12") {
+    if (!driverConfigured) {
+      Serial.println("# QUICK12 rejected: TMC2209 initialisation did not pass.");
+    } else {
+      runQuick12Diagnostic();
+      Serial.println("# Enter CHECK, VISIBLE, QUICK12, or RUN.");
+    }
   } else if (command == "RUN") {
     if (!driverConfigured) {
       Serial.println("# RUN rejected: TMC2209 initialisation did not pass.");
@@ -768,6 +903,6 @@ void loop() {
     aborted = true;
     safeStop("ABORT_WHILE_IDLE");
   } else if (command.length() > 0) {
-    Serial.println("# Unknown command. Use CHECK, VISIBLE, RECOVER38, RUN, or ABORT.");
+    Serial.println("# Unknown command. Use CHECK, VISIBLE, QUICK12, RECOVER38, RUN, or ABORT.");
   }
 }
