@@ -16,6 +16,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.ticker import FuncFormatter
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,6 +38,27 @@ CONFIG_ORDER = ((4, "I_50pct"), (4, "I_100pct"),
                 (1, "I_50pct"), (1, "I_100pct"))
 D_RATES = ("0.125", "0.375", "1.25", "3.5",
            "9.5", "27.5", "70", "200")
+
+MEASURED_COLOR = "#136f63"
+COMMAND_COLOR = "#d1495b"
+MEASURED_LABEL = "Measured (IDS)"
+COMMAND_LABEL = "Commanded"
+
+# Dedicated-controller SC peak current per relative current level (see
+# HARDWARE_RUNNERS.md): I_50pct -> 200 mA, I_100pct -> 400 mA.
+CURRENT_LABELS = {"I_50pct": "200 mA (50%)", "I_100pct": "400 mA (100%)"}
+CURRENT_SHORT = {"I_50pct": "50% I", "I_100pct": "100% I"}
+
+THOUSANDS_FORMATTER = FuncFormatter(lambda value, _pos: f"{value:,.0f}")
+
+
+def format_current(current):
+    return CURRENT_LABELS.get(current, current)
+
+
+def run_title(run):
+    return (f"Run {run['run_index']} — MRES 1/{run['mres']}, "
+            f"{format_current(run['current'])}")
 
 
 def sha256(path: Path) -> str:
@@ -320,10 +342,20 @@ def measured_window(ids, aligned_nm, start_s, end_s, bin_samples=20):
     return downsample_median(x, y, bin_samples)
 
 
-def style_axis(ax):
-    ax.grid(True, alpha=0.25)
-    ax.set_xlabel("Time (s)")
-    ax.set_ylabel("Position (um)")
+def style_axis(ax, xlabel="Time (s)", ylabel="Position (µm)"):
+    ax.grid(True, alpha=0.3, linewidth=0.6)
+    ax.set_axisbelow(True)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.yaxis.set_major_formatter(THOUSANDS_FORMATTER)
+
+
+def add_shared_legend(fig, ax, ncol=2):
+    handles, labels = ax.get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper right", ncol=ncol, frameon=False,
+               fontsize=9.5, bbox_to_anchor=(0.995, 1.0))
 
 
 def plot_campaign(ids, aligned_nm, runs, campaign_start_s, campaign_end_s):
@@ -331,20 +363,21 @@ def plot_campaign(ids, aligned_nm, runs, campaign_start_s, campaign_end_s):
     x, y = measured_window(ids, aligned_nm, campaign_start_s,
                            campaign_end_s, bin_samples=100)
     fig, ax = plt.subplots(figsize=(15, 5.5), constrained_layout=True)
-    ax.plot(x / 60.0, y, color="#136f63", lw=0.9)
+    ax.plot(x / 60.0, y, color=MEASURED_COLOR, lw=0.9)
     colors = ("#e8f1f2", "#f5e6cc")
     for run in runs:
         left = (run["start_s"] - campaign_start_s) / 60.0
         right = (run["end_s"] - campaign_start_s) / 60.0
         ax.axvspan(left, right, color=colors[(run["run_index"] - 1) % 2],
                    alpha=0.6, zorder=-1)
-        ax.text((left + right) / 2.0, 0.98,
-                f"R{run['run_index']} 1/{run['mres']} {run['current']}",
+        ax.text((left + right) / 2.0, 0.97,
+                f"R{run['run_index']}  1/{run['mres']}, "
+                f"{CURRENT_SHORT.get(run['current'], run['current'])}",
                 transform=ax.get_xaxis_transform(), ha="center", va="top",
-                fontsize=8)
-    ax.set(title="Reliable v3 identification campaign - IDS position",
-           xlabel="Time from campaign start (min)", ylabel="Position (um)")
-    ax.grid(True, alpha=0.25)
+                fontsize=8.5)
+    ax.set_title("Reliable v3 identification campaign — IDS position",
+                 fontsize=14, fontweight="semibold")
+    style_axis(ax, xlabel="Time from campaign start (min)")
     fig.savefig(path, dpi=180)
     plt.close(fig)
     return path
@@ -352,18 +385,22 @@ def plot_campaign(ids, aligned_nm, runs, campaign_start_s, campaign_end_s):
 
 def plot_run_montage(ids, aligned_nm, rows, runs):
     path = ASSET_DIR / "configuration_montage.png"
-    fig, axes = plt.subplots(3, 2, figsize=(15, 11), constrained_layout=True)
+    fig, axes = plt.subplots(3, 2, figsize=(15, 11), sharey=True,
+                             constrained_layout=True)
     for ax, run in zip(axes.flat, runs):
         x, y = measured_window(ids, aligned_nm, run["start_s"],
                                run["end_s"], bin_samples=30)
         cmd_t, cmd_y = command_series(rows, run["start_s"], run["end_s"])
-        ax.plot(x, y, color="#136f63", lw=0.75, label="IDS")
+        ax.plot(x, y, color=MEASURED_COLOR, lw=0.75, label=MEASURED_LABEL)
         ax.step(cmd_t - run["start_s"], cmd_y, where="post",
-                color="#d1495b", lw=0.75, alpha=0.8, label="command")
-        ax.set_title(f"Run {run['run_index']}: 1/{run['mres']}, {run['current']}")
+                color=COMMAND_COLOR, lw=0.75, alpha=0.85, label=COMMAND_LABEL)
+        ax.set_title(run_title(run), fontsize=10.5)
         style_axis(ax)
-    axes[0, 0].legend(loc="best", fontsize=8)
-    fig.suptitle("Six completed identification configurations", fontsize=15)
+    for ax in axes[:, 1:].flat:
+        ax.set_ylabel("")
+    add_shared_legend(fig, axes[0, 0])
+    fig.suptitle("Commanded vs. measured position — six MRES/current "
+                 "configurations", fontsize=15, fontweight="semibold")
     fig.savefig(path, dpi=180)
     plt.close(fig)
     return path
@@ -380,19 +417,22 @@ def find_block(block_records, run_index, pattern):
 def plot_selected_montage(ids, aligned_nm, rows, runs, block_records,
                           pattern, filename, title):
     path = ASSET_DIR / filename
-    fig, axes = plt.subplots(3, 2, figsize=(14, 10), constrained_layout=True)
+    fig, axes = plt.subplots(3, 2, figsize=(14, 10), sharey=True,
+                             constrained_layout=True)
     for ax, run in zip(axes.flat, runs):
         block = find_block(block_records, run["run_index"], pattern)
         x, y = measured_window(ids, aligned_nm, block["start_s"],
                                block["end_s"], bin_samples=10)
         cmd_t, cmd_y = command_series(rows, block["start_s"], block["end_s"])
-        ax.plot(x, y, color="#136f63", lw=0.9, label="IDS")
+        ax.plot(x, y, color=MEASURED_COLOR, lw=0.9, label=MEASURED_LABEL)
         ax.step(cmd_t - block["start_s"], cmd_y, where="post",
-                color="#d1495b", lw=0.85, label="command")
-        ax.set_title(f"Run {run['run_index']}: 1/{run['mres']}, {run['current']}")
+                color=COMMAND_COLOR, lw=0.85, label=COMMAND_LABEL)
+        ax.set_title(run_title(run), fontsize=10.5)
         style_axis(ax)
-    axes[0, 0].legend(loc="best", fontsize=8)
-    fig.suptitle(title, fontsize=15)
+    for ax in axes[:, 1:].flat:
+        ax.set_ylabel("")
+    add_shared_legend(fig, axes[0, 0])
+    fig.suptitle(title, fontsize=15, fontweight="semibold")
     fig.savefig(path, dpi=180)
     plt.close(fig)
     return path
@@ -400,18 +440,23 @@ def plot_selected_montage(ids, aligned_nm, rows, runs, block_records,
 
 def plot_reference_repeatability(ids, aligned_nm, runs, block_records):
     path = ASSET_DIR / "reference_repeatability_montage.png"
-    fig, axes = plt.subplots(3, 2, figsize=(14, 10), constrained_layout=True)
+    fig, axes = plt.subplots(3, 2, figsize=(14, 10), sharey="row",
+                             constrained_layout=True)
     for ax, run in zip(axes.flat, runs):
-        for pattern, label, color in ((r"BLOCK_0_START$", "start", "#136f63"),
-                                      (r"BLOCK_0_END$", "end", "#d1495b")):
+        for pattern, label, color in (
+                (r"^BLOCK_0_START$", "Block start", MEASURED_COLOR),
+                (r"^BLOCK_0_END$", "Block end", COMMAND_COLOR)):
             block = find_block(block_records, run["run_index"], pattern)
             x, y = measured_window(ids, aligned_nm, block["start_s"],
                                    block["end_s"], bin_samples=10)
             ax.plot(x, y, color=color, lw=0.9, label=label)
-        ax.set_title(f"Run {run['run_index']}: 1/{run['mres']}, {run['current']}")
+        ax.set_title(run_title(run), fontsize=10.5)
         style_axis(ax)
-    axes[0, 0].legend(loc="best", fontsize=8)
-    fig.suptitle("Reference block repeatability: start versus end", fontsize=15)
+    for ax in axes[:, 1:].flat:
+        ax.set_ylabel("")
+    add_shared_legend(fig, axes[0, 0])
+    fig.suptitle("Reference block repeatability — run start vs. run end",
+                 fontsize=15, fontweight="semibold")
     fig.savefig(path, dpi=180)
     plt.close(fig)
     return path
@@ -427,18 +472,20 @@ def plot_velocity_montages(ids, aligned_nm, rows, runs, block_records):
         fig, axes = plt.subplots(2, 4, figsize=(16, 7), constrained_layout=True)
         for ax, rate in zip(axes.flat, D_RATES):
             block = find_block(block_records, run["run_index"],
-                               rf"COND_D_RATE_{re.escape(rate)}$")
+                               rf"^D_{re.escape(rate)}$")
             x, y = measured_window(ids, aligned_nm, block["start_s"],
                                    block["end_s"], bin_samples=5)
             cmd_t, cmd_y = command_series(rows, block["start_s"], block["end_s"])
-            ax.plot(x, y, color="#136f63", lw=0.85, label="IDS")
+            ax.plot(x, y, color=MEASURED_COLOR, lw=0.85, label=MEASURED_LABEL)
             ax.step(cmd_t - block["start_s"], cmd_y, where="post",
-                    color="#d1495b", lw=0.8, label="command")
-            ax.set_title(f"D rate {rate}")
+                    color=COMMAND_COLOR, lw=0.8, label=COMMAND_LABEL)
+            ax.set_title(f"{rate} full-steps/s", fontsize=10.5)
             style_axis(ax)
-        axes[0, 0].legend(loc="best", fontsize=8)
-        fig.suptitle(f"Velocity sequence - run {run['run_index']}, "
-                     f"1/{run['mres']}, {run['current']}", fontsize=14)
+        for ax in axes[:, 1:].flat:
+            ax.set_ylabel("")
+        add_shared_legend(fig, axes[0, 0])
+        fig.suptitle(f"Velocity-plateau sequence — {run_title(run)}",
+                     fontsize=14, fontweight="semibold")
         fig.savefig(path, dpi=170)
         plt.close(fig)
         paths.append(path)
@@ -465,8 +512,8 @@ def main():
         plot_campaign(ids, aligned_nm, runs, campaign_start, campaign_end),
         plot_run_montage(ids, aligned_nm, rows, runs),
         plot_selected_montage(ids, aligned_nm, rows, runs, blocks,
-                              r"COND_C$", "creep_c_montage.png",
-                              "Condition C - slow/creep motion"),
+                              r"^C$", "creep_c_montage.png",
+                              "Condition C — slow/creep motion"),
         plot_reference_repeatability(ids, aligned_nm, runs, blocks),
     ]
     assets.extend(plot_velocity_montages(ids, aligned_nm, rows, runs, blocks))
