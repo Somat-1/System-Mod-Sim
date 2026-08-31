@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rev 4 Analytical Model Derivation — Newton Approach, Nonlinear Detent and LuGre Friction</title>
+<script>
+window.MathJax = {tex: {inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]']]}, svg: {fontCache: 'local'}};
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+:root{
+  --bg:#fbfaf7; --panel:#ffffff; --ink:#1d2126; --ink-soft:#4b535c;
+  --rule:#dcd8ce; --accent:#8a5a2b; --accent-soft:#f3e9db;
+  --toggle-bg:#f6f3ec; --toggle-border:#d8cfba; --code-bg:#f1efe8;
+  --link:#8a5a2b; --warn-bg:#fbeee0; --warn-border:#d9a86c;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#15181c; --panel:#1b1f24; --ink:#e8e6e1; --ink-soft:#aab0b8;
+    --rule:#333a41; --accent:#d5a35c; --accent-soft:#2a2620;
+    --toggle-bg:#20252b; --toggle-border:#343c44; --code-bg:#20242a;
+    --link:#e0b26e; --warn-bg:#2c2419; --warn-border:#7a5326;
+  }
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);}
+body{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;line-height:1.6;font-size:16.5px;}
+.wrap{max-width:920px;margin:0 auto;padding:2.2rem 1.6rem 6rem;}
+header.doc-head{border-bottom:1px solid var(--rule);padding-bottom:1.4rem;margin-bottom:1.8rem;}
+header.doc-head h1{font-size:1.65rem;line-height:1.3;margin:0 0 .4rem;font-weight:600;}
+header.doc-head .subtitle{color:var(--ink-soft);font-size:1rem;margin:0 0 .9rem;}
+.toolbar{display:flex;gap:.5rem;flex-wrap:wrap;}
+.toolbar button{
+  font-family:inherit;font-size:.82rem;background:var(--panel);color:var(--ink);
+  border:1px solid var(--rule);border-radius:6px;padding:.35rem .7rem;cursor:pointer;
+}
+.toolbar button:hover{border-color:var(--accent);color:var(--accent);}
+nav.toc{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:1.1rem 1.4rem;margin:1.6rem 0 2.4rem;}
+nav.toc h2{font-size:.95rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin:0 0 .6rem;font-weight:600;}
+nav.toc ol{margin:0;padding-left:1.2rem;}
+nav.toc li{margin:.15rem 0;}
+nav.toc a{color:var(--link);text-decoration:none;}
+nav.toc a:hover{text-decoration:underline;}
+nav.toc .sub{list-style:lower-alpha;font-size:.95em;}
+h2.chapter{font-size:1.4rem;margin:2.6rem 0 .3rem;padding-top:1.4rem;border-top:2px solid var(--accent);}
+h3{font-size:1.12rem;margin:1.8rem 0 .5rem;color:var(--ink);}
+h3 .num{color:var(--accent);font-weight:600;margin-right:.4rem;}
+p{margin:.7rem 0;}
+.lede{color:var(--ink-soft);font-size:.98rem;}
+a{color:var(--link);}
+code{font-family:"SFMono-Regular",Consolas,Menlo,monospace;background:var(--code-bg);padding:.1rem .3rem;border-radius:4px;font-size:.88em;}
+table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.92rem;}
+th,td{border:1px solid var(--rule);padding:.4rem .6rem;text-align:left;vertical-align:top;}
+th{background:var(--toggle-bg);font-weight:600;}
+tbody tr:nth-child(even){background:color-mix(in srgb, var(--panel) 92%, var(--rule));}
+.note{background:var(--panel);border-left:3px solid var(--accent);padding:.7rem 1rem;margin:1rem 0;border-radius:0 6px 6px 0;font-size:.95rem;color:var(--ink-soft);}
+.warn{background:var(--warn-bg);border-left:3px solid var(--warn-border);padding:.7rem 1rem;margin:1rem 0;border-radius:0 6px 6px 0;font-size:.95rem;}
+details.toggle{
+  background:var(--toggle-bg);border:1px solid var(--toggle-border);border-radius:8px;
+  margin:.9rem 0 1.4rem;padding:.15rem .9rem;
+}
+details.toggle[open]{padding-bottom:.9rem;}
+details.toggle summary{
+  cursor:pointer;padding:.6rem 0;font-weight:600;font-size:.92rem;color:var(--accent);
+  list-style:none;display:flex;align-items:center;gap:.5rem;
+}
+details.toggle summary::-webkit-details-marker{display:none;}
+details.toggle summary::before{content:"▸";display:inline-block;transition:transform .15s;font-size:.8em;}
+details.toggle[open] summary::before{transform:rotate(90deg);}
+details.toggle summary .tag{
+  font-weight:500;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;font-size:.72rem;
+  background:var(--accent-soft);padding:.1rem .5rem;border-radius:999px;
+}
+.mjx-content, mjx-container{overflow-x:auto;overflow-y:hidden;max-width:100%;}
+.eq-block{overflow-x:auto;padding:.2rem 0;}
+figure{margin:1.4rem 0;text-align:center;}
+figure svg{max-width:100%;height:auto;background:var(--panel);border:1px solid var(--rule);border-radius:8px;}
+figcaption{font-size:.85rem;color:var(--ink-soft);margin-top:.5rem;}
+.provenance{font-size:.88rem;color:var(--ink-soft);}
+.provenance code{font-size:.85em;}
+hr.chapter-end{border:none;border-top:1px dashed var(--rule);margin:2.4rem 0;}
+footer{margin-top:3rem;padding-top:1.2rem;border-top:1px solid var(--rule);color:var(--ink-soft);font-size:.85rem;}
+.badge{display:inline-block;font-size:.72rem;background:var(--accent-soft);color:var(--accent);padding:.1rem .5rem;border-radius:999px;margin-left:.4rem;vertical-align:middle;}
+::selection{background:var(--accent-soft);}
+.eq-wrap{position:relative;margin:.9rem 0;}
+.eq-wrap .eq-block{margin:0;padding-right:2.1rem;}
+.eq-copy-btn{
+  position:absolute;top:.15rem;right:0;z-index:2;
+  display:inline-flex;align-items:center;gap:.3rem;
+  font-family:"SFMono-Regular",Consolas,Menlo,monospace;font-size:.7rem;letter-spacing:.02em;
+  background:var(--panel);color:var(--ink-soft);border:1px solid var(--rule);border-radius:6px;
+  padding:.2rem .45rem;cursor:pointer;opacity:.55;transition:opacity .12s,color .12s,border-color .12s;
+}
+.eq-wrap:hover .eq-copy-btn{opacity:1;}
+.eq-copy-btn:hover{color:var(--accent);border-color:var(--accent);opacity:1;}
+.eq-copy-btn:disabled{cursor:default;opacity:.3;}
+.eq-copy-btn[data-state="ok"]{color:#3f8f5f;border-color:#3f8f5f;opacity:1;}
+.eq-copy-btn[data-state="err"]{color:#b0503f;border-color:#b0503f;opacity:1;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc-head">
+  <h1>Rev 4 Analytical Model Derivation</h1>
+  <p class="subtitle">Newton (free-body) derivation of the frictionless baseline, then the nonlinear detent torque and nonlinear LuGre friction implemented on top of it.</p>
+  <div class="toolbar">
+    <button onclick="setAllDetails(true)">Expand all</button>
+    <button onclick="setAllDetails(false)">Collapse all</button>
+    <button onclick="toggleTheme()">Toggle theme</button>
+  </div>
+</header>
+
+<p>This document derives the Rev 4 six-coordinate drivetrain model by direct application of <strong>Newton's second law to each free body</strong> (a force/torque-balance derivation, as opposed to the parallel energy-based Lagrangian reconstruction kept elsewhere in the workspace). Chapter 1 builds the linear frictionless baseline this way. Chapter 2 keeps that structural plant in place and adds the two nonlinearities that sit on top of it in the executed model: the sinusoidal detent (cogging) torque, and LuGre friction at three ports, injected through a generalized Jacobian/virtual-power formulation. Every generalized expression below is followed by a toggle containing its fully expanded matrix or scalar form.</p>
+
+<div class="note">
+Primary sources, reproduced and reorganized here rather than duplicated by hand: <code>Rev 4/state_space_6dof.md</code> (Newton baseline) and <code>Rev 4/lugre_friction/Rev 4.2/README.md</code> (parallel nonlinear detent + LuGre extension). Numerical parameter values are read from the corresponding <code>model_parameters.json</code> files. See <a href="#sec-provenance">§ Provenance</a>.
+</div>
+
+<nav class="toc">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#ch1">Chapter 1 — Newton free-body derivation of the frictionless baseline</a>
+      <ol class="sub">
+        <li><a href="#s11">Kinematic convention</a></li>
+        <li><a href="#s12">Generalized coordinates</a></li>
+        <li><a href="#s13">Generic two-node element and Newton's third law</a></li>
+        <li><a href="#s14">Elemental constitutive relations</a></li>
+        <li><a href="#s15">Newton's second law per body</a></li>
+        <li><a href="#s16">Second-order matrix assembly</a></li>
+        <li><a href="#s17">First-order state-space form</a></li>
+      </ol>
+    </li>
+    <li><a href="#ch2">Chapter 2 — Nonlinear detent torque and LuGre friction on top of the baseline</a>
+      <ol class="sub">
+        <li><a href="#s21">Where the nonlinearity enters</a></li>
+        <li><a href="#s22">Nonlinear detent torque</a></li>
+        <li><a href="#s23">Friction ports: generalized Jacobian formulation</a></li>
+        <li><a href="#s24">LuGre constitutive law at a generic port</a></li>
+        <li><a href="#s25">Why the screw–nut branches are parallel</a></li>
+        <li><a href="#s26">Assembled nonlinear equations of motion</a></li>
+        <li><a href="#s27">Full nonlinear state-space model</a></li>
+        <li><a href="#s28">Parameter values used</a></li>
+      </ol>
+    </li>
+    <li><a href="#sec-provenance">Provenance</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ CHAPTER 1 ============================================================ -->
+
+<h2 class="chapter" id="ch1">Chapter 1 — Newton free-body derivation of the frictionless baseline</h2>
+<p class="lede">Six retained coordinates, linear elements throughout, all friction forces set to zero. This is the common structural plant that Chapter 2 builds on.</p>
+
+<h3 id="s11"><span class="num">1.1</span>Kinematic convention</h3>
+<p>Positive screw rotation \(\theta^{+}\) drives positive stage translation \(x^{+}\). With lead \(L\), the ideal (no-slip) kinematic ratio is</p>
+<div class="eq-wrap"><button class="eq-copy-btn" type="button" onclick="copyEquationPng(this)" title="Copy equation as a white-on-transparent PNG" aria-label="Copy equation as PNG">Copy PNG</button><div class="eq-block">\[
+x=\frac{L}{2\pi}\,\theta,\qquad \frac{\partial\theta}{\partial x}=\frac{2\pi}{L}.
+\]</div></div>
+<p>This ratio, abbreviated \(r=\dfrac{L}{2\pi}\) from Chapter 2 onward, is what reflects the axial screw–nut contact into the rotational equations and vice versa. All stiffness and damping elements below act on <em>relative</em> coordinates; every element is linear in this chapter.</p>
+
+<h3 id="s12"><span class="num">1.2</span>Generalized coordinates</h3>
+<div class="eq-wrap"><button class="eq-copy-btn" type="button" onclick="copyEquationPng(this)" title="Copy equation as a white-on-transparent PNG" aria-label="Copy equation as PNG">Copy PNG</button><div class="eq-block">\[
+\mathbf q=\begin{bmatrix}\theta_m&\theta_c&\theta_s&\theta_{sb}&x_s&x_n\end{bmatrix}^{\mathsf T}
+\]</div></div>
+<table>
+<thead><tr><th>Index</th><th>Symbol</th><th>Body</th><th>Inertia</th><th>Unit</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>\(\theta_m\)</td><td>Motor rotor</td><td>\(I_m\)</td><td>rad</td></tr>
+<tr><td>2</td><td>\(\theta_c\)</td><td>Bellows coupling</td><td>\(I_c\)</td><td>rad</td></tr>
+<tr><td>3</td><td>\(\theta_s\)</td><td>Screw shaft, rotation</td><td>\(I_s\)</td><td>rad</td></tr>
+<tr><td>4</td><td>\(\theta_{sb}\)</td><td>Support-bearing inner ring</td><td>\(I_{sb}\)</td><td>rad</td></tr>
+<tr><td>5</td><td>\(x_s\)</td><td>Screw shaft, axial</td><td>\(M_{screw}\)</td><td>m</td></tr>
+<tr><td>6</td><td>\(x_n\)</td><td>Nut and stage assembly</td><td>\(M_s\)</td><td>m</td></tr>
+</tbody>
+</table>
+<p>Six coordinates, six free bodies: the derivation strategy is to isolate each one, sum the torques or forces acting on it from its constitutive elements, and set the sum equal to \(I\ddot\theta\) or \(m\ddot x\).</p>
+
+<h3 id="s13"><span class="num">1.3</span>Generic two-node element and Newton's third law</h3>
+<p>Every coupling in this model — torsional or axial — is an instance of one generic template: a spring/damper pair connecting two coordinates \(q_a\) and \(q_b\),</p>
+<div class="eq-wrap"><button class="eq-copy-btn" type="button" onclick="copyEquationPng(this)" title="Copy equation as a white-on-transparent PNG" aria-label="Copy equation as PNG">Copy PNG</button><div class="eq-block">\[
+\mathcal F_i = k_i\,(q_a-q_b)\;+\;c_i\,(\dot q_a-\dot q_b).
+\]</div></div>
+<p>Newton's third law fixes how this enters the two free-body sums: \(\mathcal F_i\) appears with a \(+\) sign as the driving action on the downstream body and with a \(-\) sign as the equal-and-opposite reaction on the upstream body. This one template, instantiated four times (once per coupling below), is what produces every off-diagonal term in \(\mathbf K\) and \(\mathbf C\) in §1.6 — the diagonal terms are just the sum of every element template touching that node.</p>
+
+<h3 id="s14"><span class="num">1.4</span>Elemental constitutive relations</h3>
+<p><strong>Electromagnetic torque</strong> (linearized about the commanded equilibrium; \(N_r\) rotor teeth, holding torque \(T_{hold}\)):</p>
+<div class="eq-wrap"><button class="eq-copy-btn" type="button" onclick="copyEquationPng(this)" title="Copy equation as a white-on-transparent PNG" aria-label="Copy equation as PNG">Copy PNG</button><div class="eq-block">\[
+T_{EM}=k_{EM}(\theta_{cmd}-\theta_m)\;\big[+\,c_{EM}(\dot\theta_{cmd}-\dot\theta_m)\big],\qquad k_{EM}=N_r T_{hold}.
+\]</div></div>
+<details class="toggle"><summary><span class="tag">Implementation note</span>Which half of \(c_{EM}\) is actually used</summary>
+<p>As implemented, \(c_{EM}\) acts only as plain viscous damping of \(\theta_m\) against a fixed frame (it lands on \(\mathbf C_{11}\) alone), not the literal relative-velocity term against \(\dot\theta_{cmd}\) shown above. The commanded trajectory used downstream is a STEP/DIR staircase, and its time derivative is a train of Dirac impulses — not representable on the finite simulation grid — so the \(\dot\theta_{cmd}\) half of this term is dropped rather than approximated. \(c_{EM}\) was sized by bisection to bring the first structural mode (176.7 Hz, the whole rotational chain moving almost rigidly against \(k_{EM}\)) to a damping ratio of 0.02; without it that mode came out at \(\zeta_1\approx4.9\times10^{-5}\), an impractical ~74 s settling time.</p>
+</details>
+
+<p><strong>Detent (cogging) torque</strong>, linearized here for the frictionless baseline (the nonlinear form is retained and used directly in Chapter 2):</p>
+<div class="eq-wrap"><button class="eq-copy-btn" type="button" onclick="copyEquationPng(this)" title="Copy equation as a white-on-transparent PNG" aria-label="Copy equation as PNG">Copy PNG</button><div class="eq-block">\[
+T_{det}=T_d\sin(4N_r\theta_m)\;\xrightarrow[\sin\phi\approx\phi]{}\;k_d\,\theta_m,\qquad k_d=4N_rT_d.
+\]</div></div>
+<p>The factor \(4N_r\) gives 200 detent cycles per revolution for a 1.8° hybrid motor (\(N_r=50\)) — one period per full step.</p>
+
+<p><strong>Torsional couplings</strong> (instances of the §1.3 template):</p>
+<div class="eq-wrap"><button class="eq-copy-btn" type="button" onclick="copyEquationPng(this)" title="Copy equation as a white-on-transparent PNG" aria-label="Copy equation as PNG">Copy PNG</button><div class="eq-block">\[
+\begin{aligned}
+T_{c}&=k_{c}(\theta_m-\theta_c)+c_{c}(\dot\theta_m-\dot\theta_c)\\
+T_{s1}&=k_{s1}(\theta_c-\theta_s)+c_{s1}(\dot\theta_c-\dot\theta_s)\\
+T_{s2}&=k_{s2}(\theta_s-\theta_{sb})+c_{s2}(\dot\theta_s-\dot\theta_{sb})
+\end{aligned}
+\]</div></div>
+
+<p><strong>Axial couplings:</strong></p>
+<div class="eq-wrap"><button class="eq-copy-btn" type="button" onclick="copyEquationPng(this)" title="Copy equation as a white-on-transparent PNG" aria-label="Copy equation as PNG">Copy PNG</button><div class="eq-block">\[
+\begin{aligned}
+F_{nut}&=k_{nut}\Big(x_n-x_s-\tfrac{L}{2\pi}\theta_s\Big)+c_{nut}\Big(\dot x_n-\dot x_s-\tfrac{L}{2\pi}\dot\theta_s\Big)\\
+F_{ax,\text{react}}&=k_{brg}\,x_s+c_{brg}\,\dot x_s
+\end{aligned}
+\]</div></div>
+<p>\(F_{nut}\) is not quite the bare §1.3 template: the screw's rotational coordinate is reflected into the axial deformation through the lead ratio \(r=L/2\pi\), because the nut's ideal no-slip position is \(x_s+r\theta_s\), not \(x_s\). The bracket is <em>actual nut position minus ideal no-slip position</em>, \(x_n-x_s-r\theta_s\), fixed so that positive \(\theta_s\) drives positive \(x_n\). \(F_{ax,\text{react}}\) is a single-node grounded spring/damper (the support-bearing pair), the degenerate case of the template with \(q_b\equiv0\).</p>
+
+<h3 id="s15"><span class="num">1.5</span>Newton's second law per body</h3>
+<p>For each of the six free bodies, sum the constitutive torques/forces from §1.4 (with §1.3 sign conventions) and set the result equal to \(I\ddot\theta\) or \(m\ddot x\):</p>
+<div class="eq-wrap"><button class="eq-copy-btn" type="button" onclick="copyEquationPng(this)" title="Copy equation as a white-on-transparent PNG" aria-label="Copy equation as PNG">Copy PNG</button><div class="eq-block">\[
+\begin{aligned}
+\text{(1) Motor rotor:}&& T_{EM}-T_{det}-T_{c,\text{react}}&=I_m\ddot\theta_m\\
+\text{(2) Coupling:}&& T_{c,\text{drive}}-T_{s1,\text{react}}&=I_c\ddot\theta_c\\
+\text{(3) Screw rotation:}&& T_{s1,\text{drive}}-\tfrac{L}{2\pi}F_{nut}-T_{s2,\text{react}}&=I_s\ddot\theta_s\\
+\text{(4) Support bearing:}&& T_{s2,\text{drive}}&=I_{sb}\ddot\theta_{sb}\\
+\text{(5) Screw axial:}&& F_{nut}-F_{ax,\text{react}}&=M_{screw}\ddot x_s\\
+\text{(6) Nut and stage:}&& -F_{nut}&=M_s\ddot x_n
+\end{aligned}
+\]</div></div>
+<p>Equation (3) is the one place the \(L/2\pi\) lead ratio appears as a torque arm: \(F_{nut}\) is an axial force, so its reaction on the rotational screw coordinate is the moment \(r F_{nut}\), consistent with virtual work at the interface.</p>
+
+<details class="toggle">
+<summary><span class="tag">Expand</span>Fully substituted scalar equations of motion</summary>
+<div class="eq-block">\[
+\begin{aligned}
+\text{(1)}\quad
+& k_{EM}(\theta_{cmd}-\theta_m)-T_d\sin(4N_r\theta_m)
+-\Big[k_c(\theta_m-\theta_c)+c_c(\dot\theta_m-\dot\theta_c)\Big]
+=I_m\ddot\theta_m\\[1.2ex]
+\text{(2)}\quad
+& \Big[k_c(\theta_m-\theta_c)+c_c(\dot\theta_m-\dot\theta_c)\Big]
+-\Big[k_{s1}(\theta_c-\theta_s)+c_{s1}(\dot\theta_c-\dot\theta_s)\Big]
+=I_c\ddot\theta_c\\[1.2ex]
+\text{(3)}\quad
+& \Big[k_{s1}(\theta_c-\theta_s)+c_{s1}(\dot\theta_c-\dot\theta_s)\Big]
+-\frac{L}{2\pi}\Big[k_{nut}\big(x_n-x_s-\tfrac{L}{2\pi}\theta_s\big)+c_{nut}\big(\dot x_n-\dot x_s-\tfrac{L}{2\pi}\dot\theta_s\big)\Big]\\
+&\qquad -\Big[k_{s2}(\theta_s-\theta_{sb})+c_{s2}(\dot\theta_s-\dot\theta_{sb})\Big]
+=I_s\ddot\theta_s\\[1.2ex]
+\text{(4)}\quad
+& \Big[k_{s2}(\theta_s-\theta_{sb})+c_{s2}(\dot\theta_s-\dot\theta_{sb})\Big]
+=I_{sb}\ddot\theta_{sb}\\[1.2ex]
+\text{(5)}\quad
+& \Big[k_{nut}\big(x_n-x_s-\tfrac{L}{2\pi}\theta_s\big)+c_{nut}\big(\dot x_n-\dot x_s-\tfrac{L}{2\pi}\dot\theta_s\big)\Big]
+-\Big[k_{brg}x_s+c_{brg}\dot x_s\Big]
+=M_{screw}\ddot x_s\\[1.2ex]
+\text{(6)}\quad
+& -\Big[k_{nut}\big(x_n-x_s-\tfrac{L}{2\pi}\theta_s\big)+c_{nut}\big(\dot x_n-\dot x_s-\tfrac{L}{2\pi}\dot\theta_s\big)\Big]
+=M_s\ddot x_n
+\end{aligned}
+\]</div>
+<p style="margin-top:.8rem" class="lede">The frictionless baseline itself linearizes \(\sin(4N_r\theta_m)\to4N_r\theta_m\) in equation (1) before assembling the matrix form of §1.6 — that is the one step that turns detent from a nonlinear term into the \(k_d\) entry of \(\mathbf K\). Chapter 2 removes this linearization.</p>
+</details>
+
+<h3 id="s16"><span class="num">1.6</span>Second-order matrix assembly</h3>
+<p>Collecting the six scalar equations of §1.5 (with the small-angle detent substitution) into vector form:</p>
+<div class="eq-wrap"><button class="eq-copy-btn" type="button" onclick="copyEquationPng(this)" title="Copy equation as a white-on-transparent PNG" aria-label="Copy equation as PNG">Copy PNG</button><div class="eq-block">\[
+\mathbf M\ddot{\mathbf q}+\mathbf C\dot{\mathbf q}+\mathbf K\mathbf q=\mathbf B_u\mathbf u,\qquad \mathbf u=\theta_{cmd}.
+\]</div></div>
+<p><strong>Assembly rule</strong> (this is the generalized statement — it is what produces every entry below by inspection, without re-deriving free-body sums row by row): for element \(i\) with stiffness \(k_i\) connecting node \(a\) to node \(b\) (or to ground), its contribution to \(\mathbf K\) is the rank-1, positive-semidefinite outer product \(k_i\,\mathbf c_i\mathbf c_i^{\mathsf T}\) where \(\mathbf c_i\) has \(+1\) at \(a\), \(-1\) at \(b\) (or just \(+1\) at \(a\) if grounded), and the lead-ratio weight \(r=L/2\pi\) where the element crosses the rotational/axial reflection. Every diagonal entry of \(\mathbf K\) is therefore the sum of every element template touching that node; every off-diagonal entry is \(-k_i\) (or \(-r k_i\), \(-r^2k_i\)) for the single element connecting those two nodes. \(\mathbf C\) is assembled identically from the \(c_i\).</p>
+<div class="eq-wrap"><button class="eq-copy-btn" type="button" onclick="copyEquationPng(this)" title="Copy equation as a white-on-transparent PNG" aria-label="Copy equation as PNG">Copy PNG</button><div class="eq-block">\[
+\mathbf M=\operatorname{diag}\big(I_m,\,I_c,\,I_s,\,I_{sb},\,M_{screw},\,M_s\big)
+\]</div></div>
+
+<details class="toggle">
+<summary><span class="tag">Expand</span>Full \(6\times6\) \(\mathbf K\), \(\mathbf C\) and \(\mathbf B_u\)</summary>
+<div class="eq-block">\[
+\mathbf K=
+\begin{bmatrix}
+k_c+k_{EM}+k_d & -k_c & 0 & 0 & 0 & 0 \\
+-k_c & k_c+k_{s1} & -k_{s1} & 0 & 0 & 0 \\
+0 & -k_{s1} & k_{s1}+k_{s2}+\left(\dfrac{L}{2\pi}\right)^2\! k_{nut} & -k_{s2} & \dfrac{L}{2\pi}k_{nut} & -\dfrac{L}{2\pi}k_{nut} \\
+0 & 0 & -k_{s2} & k_{s2} & 0 & 0 \\
+0 & 0 & \dfrac{L}{2\pi}k_{nut} & 0 & k_{brg}+k_{nut} & -k_{nut} \\
+0 & 0 & -\dfrac{L}{2\pi}k_{nut} & 0 & -k_{nut} & k_{nut}
+\end{bmatrix}
+\]</div>
+<div class="eq-block">\[
+\mathbf C=
+\begin{bmatrix}
+c_c+c_{EM} & -c_c & 0 & 0 & 0 & 0 \\
+-c_c & c_c+c_{s1} & -c_{s1} & 0 & 0 & 0 \\
+0 & -c_{s1} & c_{s1}+c_{s2}+\left(\dfrac{L}{2\pi}\right)^2\! c_{nut} & -c_{s2} & \dfrac{L}{2\pi}c_{nut} & -\dfrac{L}{2\pi}c_{nut} \\
+0 & 0 & -c_{s2} & c_{s2} & 0 & 0 \\
+0 & 0 & \dfrac{L}{2\pi}c_{nut} & 0 & c_{brg}+c_{nut} & -c_{nut} \\
+0 & 0 & -\dfrac{L}{2\pi}c_{nut} & 0 & -c_{nut} & c_{nut}
+\end{bmatrix}
+\]</div>
+<div class="eq-block">\[
+\mathbf B_u=\begin{bmatrix}k_{EM}\\0\\0\\0\\0\\0\end{bmatrix}
+\]</div>
+<p class="lede">The baseline has one command input; the structural screw–nut contact is embedded directly in \(\mathbf K\)/\(\mathbf C\), not carried as an input. Note \(\mathbf K_{11}\) carries \(+k_d\): this is the one entry that disappears in Chapter 2, where detent is kept nonlinear instead of tangent-linearized into the stiffness matrix.</p>
+</details>
+
+<h3 id="s17"><span class="num">1.7</span>First-order state-space form</h3>
+<p>With state \(\mathbf z=[\mathbf q;\dot{\mathbf q}]\) (12 states):</p>
+<div class="eq-wrap"><button class="eq-copy-btn" type="button" onclick="copyEquationPng(this)" title="Copy equation as a white-on-transparent PNG" aria-label="Copy equation as PNG">Copy PNG</button><div class="eq-block">\[
+\dot{\mathbf z}=\mathbf A\mathbf z+\mathbf B\mathbf u,\qquad
+\mathbf A=\begin{bmatrix}\mathbf 0_{6\times6}&\mathbf I_{6\times6}\\-\mathbf M^{-1}\mathbf K&-\mathbf M^{-1}\mathbf C\end{bmatrix},\qquad
+\mathbf B=\begin{bmatrix}\mathbf 0_{6\times1}\\\mathbf M^{-1}\mathbf B_u\end{bmatrix}.
+\]</div></div>
+<p>Output — stage position and the open-loop tracking error against the ideal kinematic command:</p>
+<div class="eq-wrap"><button class="eq-copy-btn" type="button" onclick="copyEquationPng(this)" title="Copy equation as a white-on-transparent PNG" aria-label="Copy equation as PNG">Copy PNG</button><div class="eq-block">\[
+y=x_n=\mathbf C_y\mathbf z,\quad \mathbf C_y=\big[0\;0\;0\;0\;0\;1\;0\;0\;0\;0\;0\;0\big],\qquad
+e(t)=\frac{L}{2\pi}\theta_{cmd}(t)-x_n(t).
+\]</div></div>
+<details class="toggle">
+<summary><span class="tag">Note</span>Numerical conditioning of \(\mathbf A\)</summary>
+<p>\(\mathbf M\) is diagonal by construction, so \(\mathbf M^{-1}\) is an explicit diagonal inverse — no factorization needed. Rotational and translational state entries differ in scale by roughly \(2\pi/L\approx6.28\times10^3\) with \(L=1\ \text{mm}\), which badly conditions the raw \(\mathbf A\) for eigenanalysis; the implementation scales the state vector before extracting modes. A rigid-body check (\(k_d=0\), \(k_{brg}=0\)) should show a free rigid-body mode in the axial block; this is the basic sanity test on the assembly of §1.6.</p>
+</details>
+
+<hr class="chapter-end">
+
+<!-- ============================================================ CHAPTER 2 ============================================================ -->
+
+<h2 class="chapter" id="ch2">Chapter 2 — Nonlinear detent torque and LuGre friction on top of the baseline</h2>
+<p class="lede">The structural plant of Chapter 1 — \(\mathbf M\), \(\mathbf K\), \(\mathbf C\), including the structural screw–nut contact \(k_{nut}\)/\(c_{nut}\) — stays load-bearing and unmodified. Two nonlinearities are added on top of it, each entering as an explicit generalized force rather than a linearized matrix entry: the sinusoidal detent torque, and LuGre friction at three physical ports (guideway, screw–nut, support bearing), injected through a Jacobian/virtual-power formulation so that reaction signs never have to be assigned by hand at each equation.</p>
+
+<h3 id="s21"><span class="num">2.1</span>Where the nonlinearity enters</h3>
+<p>The governing equation gains two additive terms relative to §1.6, and loses the \(k_d\) entry that the baseline used to approximate one of them:</p>
+<div class="eq-wrap"><button class="eq-copy-btn" type="button" onclick="copyEquationPng(this)" title="Copy equation as a white-on-transparent PNG" aria-label="Copy equation as PNG">Copy PNG</button><div class="eq-block">\[
+\mathbf M\ddot{\mathbf q}+\mathbf C\dot{\mathbf q}+\mathbf K\mathbf q
+=\mathbf G\,\theta_{cmd}+\mathbf Q_{fric}-\mathbf e_m\,T_d\sin(4N_r\theta_m),
+\]</div></div>
+<p>with \(\mathbf G=[k_{EM},0,0,0,0,0]^{\mathsf T}\) (identical to \(\mathbf B_u\) in §1.6) and \(\mathbf e_m=[1,0,0,0,0,0]^{\mathsf T}\). \(\mathbf M\) and \(\mathbf C\) are unchanged from §1.6.</p>
+<details class="toggle">
+<summary><span class="tag">Expand</span>\(\mathbf K\) without the linearized detent term</summary>
+<div class="eq-block">\[
+\mathbf K=
+\begin{bmatrix}
+k_c+k_{EM} & -k_c & 0 & 0 & 0 & 0 \\
+-k_c & k_c+k_{s1} & -k_{s1} & 0 & 0 & 0 \\
+0 & -k_{s1} & k_{s1}+k_{s2}+r^2k_{nut} & -k_{s2} & rk_{nut} & -rk_{nut} \\
+0 & 0 & -k_{s2} & k_{s2} & 0 & 0 \\
+0 & 0 & rk_{nut} & 0 & k_{brg}+k_{nut} & -k_{nut} \\
+0 & 0 & -rk_{nut} & 0 & -k_{nut} & k_{nut}
+\end{bmatrix},\qquad r=\frac{L}{2\pi}.
+\]</div>
+<p class="lede">Same topology as §1.6, with the \(k_d\) term at \(\mathbf K_{11}\) removed: detent is evaluated as the exact nonlinear torque in the equation above instead of being folded into the stiffness matrix. \(\mathbf C\) is exactly the §1.6 damping matrix, unchanged.</p>
+</details>
+
+<h3 id="s22"><span class="num">2.2</span>Nonlinear detent torque</h3>
+<p>Chapter 1 linearized \(T_{det}=T_d\sin(4N_r\theta_m)\approx k_d\theta_m\) for validity near a single equilibrium. That approximation holds only for \(\theta_m\ll1/(4N_r)\approx5\ \text{mrad}\), roughly a quarter of one full step — too narrow for the stepping trajectories the nonlinear model is meant to reproduce. Chapter 2 therefore keeps the exact sinusoid and applies it as a generalized torque directly on the motor coordinate, as already written into the governing equation of §2.1:</p>
+<div class="eq-wrap"><button class="eq-copy-btn" type="button" onclick="copyEquationPng(this)" title="Copy equation as a white-on-transparent PNG" aria-label="Copy equation as PNG">Copy PNG</button><div class="eq-block">\[
+\text{generalized detent force vector: } -\mathbf e_m\,T_d\sin(4N_r\theta_m)=\begin{bmatrix}-T_d\sin(4N_r\theta_m)\\0\\0\\0\\0\\0\end{bmatrix}.
+\]</div></div>
+<p>Everything else in the motor-rotor row is unchanged from §1.5 equation (1); only the detent term switches from its tangent \(k_d\theta_m\) to the exact nonlinear expression.</p>
+
+<h3 id="s23"><span class="num">2.3</span>Friction ports: generalized Jacobian formulation</h3>
+<p>Each friction port \(p\) has a scalar relative velocity extracted from the full coordinate-rate vector by a fixed row Jacobian:</p>
+<div class="eq-wrap"><button class="eq-copy-btn" type="button" onclick="copyEquationPng(this)" title="Copy equation as a white-on-transparent PNG" aria-label="Copy equation as PNG">Copy PNG</button><div class="eq-block">\[
+v_p=\mathbf J_p\dot{\mathbf q}.
+\]</div></div>
+<p>Let \(F_p\) be the scalar friction force/torque at that port, defined positive when it opposes positive \(v_p\). The power it removes from the mechanical coordinates is \(-v_pF_p\), so the generalized force it contributes must satisfy</p>
+<div class="eq-wrap"><button class="eq-copy-btn" type="button" onclick="copyEquationPng(this)" title="Copy equation as a white-on-transparent PNG" aria-label="Copy equation as PNG">Copy PNG</button><div class="eq-block">\[
+\dot{\mathbf q}^{\mathsf T}\mathbf Q_{fric,p}=-v_pF_p.
+\]</div></div>
+<p>Substituting \(v_p=\mathbf J_p\dot{\mathbf q}\) and requiring this to hold for every \(\dot{\mathbf q}\) gives the generalized injection rule used for all three ports:</p>
+<div class="eq-wrap"><button class="eq-copy-btn" type="button" onclick="copyEquationPng(this)" title="Copy equation as a white-on-transparent PNG" aria-label="Copy equation as PNG">Copy PNG</button><div class="eq-block">\[
+\boxed{\;\mathbf Q_{fric,p}=-\mathbf J_p^{\mathsf T}F_p\;}
+\]</div></div>
+<p>This one rule replaces assigning a reaction sign by hand in each mechanical equation — every port uses the identical template, differing only in its Jacobian.</p>
+<details class="toggle">
+<summary><span class="tag">Expand</span>The three port Jacobians and \(\mathbf Q_{fric}\)</summary>
+<table>
+<thead><tr><th>Port</th><th>\(\mathbf J_p\)</th><th>Relative velocity</th></tr></thead>
+<tbody>
+<tr><td>Guideway</td><td>\([0,0,0,0,0,1]\)</td><td>\(v_{way}=\dot x_n\)</td></tr>
+<tr><td>Screw–nut</td><td>\([0,0,r,0,1,-1]\)</td><td>\(v_{nut}=r\dot\theta_s+\dot x_s-\dot x_n\)</td></tr>
+<tr><td>Support bearing</td><td>\([0,0,0,1,0,0]\)</td><td>\(v_{sb}=\dot\theta_{sb}\)</td></tr>
+</tbody>
+</table>
+<div class="eq-block">\[
+\mathbf Q_{fric}=-\mathbf J_{way}^{\mathsf T}F_{way}-\mathbf J_{nut}^{\mathsf T}F_{nut}-\mathbf J_{sb}^{\mathsf T}T_{sb}
+=\begin{bmatrix}0\\0\\-rF_{nut}\\-T_{sb}\\-F_{nut}\\F_{nut}-F_{way}\end{bmatrix}
+\]</div>
+<p class="lede">For the rotational support-bearing port, \(F_p\) is interpreted as a torque \(T_{sb}\) and its parameters carry rotational units. \(v_{nut}\) is a slip/tracking-error velocity, not a bulk speed: at an idealized no-slip steady cruise it is exactly zero, which is a deliberate property of the port, not a singularity to guard against.</p>
+</details>
+
+<h3 id="s24"><span class="num">2.4</span>LuGre constitutive law at a generic port</h3>
+<p>Every port carries one bristle state \(z_p\). To avoid the nondifferentiability of \(|v_p|\) at \(v_p=0\), the smoothed magnitude \(s_p=\sqrt{v_p^2+\varepsilon^2}\) is used in place of \(|v_p|\). The Stribeck curve and decay rate are</p>
+<div class="eq-wrap"><button class="eq-copy-btn" type="button" onclick="copyEquationPng(this)" title="Copy equation as a white-on-transparent PNG" aria-label="Copy equation as PNG">Copy PNG</button><div class="eq-block">\[
+g_p(v_p)=F_{c,p}+\big(F_{s,p}-F_{c,p}\big)\exp\!\left[-\left(\frac{v_p}{v_{s,p}}\right)^{2}\right],
+\qquad
+\lambda_p=\frac{\sigma_{0,p}\,s_p}{g_p(v_p)}.
+\]</div></div>
+<p>The generalized bristle evolution and friction force — the same template at every port — are</p>
+<div class="eq-wrap"><button class="eq-copy-btn" type="button" onclick="copyEquationPng(this)" title="Copy equation as a white-on-transparent PNG" aria-label="Copy equation as PNG">Copy PNG</button><div class="eq-block">\[
+\boxed{\;\dot z_p=v_p-\lambda_p z_p,\qquad F_p=\sigma_{0,p}z_p+\sigma_{1,p}\dot z_p+\sigma_{2,p}v_p\;}
+\]</div></div>
+<p>\(\sigma_{0,p}\) is bristle stiffness, \(\sigma_{1,p}\) bristle (micro-)damping, \(\sigma_{2,p}\) viscous damping, \(F_{c,p}\)/\(F_{s,p}\) Coulomb/static breakaway levels, \(v_{s,p}\) the Stribeck velocity.</p>
+<details class="toggle">
+<summary><span class="tag">Expand</span>Closed-form \(F_p(z_p,v_p)\) and the frozen-bristle linearization</summary>
+<p>Substituting \(\dot z_p\) into \(F_p\) removes the derivative and gives an explicit algebraic function of \((z_p,v_p)\) alone:</p>
+<div class="eq-block">\[
+F_p(z_p,v_p)=\sigma_{0,p}z_p\left(1-\sigma_{1,p}\frac{s_p}{g_p(v_p)}\right)+v_p\big(\sigma_{1,p}+\sigma_{2,p}\big).
+\]</div>
+<p>Freezing each bristle at a chosen cruise velocity \(v_{p,0}\) and its steady-state deflection \(z_{p,0}\) (found from \(\dot z_p=0\Rightarrow z_{p,0}=v_{p,0}/\lambda_p(v_{p,0})\)) and taking the Jacobian of this closed form at \((z_{p,0},v_{p,0})\) collapses the nonlinear port into a static-equivalent stiffness/damping pair for small-signal analysis, without needing the port to actually relax on the timescale of the perturbation:</p>
+<div class="eq-block">\[
+k_{eq,p}=\left.\frac{\partial F_p}{\partial z_p}\right|_{0},\qquad
+c_{eq,p}=\left.\frac{\partial F_p}{\partial v_p}\right|_{0}.
+\]</div>
+<p class="lede">When \(\sigma_{1,p}=0\), \(F_p\) is already linear in \(z_p\) and \(v_p\), so \(k_{eq,p}=\sigma_{0,p}\) and \(c_{eq,p}=\sigma_{2,p}\) independently of the chosen \(v_{p,0}\) — the operating point still matters conceptually (it is what justifies treating the port as gross sliding rather than presliding, and it sets the steady bias force \(F_{p,0}=\sigma_{0,p}z_{p,0}+\sigma_{2,p}v_{p,0}\)), it just happens not to move the linearized numbers for that particular parameter choice.</p>
+</details>
+
+<h3 id="s25"><span class="num">2.5</span>Why the screw–nut branches are parallel</h3>
+<p>Define the oriented screw–nut relative coordinate \(\rho_{nut}=\mathbf J_{nut}\mathbf q=r\theta_s+x_s-x_n\), with \(\dot\rho_{nut}=v_{nut}\). The structural nut potential and Rayleigh dissipation from §1.6 are</p>
+<div class="eq-wrap"><button class="eq-copy-btn" type="button" onclick="copyEquationPng(this)" title="Copy equation as a white-on-transparent PNG" aria-label="Copy equation as PNG">Copy PNG</button><div class="eq-block">\[
+V_{nut}=\tfrac12 k_{nut}\rho_{nut}^{2},\qquad \mathcal R_{nut}=\tfrac12 c_{nut}\dot\rho_{nut}^{2},
+\]</div></div>
+<p>producing the structural generalized force \(\mathbf Q_{nut,\text{struct}}=-\mathbf J_{nut}^{\mathsf T}\big(k_{nut}\rho_{nut}+c_{nut}v_{nut}\big)\). The LuGre element sees exactly the same relative velocity \(v_{nut}\) and, by the §2.3 injection rule, produces \(\mathbf Q_{nut,\text{LuGre}}=-\mathbf J_{nut}^{\mathsf T}F_{nut}\). Because both act on the identical coordinate and velocity, their forces simply add:</p>
+<div class="eq-wrap"><button class="eq-copy-btn" type="button" onclick="copyEquationPng(this)" title="Copy equation as a white-on-transparent PNG" aria-label="Copy equation as PNG">Copy PNG</button><div class="eq-block">\[
+\boxed{\;\mathbf Q_{nut,\text{total}}=-\mathbf J_{nut}^{\mathsf T}\big(k_{nut}\rho_{nut}+c_{nut}v_{nut}+F_{nut}\big)\;}
+\]</div></div>
+<p>This is the analytical statement that elastic contact, viscous contact damping, and LuGre pre-rolling drag are three parallel branches across the same interface — the elastic and viscous terms are assembled once, in \(\mathbf K\) and \(\mathbf C\); the LuGre term is evaluated separately as nonlinear feedback at every timestep. Nothing about this replaces \(k_{nut}\)/\(c_{nut}\): LuGre friction here cannot cap transmitted thrust at its own breakaway force, because the stiff structural spring remains in the load path alongside it.</p>
+
+<h3 id="s26"><span class="num">2.6</span>Assembled nonlinear equations of motion</h3>
+<p>Combining §2.1's governing equation with the §2.3 injection rule for all three ports gives the complete nonlinear equations of motion, still six second-order equations in \(\mathbf q\):</p>
+<div class="eq-wrap"><button class="eq-copy-btn" type="button" onclick="copyEquationPng(this)" title="Copy equation as a white-on-transparent PNG" aria-label="Copy equation as PNG">Copy PNG</button><div class="eq-block">\[
+\mathbf M\ddot{\mathbf q}+\mathbf C\dot{\mathbf q}+\mathbf K\mathbf q
+=\mathbf G\theta_{cmd}
+-\mathbf J_{way}^{\mathsf T}F_{way}-\mathbf J_{nut}^{\mathsf T}F_{nut}-\mathbf J_{sb}^{\mathsf T}T_{sb}
+-\mathbf e_m T_d\sin(4N_r\theta_m),
+\]</div></div>
+<p>with \(F_{way}\), \(F_{nut}\), \(T_{sb}\) each evaluated by the §2.4 LuGre template at its own port, from \(v_{way}=\dot x_n\), \(v_{nut}=r\dot\theta_s+\dot x_s-\dot x_n\), \(v_{sb}=\dot\theta_{sb}\) respectively.</p>
+
+<h3 id="s27"><span class="num">2.7</span>Full nonlinear state-space model</h3>
+<p>With \(\mathbf v=\dot{\mathbf q}\), \(\mathbf z=[z_{way},z_{nut},z_{sb}]^{\mathsf T}\), and \(\mathbf x=[\mathbf q^{\mathsf T},\mathbf v^{\mathsf T},\mathbf z^{\mathsf T}]^{\mathsf T}\) (15 states), the generalized right-hand side is</p>
+<div class="eq-wrap"><button class="eq-copy-btn" type="button" onclick="copyEquationPng(this)" title="Copy equation as a white-on-transparent PNG" aria-label="Copy equation as PNG">Copy PNG</button><div class="eq-block">\[
+\dot{\mathbf q}=\mathbf v,\qquad
+\dot{\mathbf v}=\mathbf M^{-1}\!\left[\mathbf G\theta_{cmd}-\mathbf C\mathbf v-\mathbf K\mathbf q-\mathbf e_mT_d\sin(4N_r\theta_m)-\sum_p\mathbf J_p^{\mathsf T}F_p\right],
+\]</div></div>
+<div class="eq-wrap"><button class="eq-copy-btn" type="button" onclick="copyEquationPng(this)" title="Copy equation as a white-on-transparent PNG" aria-label="Copy equation as PNG">Copy PNG</button><div class="eq-block">\[
+\dot z_p=\mathbf J_p\mathbf v-\frac{\sigma_{0,p}\sqrt{(\mathbf J_p\mathbf v)^2+\varepsilon^2}}{g_p(\mathbf J_p\mathbf v)}\,z_p,\qquad p\in\{way,nut,sb\}.
+\]</div></div>
+<details class="toggle">
+<summary><span class="tag">Expand</span>Full 15-state vector field and implementation notes</summary>
+<p>Expanding the sum over ports in \(\dot{\mathbf v}\) using the §2.3 Jacobians gives the same six-component friction vector as §2.3's expanded box, applied here inside \(\mathbf M^{-1}[\cdots]\):</p>
+<div class="eq-block">\[
+\sum_p\mathbf J_p^{\mathsf T}F_p=\begin{bmatrix}0\\0\\rF_{nut}\\T_{sb}\\F_{nut}\\F_{way}-F_{nut}\end{bmatrix}
+\]</div>
+<p class="lede">(the vector enters with a leading minus sign in \(\dot{\mathbf v}\) above, matching \(\mathbf Q_{fric}=-\sum_p\mathbf J_p^{\mathsf T}F_p\) from §2.3).</p>
+<p><strong>Solver behavior.</strong> The LuGre kink at \(v_p=0\) (the \(s_p/g_p(v_p)\,z_p\) term is not differentiable there even after smoothing \(|v_p|\)) defeats Newton-iteration/finite-difference-Jacobian solvers: Radau and BDF were observed to diverge to NaN within a second on a representative slow, stiction-cycling case, unaffected by tightening tolerances or capping step size. LSODA, which switches on the fly between explicit and implicit steps, completes reliably and is the default. An analytical Jacobian of the full 15-state field (verified against a complex-step numerical Jacobian) is what makes the stiffer implicit methods usable at all in the Rev 4.2 linearized-Bode workflow — the same Jacobian machinery underlies the frozen-bristle linearization of §2.4's toggle.</p>
+<p><strong>Sign audit.</strong> Instantaneous \(F_pv_p\) can go negative while a bristle returns stored energy; the reaction-sign check is therefore the exact identity \(\dot{\mathbf q}^{\mathsf T}\mathbf Q_{fric,p}=-v_pF_p\) from §2.3, not an assumption that every port dissipates at every instant.</p>
+</details>
+
+<h3 id="s28"><span class="num">2.8</span>Parameter values used</h3>
+<p>Structural parameters are identical to the Chapter 1 baseline. The eighteen LuGre parameters (six per port) are placeholders pending identification; see <code>parameter_notes</code> in the source JSON for full provenance.</p>
+<details class="toggle" open>
+<summary><span class="tag">Expand</span>Structural and LuGre parameter tables</summary>
+<table>
+<thead><tr><th>Symbol</th><th>Description</th><th>Value</th><th>Unit</th></tr></thead>
+<tbody>
+<tr><td>\(L\)</td><td>Screw lead</td><td>1.0e-3</td><td>m</td></tr>
+<tr><td>\(N_r\)</td><td>Rotor teeth</td><td>50</td><td>—</td></tr>
+<tr><td>\(T_{hold}\)</td><td>Holding torque</td><td>0.06</td><td>N·m</td></tr>
+<tr><td>\(T_d\)</td><td>Detent torque amplitude</td><td>3.0e-3</td><td>N·m</td></tr>
+<tr><td>\(I_m,I_c,I_s,I_{sb}\)</td><td>Rotational inertias</td><td>9.0e-7, 1.18e-6, 6.06e-7, 1.5e-7</td><td>kg·m²</td></tr>
+<tr><td>\(M_{screw},M_s\)</td><td>Axial masses</td><td>0.0758, 0.405</td><td>kg</td></tr>
+<tr><td>\(k_c,k_{s1},k_{s2}\)</td><td>Torsional stiffnesses</td><td>68.75, 211.0, 211.0</td><td>N·m/rad</td></tr>
+<tr><td>\(k_{nut},k_{brg}\)</td><td>Axial contact / bearing stiffness</td><td>1.0e8, 1.14e7</td><td>N/m</td></tr>
+<tr><td>\(c_c,c_{s1},c_{s2}\)</td><td>Torsional damping</td><td>2.4e-4, 3.7e-4, 2.0e-4</td><td>N·m·s/rad</td></tr>
+<tr><td>\(c_{nut},c_{brg},c_{EM}\)</td><td>Axial / EM damping</td><td>101.0, 37.2, 1.3283e-4</td><td>N·s/m, N·s/m, N·m·s/rad</td></tr>
+</tbody>
+</table>
+<table>
+<thead><tr><th>Port</th><th>\(\sigma_0\)</th><th>\(\sigma_1\)</th><th>\(\sigma_2\)</th><th>\(F_c\) / \(T_c\)</th><th>\(F_s\) / \(T_s\)</th><th>\(v_s\)</th></tr></thead>
+<tbody>
+<tr><td>Screw–nut</td><td>2.0e6 N/m</td><td>500.29 N·s/m</td><td>0.25 N·s/m</td><td>0.5 N</td><td>0.75 N</td><td>2.0e-4 m/s</td></tr>
+<tr><td>Support bearing</td><td>0.076 N·m/rad</td><td>1.495e-4 N·m·s/rad</td><td>1.0e-5 N·m·s/rad</td><td>1.5e-4 N·m</td><td>2.2e-4 N·m</td><td>0.1 rad/s</td></tr>
+<tr><td>Guideway</td><td>7.6e5 N/m</td><td>776.72 N·s/m</td><td>0.4 N·s/m</td><td>3.0 N</td><td>4.5 N</td><td>2.5e-4 m/s</td></tr>
+</tbody>
+</table>
+<p class="lede">\(\sigma_{1,p}\) at every port is initialized by \(\sigma_1=2\zeta\sqrt{\sigma_0 m_{eff}}\), \(\zeta=0.7\), with \(m_{eff}\) the appropriate translational mass or rotational inertia — an initialization rule, not an identification result. \(c_{nut}=101\ \text{N·s/m}\) is retained in \(\mathbf C\) alongside the LuGre \(\sigma_1,\sigma_2\) at the same port for a direct topology comparison against the baseline; this double-counts dissipation until the split is identified. Smoothing constant \(\varepsilon=1.0\times10^{-9}\) (port velocity units).</p>
+</details>
+
+<div class="warn">
+An alternative topology, Rev 4.1, tests a different modeling hypothesis at the screw–nut interface: LuGre <em>replaces</em> \(k_{nut}\)/\(c_{nut}\) entirely rather than running in parallel with them, on the interpretation that the bristle alone carries the full screw–nut contact compliance. Chapter 2 above follows Rev 4.2 (the parallel topology) because it is the one that keeps the Chapter 1 structural plant intact and adds nonlinearity strictly on top of it, matching this document's stated scope. See <code>Rev 4/lugre_friction/Rev 4.1/README.md</code> for the replacement derivation and its own sign-convention re-derivation (v_nut there is defined with the opposite orientation, which flips two of the three injection signs relative to §2.3 above).
+</div>
+
+<hr class="chapter-end">
+
+<h2 class="chapter" id="sec-provenance">Provenance</h2>
+<table>
+<thead><tr><th>Content</th><th>Source file</th></tr></thead>
+<tbody>
+<tr><td>Chapter 1 — Newton frictionless baseline</td><td><code>Rev 4/state_space_6dof.md</code></td></tr>
+<tr><td>Chapter 1 — structural parameter values</td><td><code>Rev 4/model_parameters.json</code></td></tr>
+<tr><td>Chapter 2 — nonlinear detent, LuGre ports, Jacobian sign convention</td><td><code>Rev 4/lugre_friction/Rev 4.2/README.md</code></td></tr>
+<tr><td>Chapter 2 — LuGre and structural parameter values</td><td><code>Rev 4/lugre_friction/Rev 4.2/model_parameters.json</code></td></tr>
+<tr><td>Chapter 2 toggle — frozen-bristle linearization, solver behavior</td><td><code>Rev 4/lugre_friction/Rev 4.1/README.md</code></td></tr>
+<tr><td>Independent energy-based (Lagrangian) reconstruction, not used here</td><td><code>Rev 4/Lagrange Derivation/README.md</code></td></tr>
+</tbody>
+</table>
+<p class="provenance">This document is a hand-authored synthesis for presentation; it does not replace the source Markdown/JSON above as the executable record. Where this document and a source file disagree after either is edited, the source file governs. Structural parameters marked as placeholders in the source JSON (most inertias, most stiffnesses, all friction levels) remain placeholders here.</p>
+
+<footer>
+Rev 4 Analytical Model Derivation — generated from workspace sources on 2026-08-31.
+</footer>
+
+</div>
+
+<script>
+function toggleTheme(){
+  const root=document.documentElement;
+  const cur=root.style.getPropertyValue('--force-theme');
+  root.dataset.theme = root.dataset.theme==='dark' ? 'light' : 'dark';
+  applyTheme();
+}
+function applyTheme(){
+  const t=document.documentElement.dataset.theme;
+  if(t==='dark'){
+    document.documentElement.style.setProperty('color-scheme','dark');
+  } else if(t==='light'){
+    document.documentElement.style.setProperty('color-scheme','light');
+  }
+}
+(function(){
+  // Manual override on top of prefers-color-scheme via a small style block.
+  const style=document.createElement('style');
+  style.textContent = `
+    html[data-theme="dark"]{
+      --bg:#15181c; --panel:#1b1f24; --ink:#e8e6e1; --ink-soft:#aab0b8;
+      --rule:#333a41; --accent:#d5a35c; --accent-soft:#2a2620;
+      --toggle-bg:#20252b; --toggle-border:#343c44; --code-bg:#20242a;
+      --link:#e0b26e; --warn-bg:#2c2419; --warn-border:#7a5326;
+    }
+    html[data-theme="light"]{
+      --bg:#fbfaf7; --panel:#ffffff; --ink:#1d2126; --ink-soft:#4b535c;
+      --rule:#dcd8ce; --accent:#8a5a2b; --accent-soft:#f3e9db;
+      --toggle-bg:#f6f3ec; --toggle-border:#d8cfba; --code-bg:#f1efe8;
+      --link:#8a5a2b; --warn-bg:#fbeee0; --warn-border:#d9a86c;
+    }
+  `;
+  document.head.appendChild(style);
+})();
+function setAllDetails(open){
+  document.querySelectorAll('details.toggle').forEach(d=>{ d.open = open; });
+}
+
+/* ---- Copy key equations as a white-on-transparent PNG ---- */
+(function(){
+  var EQ_SCALE = 4; // rasterization multiplier for a crisp copy/paste
+
+  function flashButton(btn, label, state){
+    if(!btn.dataset.label) btn.dataset.label = btn.textContent;
+    btn.textContent = label;
+    if(state) btn.setAttribute('data-state', state); else btn.removeAttribute('data-state');
+    clearTimeout(btn._flashTimer);
+    btn._flashTimer = setTimeout(function(){
+      btn.textContent = btn.dataset.label;
+      btn.removeAttribute('data-state');
+    }, 1500);
+  }
+
+  function downloadBlob(blob, filename){
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
+  }
+
+  window.copyEquationPng = function(btn){
+    var wrap = btn.closest('.eq-wrap');
+    var block = wrap && wrap.querySelector('.eq-block');
+    var svg = block && block.querySelector('mjx-container svg');
+    if(!svg){ flashButton(btn, 'Not ready', 'err'); return; }
+
+    var rect = svg.getBoundingClientRect();
+    var w = Math.max(1, Math.round(rect.width * EQ_SCALE));
+    var h = Math.max(1, Math.round(rect.height * EQ_SCALE));
+
+    var clone = svg.cloneNode(true);
+    clone.removeAttribute('style');
+    clone.setAttribute('style', 'color:#ffffff;');
+    clone.setAttribute('width', w);
+    clone.setAttribute('height', h);
+    if(!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+
+    var svgString = new XMLSerializer().serializeToString(clone);
+    var svgBlob = new Blob([svgString], {type: 'image/svg+xml;charset=utf-8'});
+    var url = URL.createObjectURL(svgBlob);
+    var img = new Image();
+
+    img.onload = function(){
+      try{
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        var ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+
+        canvas.toBlob(function(pngBlob){
+          if(!pngBlob){ flashButton(btn, 'Copy failed', 'err'); return; }
+          if(navigator.clipboard && window.ClipboardItem){
+            navigator.clipboard.write([new ClipboardItem({'image/png': pngBlob})]).then(
+              function(){ flashButton(btn, 'Copied!', 'ok'); },
+              function(){ downloadBlob(pngBlob, 'equation.png'); flashButton(btn, 'Saved PNG', 'ok'); }
+            );
+          } else {
+            downloadBlob(pngBlob, 'equation.png');
+            flashButton(btn, 'Saved PNG', 'ok');
+          }
+        }, 'image/png');
+      } catch(err){
+        console.error('copyEquationPng render failed', err);
+        URL.revokeObjectURL(url);
+        flashButton(btn, 'Copy failed', 'err');
+      }
+    };
+    img.onerror = function(){
+      URL.revokeObjectURL(url);
+      flashButton(btn, 'Copy failed', 'err');
+    };
+    img.src = url;
+  };
+
+  document.querySelectorAll('.eq-copy-btn').forEach(function(b){ b.disabled = true; });
+  if(window.MathJax && MathJax.startup && MathJax.startup.promise){
+    MathJax.startup.promise.then(function(){
+      document.querySelectorAll('.eq-copy-btn').forEach(function(b){ b.disabled = false; });
+    });
+  } else {
+    window.addEventListener('load', function(){
+      document.querySelectorAll('.eq-copy-btn').forEach(function(b){ b.disabled = false; });
+    });
+  }
+})();
+</script>
+</body>
+</html>

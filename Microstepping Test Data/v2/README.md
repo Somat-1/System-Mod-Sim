@@ -11,7 +11,11 @@ archived v1 analysis workflow.
 - `scripts/run_identification_esp32_tmc2209/`: Arduino-ESP32/TMCStepper/RMT
   runner for Blocks A, B, and E.
 - `scripts/run_identification_dedicated_controller.py`: host-side serial
-  runner for Blocks C and D.
+  runner for the reduced six-condition Blocks C and D campaign, including
+  data-visible separator signatures.
+- `scripts/run_dedicated_controller_diagnostic.py`: approximately 92-second
+  live preflight covering representative reference, creep, slow-paced, fast
+  controller-paced, and separator motions.
 - `data/motion_sequence_config.json`: machine-readable execution and preview
   parameters.
 - `rendered_assets/trajectory_visualization_plots/`: command montages grouped

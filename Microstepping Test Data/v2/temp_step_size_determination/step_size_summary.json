@@ -1,0 +1,20 @@
+{
+  "score": 619.4715846678616,
+  "first_command_s": 9.094999999999109,
+  "second_command_s": 12.43099999999911,
+  "pre_level_nm": 30.0,
+  "plateau_level_nm": 3244.5,
+  "post_level_nm": 30.0,
+  "step_nm": 3214.5,
+  "return_error_nm": 0.0,
+  "noise_pre_nm": 2.9652,
+  "noise_plateau_nm": 9.636899999999999,
+  "noise_post_nm": 2.9652,
+  "input": "\\\\mult-fp01.hitdom.lan\\project2\\Internships\\Tomas Valentinas\\Sytem Mod & Sim\\Microstepping Test Data\\v2\\scripts\\StepSizeDepermination.csv",
+  "sample_count": 17950,
+  "sample_period_ms": 1.0,
+  "encoder_scale_nm_per_count": 1.0,
+  "expected_command_gap_s": 3.336,
+  "estimated_uncertainty_nm": 5.189099999999999,
+  "interpretation": "One controller integer MR unit produced approximately the reported step_nm displacement. Command times are inferred because the standalone probe did not timestamp commands."
+}

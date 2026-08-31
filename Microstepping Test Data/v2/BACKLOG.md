@@ -27,34 +27,28 @@ boundary.
 
 | MRES | u per driver pulse | Burst pulse rate |
 |---|---:|---:|
-| 1/16 | 1 | 4000 pulses/s |
 | 1/4 | 4 | 1000 pulses/s |
 | 1/2 | 8 | 500 pulses/s |
 | 1/1 | 16 | 250 pulses/s |
 
-All burst and doublet moves therefore use 250 full-steps/s. The outer loop is
-four MRES settings by three holding-current settings, for 12 executions.
+All burst moves therefore use 250 full-steps/s. The active dedicated-controller
+outer loop is three MRES settings by two peak-current settings, for six
+executions and approximately 42 min 32 s of planned motion.
 Every execution starts from the same fixed physical stage position; no
 position sweep is included.
 
-| Level | TMC set RMS | TMC measured RMS | Dedicated controller SC peak |
-|---|---:|---:|---:|
-| I_lo | 360 mA | approximately 355 mA | 502 mA |
-| I_mid | 600 mA | 556 mA | 786 mA |
-| I_hi | 750 mA | 715 mA | 1011 mA |
+| Level | Relative current | Dedicated controller SC peak |
+|---|---:|---:|
+| I_50pct | 50% | 200 mA |
+| I_100pct | 100% | 400 mA |
 
-Hold current equals run current for every level. On the TMC2209 this is
-enforced with IHOLD = IRUN, IHOLDDELAY = 0, and TPOWERDOWN = 0.
+Hold current equals run current for every level. The dedicated controller
+manual specifies the `SC` value as motor-current Ipeak.
 
-The ESP32-S3/TMC2209 runner executes timing-critical Blocks A1, A2, B, and E.
-The dedicated controller executes Blocks C and D. Each runner also executes
-Block 0, conditioning, and a final Block 0 around its assigned measurements.
-Each runner covers all 12 MRES/current combinations.
-
-Thus there are 12 physical operating conditions, but 24 hardware acquisition
-segments: 12 partial executions on the ESP32 runner and 12 partial executions
-on the dedicated-controller runner. Each runner is launched once and advances
-through its 12 configurations automatically.
+The active dedicated-controller runner executes Blocks C and D, with Block 0,
+conditioning, physical separator signatures, and a final Block 0 around the
+measurements. The older ESP32-S3/TMC2209 A/B/E runner remains in the project
+for reference but is not part of this reduced six-condition acquisition.
 
 ## Authoritative block definitions
 
@@ -156,14 +150,15 @@ Run Block 0 again after Block E.
 
 Generate one figure per block:
 
-- Columns: MRES = 1/16, 1/4, 1/2, 1/1.
+- Archived command previews retain MRES 1/16, 1/4, 1/2, and 1/1; active
+  dedicated-controller measured figures use 1/4, 1/2, and 1/1 only.
 - Rows: block sub-condition, such as N, loop pattern, or full-step rate.
 - First figures are command-only previews in physical travel units. Current
   does not change the command trajectory, so current traces are not shown.
-- Measured/model-response figures later overlay I_lo, I_mid, and I_hi in each
-  cell while retaining the same row/column skeleton.
+- Measured/model-response figures overlay I_50pct and I_100pct in each active
+  dedicated-controller cell.
 - Block 0 measurement result: one residual-versus-doublet-index acceptance
-  chart containing all 12 executions.
+  chart containing all six active executions.
 
 Store trajectory figures under `rendered_assets/trajectory_visualization_plots`
 in four groups: reference and conditioning, step ladders, reversal and creep,

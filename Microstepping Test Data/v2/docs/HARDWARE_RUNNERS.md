@@ -9,21 +9,20 @@ The timing-critical and controller-paced measurements are deliberately split:
 | ESP32-S3 + TMC2209 | Block 0, conditioning, A1, A2, B, E, final Block 0 |
 | EVO dedicated controller, axis X | Block 0, conditioning, C, D, final Block 0 |
 
-Each runner automatically covers four MRES settings by three current levels:
-12 configurations per runner. One ESP32 `RUN` command and one Python
-invocation therefore cover the full divided campaign. All configurations
-begin at the same working origin; neither runner homes between configurations.
+The active dedicated-controller campaign covers MRES 1/4, 1/2, and 1/1 at
+two peak-current levels: six configurations in one Python invocation. The
+older ESP32 runner retains its original matrix. All dedicated-controller
+configurations begin at the same working origin and do not re-home.
 
-## Current mapping
+## Active dedicated-controller current mapping
 
-| Level | TMC command RMS | TMC measured RMS | Dedicated `SC` peak |
-|---|---:|---:|---:|
-| I_lo | 360 mA | approximately 355 mA | 502 mA |
-| I_mid | 600 mA | 556 mA | 786 mA |
-| I_hi | 750 mA | 715 mA | 1011 mA |
+| Level | Relative setting | Dedicated `SC` peak |
+|---|---:|---:|
+| I_50pct | 50% | 200 mA |
+| I_100pct | 100% | 400 mA |
 
-Run and hold current are equal. The TMC runner writes `IHOLD = IRUN`,
-`IHOLDDELAY = 0`, and `TPOWERDOWN = 0`.
+Run and hold current are equal. The controller manual defines `SC` in mA
+Ipeak; 400 mA is therefore entered directly as `SC X 400 400`.
 
 ## ESP32-S3 and TMC2209
 
@@ -85,8 +84,9 @@ stream because it is the command/input record for later model comparison.
 Runner: `scripts/run_identification_dedicated_controller.py`
 
 The script uses 115200 baud, 8N1, CR termination, axis X, and the documented
-`DM/SM/SS/SC/MH/MA/SP/DP/DS/ME/MO/SO/CO` commands. It verifies `DM 0`,
-uses absolute six-decimal `MA` targets, and polls `DS` until status 1.
+controller commands. It verifies `DM 0` and polls `DS` until status 1. The
+standard homed workflow uses absolute `MA`; current-position mode captures
+`DP X` and uses signed relative `MR` commands without `SP`.
 
 Install pyserial only for live execution:
 
@@ -101,8 +101,69 @@ python .\scripts\run_identification_dedicated_controller.py --dry-run
 ```
 
 The dry run does not open a serial port or wait in real time. It generates all
-12 configurations and writes the complete command/event CSV under
+six configurations and writes the complete command/event CSV under
 `data/hardware_runs`.
+
+### Short diagnostic first
+
+Runner: `scripts/run_dedicated_controller_diagnostic.py`
+
+The diagnostic uses MRES 1/4 at `SC X 400 400` and lasts approximately
+92.3 seconds, excluding initialization and serial overhead. It exercises the reference
+fingerprint, conditioning, both shortened creep approaches, the fastest
+software-paced plateau (1.25 full steps/s), the fastest controller-paced
+plateau (200 full steps/s), and the data-visible marker signatures.
+
+Dry-run command:
+
+```powershell
+python .\scripts\run_dedicated_controller_diagnostic.py --dry-run
+```
+
+The diagnostic has the verified local rig settings embedded: COM5, axis X
+(J19), direction 0, MRES 1/4, and 400 mA peak. It performs no homing and sends
+no positioning move during initialization. It captures the displayed starting
+position with `DP X`, then sends every move as a signed relative `MR` command.
+
+Run it with:
+
+```powershell
+python .\scripts\run_dedicated_controller_diagnostic.py --execute
+```
+
+The script initializes the controller and then waits automatically. Start IDS
+acquisition at that prompt and press Enter to begin the first marker. Retain
+both the IDS CSV and controller CSV. After a successful diagnostic, leave the
+controller powered and do not move the stage. The subsequent full-run command
+can use `--use-current-position-as-origin` to retain the same relative-motion
+workflow without homing or `SP`.
+
+### Data-visible separator signatures
+
+Every marker makes a rapid negative leap, dwells for 1.0 second, returns by
+the same positive amount, and settles for 0.5 second. Configuration markers
+are 68, 72, 76, 80, 84, and 88 full steps for runs 1 through 6. Test markers
+identify the following block by amplitude:
+
+| Following test | Marker amplitude (full steps) |
+|---|---:|
+| Conditioning before C | 12 |
+| Conditioning before D | 16 |
+| C | 20 |
+| D 0.125 | 24 |
+| D 0.375 | 28 |
+| D 1.25 | 32 |
+| D 3.5 | 36 |
+| D 9.5 | 40 |
+| D 27.5 | 44 |
+| D 70 | 48 |
+| D 200 | 52 |
+| Final Block 0 reference | 56 |
+
+Each marker also has its own `SO 32`/`CO 32` trigger interval and a
+`MARKER_SIGNATURE` row in the controller CSV. The planned six-configuration
+motion time is 2552.1 seconds (42 min 32 s); allow approximately 46 minutes
+in acquisition for serial polling and command overhead.
 
 ### Required preflight
 
@@ -140,13 +201,17 @@ python .\scripts\run_identification_dedicated_controller.py --execute `
   --home-max-speed HOME_MAX_SPEED `
   --home-accel HOME_ACCEL `
   --home-decel HOME_DECEL `
-  --home-ramp-type HOME_RAMP_TYPE
+  --home-ramp-type HOME_RAMP_TYPE `
+  --wait-for-acquisition
 ```
 
 The homing speed values use the controller's documented 0.01-rad/s and
 0.01-rad/s-squared units. If the controller has already been homed during the
 same uninterrupted session, replace all home arguments with `--skip-home`.
 The runner still moves to the working position and applies `SP X 0.000000`.
+After the diagnostic has already established that origin, prefer
+`--reuse-working-origin`; it performs neither operation and first verifies the
+displayed position is zero.
 
 The three slow D rates, 0.125, 0.375, and 1.25 full steps/s, are software
 paced as individual absolute microstep moves. Every acknowledgment is
@@ -159,11 +224,11 @@ attempts `CO 32` followed by `MO X` and records the shutdown result.
 
 ## Session order
 
-1. Home once at the beginning of a dedicated-controller session.
-2. Move to the common working position and define it with `SP X 0.000000`.
-3. Run the dedicated-controller campaign without re-homing.
-4. Establish the same physical working origin for the ESP32 rig and verify its
-   travel envelope.
-5. Run `CHECK`, then `RUN`, while capturing the ESP32 serial log.
-6. Do not home between MRES/current configurations. Re-home only after a
-   deliberate relocation, then repeat Block 0 before accepting new data.
+1. Place the stage at a starting position with sufficient travel both ways.
+2. Run the diagnostic; it captures `DP X` and uses only relative `MR` moves.
+3. Record and review the approximately 92-second diagnostic.
+4. Leave the controller powered and the stage untouched.
+5. For the later full run, use `--use-current-position-as-origin` and start IDS
+   acquisition at the prompt.
+6. Do not relocate the stage between MRES/current configurations. After a
+   deliberate relocation, repeat the diagnostic before accepting data.

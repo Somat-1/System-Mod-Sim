@@ -2,7 +2,8 @@
 """Execute the v2 C/D sequence on the EVO dedicated controller.
 
 Protocol: docs/Stepper Motor Controller Command list.pdf.
-This runner owns Block C and Block D, with reference and conditioning blocks.
+This runner owns Block C and Block D, with reference, conditioning, and
+data-visible separator blocks.
 The timing-critical A/B/E blocks belong to the ESP32/TMC2209 runner.
 """
 
@@ -19,7 +20,13 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP, getcontext
 from pathlib import Path
-from typing import Iterator, Protocol
+from typing import Iterator, Optional, Union
+
+try:
+    from typing import Protocol
+except ImportError:  # Python 3.7
+    class Protocol:
+        pass
 
 
 getcontext().prec = 28
@@ -27,12 +34,17 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LOG_DIR = ROOT / 'data' / 'hardware_runs'
 
 AXIS = 'X'
+DEFAULT_SERIAL_PORT = 'COM5'
 EXPECTED_MODULE_TYPE = 0
 BAUD_RATE = 115200
 MOTOR_FULL_STEPS_PER_REV = 200
 POSITION_QUANTUM_REV = Decimal('0.000001')
+# Verified on this controller/axis at MRES=4 using MR X 1 on 2026-08-31.
+# The controller position argument is an integer microstep count, not a
+# decimal number of motor revolutions.
+MEASURED_MRES4_UNIT_NM = Decimal('3214.5')
 TRIGGER_MASK = 32
-MRES_VALUES = (16, 4, 2, 1)
+MRES_VALUES = (4, 2, 1)
 BURST_FULL_STEPS_S = 250.0
 CONDITIONING_FULL_STEPS_S = 150.0
 PLATEAU_RATES_FS_S = (0.125, 0.375, 1.25, 3.5, 9.5, 27.5, 70.0, 200.0)
@@ -42,20 +54,35 @@ PLATEAU_RAMP_TYPE = 1
 PLATEAU_HEAD_DISCARD_S = 0.5
 CONTROLLER_MAX_POSITION_REV = Decimal('30.000000')
 REFERENCE_MOVES = (16, -16, 4, -4, 1, -1, -16, 16, -4, 4, -1, 1)
+MARKER_RATE_FULL_STEPS_S = 150.0
+MARKER_REVERSE_DWELL_S = 1.0
+MARKER_SETTLE_S = 0.5
+TEST_MARKER_AMPLITUDES_FULL_STEPS = {
+    'COND_C': 12,
+    'COND_D': 16,
+    'C': 20,
+    'D_0.125': 24,
+    'D_0.375': 28,
+    'D_1.25': 32,
+    'D_3.5': 36,
+    'D_9.5': 40,
+    'D_27.5': 44,
+    'D_70': 48,
+    'D_200': 52,
+    'BLOCK_0_END': 56,
+}
 
 
 @dataclass(frozen=True)
 class CurrentLevel:
     name: str
-    tmc_set_rms_ma: int
-    tmc_measured_rms_ma: int
     controller_peak_ma: int
+    relative_percent: int
 
 
 CURRENT_LEVELS = (
-    CurrentLevel('I_lo', 360, 355, 502),
-    CurrentLevel('I_mid', 600, 556, 786),
-    CurrentLevel('I_hi', 750, 715, 1011),
+    CurrentLevel('I_50pct', 200, 50),
+    CurrentLevel('I_100pct', 400, 100),
 )
 
 
@@ -140,7 +167,7 @@ class RunContext:
 
 
 class Transport(Protocol):
-    def command(self, text: str, expected_prefix: str | None = None) -> str:
+    def command(self, text: str, expected_prefix: Optional[str] = None) -> str:
         ...
 
     def close(self) -> None:
@@ -168,7 +195,7 @@ class SerialTransport:
         self.context = context
         self.serial.reset_input_buffer()
 
-    def command(self, text: str, expected_prefix: str | None = None) -> str:
+    def command(self, text: str, expected_prefix: Optional[str] = None) -> str:
         if '\r' in text or '\n' in text:
             raise ValueError('Controller command must not contain CR/LF')
         expected = expected_prefix if expected_prefix is not None else text
@@ -205,8 +232,9 @@ class DryRunTransport:
         self.log = log
         self.context = context
         self.position = Decimal('0')
+        self.output_byte = 0
 
-    def command(self, text: str, expected_prefix: str | None = None) -> str:
+    def command(self, text: str, expected_prefix: Optional[str] = None) -> str:
         parts = text.upper().split()
         if parts[0] == 'DM':
             response = 'DM 0'
@@ -214,10 +242,18 @@ class DryRunTransport:
             response = f'DS {AXIS} 1'
         elif parts[0] == 'DP':
             response = f'DP {AXIS} {format_position(self.position)}'
+        elif parts[0] == 'SO':
+            self.output_byte |= int(parts[-1])
+            response = f'SO {self.output_byte}'
+        elif parts[0] == 'CO':
+            self.output_byte &= ~int(parts[-1])
+            response = f'CO {self.output_byte}'
         else:
             response = text.upper()
             if parts[0] in {'MA', 'SP'}:
                 self.position = Decimal(parts[-1])
+            elif parts[0] == 'MR':
+                self.position += Decimal(parts[-1])
         self.log.log(
             'DRY_COMMAND', **self.context.fields(),
             command=text, response=response,
@@ -261,6 +297,9 @@ class IdentificationRunner:
         self.status_timeout_s = status_timeout_s
         self.status_poll_s = status_poll_s
         self.ideal_position_rev = Decimal('0')
+        self.controller_origin_rev = Decimal('0')
+        self.controller_position_pulses = 0
+        self.relative_commands = False
         self.cancelled = False
 
     def cancel(self) -> None:
@@ -270,7 +309,7 @@ class IdentificationRunner:
         if self.cancelled:
             raise Cancelled('Execution cancelled')
 
-    def command(self, text: str, expected_prefix: str | None = None) -> str:
+    def command(self, text: str, expected_prefix: Optional[str] = None) -> str:
         self.check_cancelled()
         return self.transport.command(text, expected_prefix)
 
@@ -338,24 +377,44 @@ class IdentificationRunner:
             raise RuntimeError(
                 f'Controller position range exceeded by {target} rev'
             )
+        if self.relative_commands:
+            controller_target = self.controller_origin_rev + target
+            if abs(controller_target) > CONTROLLER_MAX_POSITION_REV:
+                raise RuntimeError(
+                    f'Relative move would take displayed controller position '
+                    f'to {controller_target} rev, outside +/-30 rev'
+                )
 
     def move_to_ideal(
         self, target: Decimal, label: str, *,
-        rate_full_steps_s: float | None = None,
-        pulse_index: int | None = None,
-        deadline_ns: int | None = None,
+        rate_full_steps_s: Optional[float] = None,
+        pulse_index: Optional[int] = None,
+        deadline_ns: Optional[int] = None,
     ) -> int:
         self.verify_target(target)
         commanded = format_position(target)
-        response = self.command(f'MA {AXIS} {commanded}')
+        if self.relative_commands:
+            # Installed firmware accepts integer microstep counts for MR/MA.
+            # Quantize the absolute target so fractional targets accumulate.
+            target_pulses = int(
+                (target * MOTOR_FULL_STEPS_PER_REV * self.context.mres)
+                .to_integral_value(rounding=ROUND_HALF_UP)
+            )
+            delta_pulses = target_pulses - self.controller_position_pulses
+            command_text = f'MR {AXIS} {delta_pulses}'
+            response = self.command(command_text, f'MR {AXIS} ')
+            self.controller_position_pulses = target_pulses
+        else:
+            command_text = f'MA {AXIS} {commanded}'
+            response = self.command(command_text)
         ack_ns = self.clock.now_ns()
-        lateness_us: str | float = ''
+        lateness_us: Union[str, float] = ''
         if deadline_ns is not None:
             lateness_us = (ack_ns - deadline_ns) / 1000.0
         self.ideal_position_rev = target
         self.log.log(
             'MOVE_ACK', **self.context.fields(), label=label,
-            command=f'MA {AXIS} {commanded}', response=response,
+            command=command_text, response=response,
             ideal_position_rev=str(target),
             commanded_position_rev=commanded,
             rate_full_steps_s=(
@@ -393,17 +452,46 @@ class IdentificationRunner:
         self.clock.sleep(duration_s)
         self.log.log('DWELL_END', **self.context.fields(), label=label)
 
+    def set_trigger(self, active: bool, *, safety: bool = False) -> None:
+        opcode = 'SO' if active else 'CO'
+        command = f'{opcode} {TRIGGER_MASK}'
+        send = self.transport.command if safety else self.command
+        response = send(command, f'{opcode} ')
+        try:
+            output_byte = int(response.split()[-1])
+        except (ValueError, IndexError) as exc:
+            raise RuntimeError(
+                f'Invalid {opcode} response: {response!r}'
+            ) from exc
+        bit_is_set = bool(output_byte & TRIGGER_MASK)
+        if bit_is_set != active:
+            expected = 'set' if active else 'cleared'
+            raise RuntimeError(
+                f'Trigger bit was not {expected}: {response!r}'
+            )
+
     @contextmanager
     def block(self, name: str) -> Iterator[None]:
         previous = self.context.block
         self.context.block = name
-        self.command(f'SO {TRIGGER_MASK}')
+        self.set_trigger(True)
         self.log.log('BLOCK_START', **self.context.fields())
+        body_failed = False
         try:
             yield
+        except BaseException:
+            body_failed = True
+            raise
         finally:
             try:
-                self.transport.command(f'CO {TRIGGER_MASK}')
+                self.set_trigger(False, safety=True)
+            except Exception as exc:
+                self.log.log(
+                    'TRIGGER_CLEAR_WARNING', **self.context.fields(),
+                    detail=f'{type(exc).__name__}: {exc}',
+                )
+                if not body_failed:
+                    raise
             finally:
                 self.log.log('BLOCK_END', **self.context.fields())
                 self.context.block = previous
@@ -419,9 +507,16 @@ class IdentificationRunner:
             displayed = Decimal(response.split()[-1])
         except (IndexError, ArithmeticError) as exc:
             raise RuntimeError(f'Invalid DP response: {response!r}') from exc
-        if abs(displayed) > POSITION_QUANTUM_REV:
+        expected_displayed = (
+            self.controller_origin_rev
+            if self.relative_commands else Decimal('0')
+        )
+        tolerance = Decimal('0') if self.relative_commands else POSITION_QUANTUM_REV
+        if abs(displayed - expected_displayed) > tolerance:
             raise RuntimeError(
-                f'{where} displayed position is not zero: {displayed} rev'
+                f'{where} did not return to the captured controller '
+                f'position: expected {expected_displayed}, '
+                f'received {displayed} rev'
             )
         self.log.log(
             'ORIGIN_CHECK_OK', **self.context.fields(),
@@ -448,6 +543,31 @@ class IdentificationRunner:
             self.dwell(2.0, 'conditioning_settle')
         self.assert_origin(f'conditioning before {target}')
 
+    def run_marker(self, label: str, amplitude_full_steps: int) -> None:
+        if amplitude_full_steps <= 0:
+            raise ValueError('Marker amplitude must be positive')
+        with self.block(f'MARKER_{label}'):
+            self.configure_speed(
+                MARKER_RATE_FULL_STEPS_S, constant_start=True
+            )
+            self.log.log(
+                'MARKER_SIGNATURE', **self.context.fields(), label=label,
+                detail=(
+                    f'negative_then_positive; '
+                    f'amplitude_full_steps={amplitude_full_steps}; '
+                    f'reverse_dwell_s={MARKER_REVERSE_DWELL_S:g}'
+                ),
+            )
+            self.move_full_steps(
+                Decimal(-amplitude_full_steps), f'{label}_negative'
+            )
+            self.dwell(MARKER_REVERSE_DWELL_S, f'{label}_reverse_dwell')
+            self.move_full_steps(
+                Decimal(amplitude_full_steps), f'{label}_return'
+            )
+            self.dwell(MARKER_SETTLE_S, f'{label}_settle')
+        self.assert_origin(f'marker {label}')
+
     def run_c(self) -> None:
         with self.block('C'):
             self.configure_speed(
@@ -473,9 +593,11 @@ class IdentificationRunner:
         self.assert_origin('C')
 
     def run_slow_plateau_direction(
-        self, rate: float, direction: int,
+        self, rate: float, direction: int, *, duration_s: Optional[float] = None,
     ) -> None:
-        duration = plateau_duration_s(rate)
+        duration = (
+            plateau_duration_s(rate) if duration_s is None else duration_s
+        )
         pulse_rate = rate * self.context.mres
         pulse_count = int(math.floor(pulse_rate * duration + 1e-12))
         period_ns = int(round(1e9 / pulse_rate))
@@ -506,9 +628,11 @@ class IdentificationRunner:
         )
 
     def run_supported_plateau_direction(
-        self, rate: float, direction: int,
+        self, rate: float, direction: int, *, duration_s: Optional[float] = None,
     ) -> None:
-        duration = plateau_duration_s(rate)
+        duration = (
+            plateau_duration_s(rate) if duration_s is None else duration_s
+        )
         maximum_code = self.configure_speed(rate, constant_start=False)
         actual_omega = maximum_code * 0.01
         actual_accel = PLATEAU_ACCEL_CODE * 0.01
@@ -550,8 +674,14 @@ class IdentificationRunner:
         )
 
     def run_d(self) -> None:
-        with self.block('D'):
-            for rate in PLATEAU_RATES_FS_S:
+        for rate in PLATEAU_RATES_FS_S:
+            rate_label = f'{rate:g}'
+            marker_label = f'D_{rate_label}'
+            self.run_marker(
+                marker_label,
+                TEST_MARKER_AMPLITUDES_FULL_STEPS[marker_label],
+            )
+            with self.block(marker_label):
                 if rate in SLOW_PLATEAU_RATES_FS_S:
                     self.command(
                         f'SS {AXIS} 10 10 {PLATEAU_ACCEL_CODE} '
@@ -562,15 +692,26 @@ class IdentificationRunner:
                 else:
                     self.run_supported_plateau_direction(rate, 1)
                     self.run_supported_plateau_direction(rate, -1)
-                self.assert_origin(f'D rate {rate:g}')
+            self.assert_origin(f'D rate {rate_label}')
         self.assert_origin('D')
 
     def run_one_configuration(self) -> None:
         self.run_reference('BLOCK_0_START')
+        self.run_marker(
+            'COND_C', TEST_MARKER_AMPLITUDES_FULL_STEPS['COND_C']
+        )
         self.run_conditioning('C')
+        self.run_marker('C', TEST_MARKER_AMPLITUDES_FULL_STEPS['C'])
         self.run_c()
+        self.run_marker(
+            'COND_D', TEST_MARKER_AMPLITUDES_FULL_STEPS['COND_D']
+        )
         self.run_conditioning('D')
         self.run_d()
+        self.run_marker(
+            'BLOCK_0_END',
+            TEST_MARKER_AMPLITUDES_FULL_STEPS['BLOCK_0_END'],
+        )
         self.run_reference('BLOCK_0_END')
 
     def initialise_session(self, args: argparse.Namespace) -> None:
@@ -584,9 +725,9 @@ class IdentificationRunner:
                 f'Expected XY test box DM 0, received {module!r}'
             )
 
-        self.context.mres = 16
+        self.context.mres = MRES_VALUES[0]
         self.context.current = CURRENT_LEVELS[0].name
-        self.configure_mechanics(16)
+        self.configure_mechanics(MRES_VALUES[0])
         self.configure_current(CURRENT_LEVELS[0].controller_peak_ma)
         self.command(f'ME {AXIS}')
 
@@ -602,12 +743,46 @@ class IdentificationRunner:
             self.wait_ready()
             self.log.log('HOME_COMPLETE', **self.context.fields())
 
+        if args.use_current_position_as_origin:
+            self.wait_ready()
+            response = self.command(f'DP {AXIS}', f'DP {AXIS} ')
+            try:
+                self.controller_origin_rev = Decimal(response.split()[-1])
+            except (IndexError, ArithmeticError) as exc:
+                raise RuntimeError(f'Invalid DP response: {response!r}') from exc
+            self.relative_commands = True
+            self.ideal_position_rev = Decimal('0')
+            self.controller_position_pulses = 0
+            self.log.log(
+                'CURRENT_POSITION_CAPTURED_AS_ORIGIN',
+                **self.context.fields(), response=response,
+                commanded_position_rev=str(self.controller_origin_rev),
+            )
+            return
+
+        if args.reuse_working_origin:
+            response = self.command(f'DP {AXIS}', f'DP {AXIS} ')
+            try:
+                displayed = Decimal(response.split()[-1])
+            except (IndexError, ArithmeticError) as exc:
+                raise RuntimeError(f'Invalid DP response: {response!r}') from exc
+            if abs(displayed) > POSITION_QUANTUM_REV:
+                raise RuntimeError(
+                    f'Reused working origin is not zero: {displayed} rev'
+                )
+            self.ideal_position_rev = Decimal('0')
+            self.log.log(
+                'WORKING_ORIGIN_REUSED', **self.context.fields(),
+                response=response,
+            )
+            return
+
         working = Decimal(args.working_position_rev)
         if abs(working) > CONTROLLER_MAX_POSITION_REV:
             raise ValueError('Working position exceeds controller range')
         self.command(f'MA {AXIS} {format_position(working)}')
         self.wait_ready()
-        self.command(f'SP {AXIS} 0.000000')
+        self.command(f'SP {AXIS} 0')
         self.ideal_position_rev = Decimal('0')
         self.log.log(
             'WORKING_ORIGIN_SET', **self.context.fields(),
@@ -638,9 +813,12 @@ class IdentificationRunner:
                     'RUN_CONFIG', **self.context.fields(),
                     detail=(
                         f'SC_peak_mA={current.controller_peak_ma}; '
-                        f'TMC_set_RMS_mA={current.tmc_set_rms_ma}; '
-                        f'TMC_measured_RMS_mA={current.tmc_measured_rms_ma}'
+                        f'relative_current_percent={current.relative_percent}'
                     ),
+                )
+                self.run_marker(
+                    f'CONFIG_{index:02d}_{current.name}_MRES_{mres}',
+                    64 + 4 * index,
                 )
                 self.run_one_configuration()
                 self.assert_origin(f'run {index}')
@@ -648,14 +826,20 @@ class IdentificationRunner:
         self.log.log('CAMPAIGN_COMPLETE', **self.context.fields())
 
     def safe_shutdown(self, reason: str) -> None:
-        for command in (f'CO {TRIGGER_MASK}', f'MO {AXIS}'):
-            try:
-                self.transport.command(command)
-            except Exception as exc:
-                self.log.log(
-                    'SHUTDOWN_WARNING', **self.context.fields(),
-                    detail=f'{command} failed: {exc}',
-                )
+        try:
+            self.set_trigger(False, safety=True)
+        except Exception as exc:
+            self.log.log(
+                'SHUTDOWN_WARNING', **self.context.fields(),
+                detail=f'CO {TRIGGER_MASK} failed: {exc}',
+            )
+        try:
+            self.transport.command(f'MO {AXIS}')
+        except Exception as exc:
+            self.log.log(
+                'SHUTDOWN_WARNING', **self.context.fields(),
+                detail=f'MO {AXIS} failed: {exc}',
+            )
         self.log.log(
             'SAFE_SHUTDOWN', **self.context.fields(), detail=reason
         )
@@ -676,13 +860,17 @@ def build_parser() -> argparse.ArgumentParser:
         '--execute', action='store_true',
         help='Enable live communication and physical motor motion.',
     )
-    parser.add_argument('--port', help='Serial port, for example COM5.')
+    parser.add_argument(
+        '--port', default=DEFAULT_SERIAL_PORT,
+        help=f'Serial port; defaults to {DEFAULT_SERIAL_PORT}.',
+    )
     parser.add_argument(
         '--confirm-position-units', choices=('REVOLUTIONS',),
         help='Required live acknowledgement of verified MA/MR units.',
     )
     parser.add_argument(
         '--direction', type=int, choices=(0, 1),
+        default=0,
         help='SM direction flag verified with the small direction test.',
     )
     parser.add_argument(
@@ -691,15 +879,31 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         '--positive-limit-rev',
+        default='30',
         help='Available positive travel from the working origin.',
     )
     parser.add_argument(
         '--negative-limit-rev',
+        default='30',
         help='Available negative travel magnitude from the working origin.',
     )
     parser.add_argument(
         '--skip-home', action='store_true',
         help='Only when this controller session has already been homed.',
+    )
+    parser.add_argument(
+        '--reuse-working-origin', action='store_true',
+        help=(
+            'After the diagnostic, skip homing/repositioning and require '
+            'the displayed controller position to still be zero.'
+        ),
+    )
+    parser.add_argument(
+        '--use-current-position-as-origin', action='store_true', default=True,
+        help=(
+            'Do not home, reposition, or use SP; capture the present '
+            'position with DP and issue all moves as relative MR commands.'
+        ),
     )
     parser.add_argument('--home-max-steps', type=int)
     parser.add_argument('--home-sensor-mask', type=int)
@@ -712,6 +916,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--command-timeout-s', type=float, default=2.0)
     parser.add_argument('--status-timeout-s', type=float, default=120.0)
     parser.add_argument('--status-poll-s', type=float, default=0.01)
+    parser.add_argument(
+        '--wait-for-acquisition', action='store_true',
+        help=(
+            'After initialization, wait for Enter before starting the first '
+            'recorded marker.'
+        ),
+    )
     parser.add_argument(
         '--log-file', type=Path,
         help='CSV output path; defaults to data/hardware_runs.',
@@ -730,16 +941,27 @@ def validate_args(args: argparse.Namespace) -> None:
         if args.negative_limit_rev is None:
             args.negative_limit_rev = '30'
         args.skip_home = True
+        args.use_current_position_as_origin = True
         return
+
+    if args.reuse_working_origin and args.use_current_position_as_origin:
+        raise SystemExit(
+            '--reuse-working-origin and --use-current-position-as-origin '
+            'cannot be combined'
+        )
+    if args.reuse_working_origin or args.use_current_position_as_origin:
+        args.skip_home = True
 
     required = {
         '--port': args.port,
-        '--confirm-position-units REVOLUTIONS': args.confirm_position_units,
         '--direction': args.direction,
-        '--working-position-rev': args.working_position_rev,
         '--positive-limit-rev': args.positive_limit_rev,
         '--negative-limit-rev': args.negative_limit_rev,
     }
+    if not (
+        args.reuse_working_origin or args.use_current_position_as_origin
+    ):
+        required['--working-position-rev'] = args.working_position_rev
     if not args.skip_home:
         required.update(
             {
@@ -771,6 +993,24 @@ def default_log_path(dry_run: bool) -> Path:
     stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     suffix = 'dry_run' if dry_run else 'live'
     return DEFAULT_LOG_DIR / f'dedicated_controller_{suffix}_{stamp}.csv'
+
+
+def wait_for_acquisition(
+    args: argparse.Namespace, log: CsvEventLog, context: RunContext,
+) -> None:
+    if args.dry_run or not args.wait_for_acquisition:
+        return
+    print(
+        'Controller initialized at the working origin. Start IDS acquisition, '
+        'then press Enter to begin motion.'
+    )
+    try:
+        input()
+    except EOFError as exc:
+        raise RuntimeError(
+            'Acquisition confirmation requires an interactive terminal'
+        ) from exc
+    log.log('ACQUISITION_CONFIRMED', **context.fields())
 
 
 def main() -> int:
@@ -807,6 +1047,7 @@ def main() -> int:
     reason = 'NORMAL'
     try:
         runner.initialise_session(args)
+        wait_for_acquisition(args, log, context)
         runner.run_campaign()
     except Cancelled:
         reason = 'CANCELLED'

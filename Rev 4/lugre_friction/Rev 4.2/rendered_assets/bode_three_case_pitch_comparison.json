@@ -1,0 +1,50 @@
+{
+  "model": "Rev 4.2 locally linearized three-case comparison",
+  "stage_operating_velocity_m_per_s": 0.005,
+  "frequency_range_hz": [
+    0.1,
+    8000.0
+  ],
+  "detent_linearization": "theta_m=0; k_d=4*N_r*T_d",
+  "case_labels": {
+    "frictionless": "Frictionless baseline (detent disabled)",
+    "frictionless_detent": "Frictionless + nonlinear detent tangent",
+    "lugre_detent": "LuGre friction + nonlinear detent tangent"
+  },
+  "figures": [
+    "bode_three_case_overlay_pitch_1mm.png",
+    "bode_three_case_overlay_pitch_2mm.png",
+    "bode_three_case_overlay_pitch_1mm_vs_2mm.png"
+  ],
+  "pitches": {
+    "pitch_1mm": {
+      "frictionless": {
+        "dc_gain_m_per_rad": 0.00015915494309189595,
+        "maximum_real_eigenvalue_per_s": -22.380640490275475
+      },
+      "frictionless_detent": {
+        "dc_gain_m_per_rad": 0.00013262911924324605,
+        "maximum_real_eigenvalue_per_s": -22.202698203920118
+      },
+      "lugre_detent": {
+        "dc_gain_m_per_rad": 0.00013262911924324605,
+        "maximum_real_eigenvalue_per_s": -0.0026143791185169072
+      }
+    },
+    "pitch_2mm": {
+      "frictionless": {
+        "dc_gain_m_per_rad": 0.00031830988618378983,
+        "maximum_real_eigenvalue_per_s": -22.109865731788304
+      },
+      "frictionless_detent": {
+        "dc_gain_m_per_rad": 0.0002652582384864864,
+        "maximum_real_eigenvalue_per_s": -21.9277812797856
+      },
+      "lugre_detent": {
+        "dc_gain_m_per_rad": 0.0002652582384864866,
+        "maximum_real_eigenvalue_per_s": -0.002614379118149008
+      }
+    }
+  },
+  "data": "rendered_assets\\npz\\bode_three_case_pitch_comparison.npz"
+}

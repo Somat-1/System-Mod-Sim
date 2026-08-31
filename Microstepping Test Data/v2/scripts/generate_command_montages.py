@@ -346,6 +346,37 @@ def motion_config() -> dict:
             'hardware_acquisition_segments_total': 24,
             'stage_start': 'same fixed starting position for every execution',
         },
+        'active_dedicated_controller_campaign': {
+            'mres': [4, 2, 1],
+            'current_levels': [
+                {
+                    'name': 'I_50pct',
+                    'sc_peak_ma': 200,
+                    'relative_percent': 50,
+                },
+                {
+                    'name': 'I_100pct',
+                    'sc_peak_ma': 400,
+                    'relative_percent': 100,
+                },
+            ],
+            'executions': 6,
+            'planned_motion_duration_s': 2552.067,
+            'configuration_marker_amplitude_full_steps': (
+                '64 + 4 * one_based_run_index'
+            ),
+            'test_marker_amplitude_full_steps': {
+                'COND_C': 12, 'COND_D': 16, 'C': 20,
+                'D_0.125': 24, 'D_0.375': 28,
+                'D_1.25': 32, 'D_3.5': 36, 'D_9.5': 40,
+                'D_27.5': 44, 'D_70': 48, 'D_200': 52,
+                'BLOCK_0_END': 56,
+            },
+            'marker_pattern': (
+                'negative leap, 1.0 s dwell, equal positive return, '
+                '0.5 s settle'
+            ),
+        },
         'current_levels': [
             {
                 'name': 'I_lo',
