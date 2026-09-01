@@ -11,3 +11,7 @@ Rev 4/lugre_friction/Rev 4.2/rendered_assets/npz/multisine_rev42_results.npz
 Rev 4/lugre_friction/Rev 4.2/rendered_assets/npz/stepping_rev42_and_frictionless.npz
 Rev 4/lugre_friction/Rev 4.2/rendered_assets/npz/stepping_0p3um_settled.npz
 Microstepping Test Data/v3/data/raw_local/SteppingSequenceID.csv
+
+# Raw Dewesoft chirp-test hardware export (~2.9 GB), same local-only policy
+# as above. Not regenerable -- keep a backup of it outside git.
+ESP32S3_TMC2209_Chirp_Test/tempTVAl.csv
