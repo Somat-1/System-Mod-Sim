@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """Plot the complete raw v3 IDS encoder record, with each of the six
-run configurations shaded/labeled directly on the plot (no legend), the
+run configurations shaded/labeled directly on the plot, the
 run-transition marker moves highlighted, and per-run subplots + data
 written to rendered_assets/individual_subplots/.
+
+Each of the ten analysis-panel blocks (matching plot_block_montage.py)
+is additionally shaded with its own opaque color on both the overview
+and the per-run plots, so the raw trace shows exactly which stretch of
+data feeds which montage panel. A shared color key applies across runs.
 
 The run-transition marker is the "CONFIG_0N_..." data-visible separator
 signature commanded by
@@ -22,6 +27,7 @@ from pathlib import Path
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -34,6 +40,48 @@ OUT_PATH = ASSET_DIR / 'full_raw_sequence.png'
 
 FILETIME_UNIX_EPOCH = 116444736000000000
 CURRENT_SHORT = {'I_50pct': '50% I', 'I_100pct': '100% I'}
+HIGHLIGHT_ALPHA = 0.15
+# Conditioning uses the given yellow at the same low alpha as the rest, it
+# is nearly invisible -- boost it specifically.
+TYPE_ALPHA = {
+    'reference': HIGHLIGHT_ALPHA,
+    'creep': HIGHLIGHT_ALPHA,
+    'conditioning': 0.6,
+    'plateau': HIGHLIGHT_ALPHA,
+}
+
+# Four experiment types, one color each (reused across every block of that
+# type -- e.g. all eight D plateaus share one color). Creep sits between
+# the reference grey and the conditioning yellow so it doesn't read as the
+# same color as reference at low alpha.
+TYPE_COLORS = {
+    'reference': '#454040',      # BLOCK_0_START / BLOCK_0_END
+    'creep': '#9C975B',          # C -- olive, between grey and yellow
+    'conditioning': '#D8D365',   # COND_BEFORE_C / COND_BEFORE_D
+    'plateau': '#E6F082',        # D_0.125 ... D_200
+}
+
+# Chronological order of blocks shaded on the overview/per-run plots.
+# BLOCK_0 stands in for both BLOCK_0_START and BLOCK_0_END.
+BLOCK_ORDER = (
+    'BLOCK_0', 'COND_BEFORE_C', 'C', 'COND_BEFORE_D', 'D_0.125', 'D_0.375',
+    'D_1.25', 'D_3.5', 'D_9.5', 'D_27.5', 'D_70', 'D_200',
+)
+BLOCK_TYPE = {
+    'BLOCK_0': 'reference',
+    'COND_BEFORE_C': 'conditioning',
+    'C': 'creep',
+    'COND_BEFORE_D': 'conditioning',
+    **{f'D_{rate}': 'plateau'
+       for rate in ('0.125', '0.375', '1.25', '3.5', '9.5', '27.5', '70', '200')},
+}
+# Legend shows one swatch per type, not per block.
+TYPE_LABELS = (
+    ('reference', 'Reference (BLOCK_0)'),
+    ('creep', 'Creep/settling (C)'),
+    ('conditioning', 'Conditioning'),
+    ('plateau', 'Velocity plateaus (D)'),
+)
 
 
 def parse_ids(path: Path):
@@ -82,6 +130,33 @@ def load_log_rows(path: Path, ids_start_epoch_s: float):
     return rows
 
 
+def find_block(rows, run_index, block_name):
+    start = next(
+        r for r in rows if r['event'] == 'BLOCK_START'
+        and r['run_index'] == str(run_index) and r['block'] == block_name
+    )
+    end = next(
+        r for r in rows if r['event'] == 'BLOCK_END'
+        and r['run_index'] == str(run_index) and r['block'] == block_name
+    )
+    return start['ids_time_s'], end['ids_time_s']
+
+
+def block_spans(rows, run_index):
+    """(label, start_s, end_s) for the analysis blocks, in chronological order."""
+    spans = []
+    for label in BLOCK_ORDER:
+        if label == 'BLOCK_0':
+            s0, e0 = find_block(rows, run_index, 'BLOCK_0_START')
+            s1, e1 = find_block(rows, run_index, 'BLOCK_0_END')
+            spans.append(('BLOCK_0_START', s0, e0))
+            spans.append(('BLOCK_0_END', s1, e1))
+        else:
+            s, e = find_block(rows, run_index, label)
+            spans.append((label, s, e))
+    return spans
+
+
 def parse_runs(rows):
     runs = []
     for run_index in range(1, 7):
@@ -111,6 +186,7 @@ def parse_runs(rows):
             'end_s': end_row['ids_time_s'],
             'marker_start_s': marker_start['ids_time_s'],
             'marker_end_s': marker_end['ids_time_s'],
+            'block_spans': block_spans(rows, run_index),
         })
     return runs
 
@@ -121,37 +197,58 @@ def sample_bounds(start_s, end_s, sample_period_s, sample_count):
     return start, end
 
 
+def block_type(label):
+    key = 'BLOCK_0' if label.startswith('BLOCK_0') else label
+    return BLOCK_TYPE[key]
+
+
+def block_color(label):
+    return TYPE_COLORS[block_type(label)]
+
+
+def add_block_key(ax):
+    handles = [
+        Patch(color=TYPE_COLORS[key], alpha=0.6, label=label)
+        for key, label in TYPE_LABELS
+    ]
+    ax.legend(
+        handles=handles, loc='upper center', ncol=4, fontsize=8,
+        frameon=False, bbox_to_anchor=(0.5, -0.14),
+    )
+
+
 def plot_overview(t_s, position_nm, runs, sample_period_ms):
     bin_samples = 50
     usable = position_nm.size - position_nm.size % bin_samples
     t_min = t_s[:usable].reshape(-1, bin_samples).mean(axis=1) / 60.0
     y_um = position_nm[:usable].reshape(-1, bin_samples).mean(axis=1) / 1000.0
 
-    fig, ax = plt.subplots(figsize=(16.0, 6.0), constrained_layout=True)
+    fig, ax = plt.subplots(figsize=(16.0, 6.5), constrained_layout=True)
     ax.plot(t_min, y_um, color='#136f63', lw=0.7, zorder=2)
 
-    colors = ('#e8f1f2', '#f5e6cc')
+    zebra = ('#f4f4f4', '#ffffff')
     for run in runs:
         left = run['start_s'] / 60.0
         right = run['end_s'] / 60.0
-        ax.axvspan(
-            left, right, color=colors[(run['run_index'] - 1) % 2],
-            alpha=0.6, zorder=-2,
-        )
+        ax.axvspan(left, right, color=zebra[(run['run_index'] - 1) % 2],
+                   alpha=0.5, zorder=-3)
         ax.text(
-            (left + right) / 2.0, 0.97,
+            (left + right) / 2.0, 1.02,
             f"R{run['run_index']}  1/{run['mres']}, "
             f"{CURRENT_SHORT.get(run['current'], run['current'])}",
-            transform=ax.get_xaxis_transform(), ha='center', va='top',
+            transform=ax.get_xaxis_transform(), ha='center', va='bottom',
             fontsize=9,
         )
-        # Highlight the run-transition marker move: the amplitude-coded
-        # negative-leap/dwell/return signature that announces this run.
+        for label, start_s, end_s in run['block_spans']:
+            ax.axvspan(
+                start_s / 60.0, end_s / 60.0, color=block_color(label),
+                alpha=TYPE_ALPHA[block_type(label)], zorder=-2, linewidth=0,
+            )
         marker_left = run['marker_start_s'] / 60.0
         marker_right = run['marker_end_s'] / 60.0
         ax.axvspan(
-            marker_left, marker_right, color='#c0392b', alpha=0.35,
-            zorder=-1,
+            marker_left, marker_right, color='#c0392b',
+            alpha=HIGHLIGHT_ALPHA, zorder=-1,
         )
         ax.axvline(
             marker_left, color='#c0392b', lw=1.1, linestyle='--', zorder=3,
@@ -164,6 +261,7 @@ def plot_overview(t_s, position_nm, runs, sample_period_ms):
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.set_xlim(t_min[0], t_min[-1])
+    add_block_key(ax)
 
     fig.savefig(OUT_PATH, dpi=160)
     plt.close(fig)
@@ -184,13 +282,21 @@ def plot_and_save_run(run, t_s, position_nm, sample_period_ms):
     run_dir = SUBPLOT_DIR / folder_name
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    fig, ax = plt.subplots(figsize=(11.0, 5.0), constrained_layout=True)
-    ax.plot(local_t_s, local_y_um, color='#136f63', lw=0.6)
+    fig, ax = plt.subplots(figsize=(12.0, 5.5), constrained_layout=True)
+    ax.plot(local_t_s, local_y_um, color='#136f63', lw=0.6, zorder=2)
+
+    for label, start_s, end_s in run['block_spans']:
+        ax.axvspan(
+            start_s - run['start_s'], end_s - run['start_s'],
+            color=block_color(label), alpha=TYPE_ALPHA[block_type(label)],
+            zorder=-2, linewidth=0,
+        )
     marker_span = (
         run['marker_start_s'] - run['start_s'],
         run['marker_end_s'] - run['start_s'],
     )
-    ax.axvspan(*marker_span, color='#c0392b', alpha=0.35, zorder=-1)
+    ax.axvspan(*marker_span, color='#c0392b', alpha=HIGHLIGHT_ALPHA, zorder=-1)
+
     ax.set_xlabel('Time since run start (s)')
     ax.set_ylabel('Position (µm)')
     ax.set_title(
@@ -202,6 +308,7 @@ def plot_and_save_run(run, t_s, position_nm, sample_period_ms):
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.set_xlim(local_t_s[0], local_t_s[-1])
+    add_block_key(ax)
     fig.savefig(run_dir / 'sequence_plot.png', dpi=160)
     plt.close(fig)
 

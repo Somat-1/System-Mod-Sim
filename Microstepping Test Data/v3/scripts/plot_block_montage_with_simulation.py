@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-"""Per-configuration 10-panel block montage, in chronological order:
-BLOCK_0 (start/end overlaid), C, then the 8 D plateaus ascending. Each
-D panel keeps its own independent y-scale. Panel title colors match the
-block-color key used in plot_full_raw_sequence.py's overview/per-run
-highlight overlays, so a panel can be matched back to its source window
-on the raw trace.
+"""Clone of plot_block_montage.py with the simulated model response added
+alongside measured/commanded, from the pre-computed
+lugre_simulation.npz (see simulate_block_responses.py).
 
-Markers are excluded from every analysis panel -- each block's own
-BLOCK_START/BLOCK_END timestamps bound the plotted window exactly, with
-no marker lead-in/lead-out included.
+Model used: Rev 4.2 parallel LuGre + nonlinear detent torque (the same
+model class as generate_stepping_settled_simplified.py), driven by the
+REAL recorded commanded trajectory (piecewise-constant theta from actual
+MOVE_ACK events), simulated independently per block from rest -- same
+convention as the measured/commanded panels.
 """
 
 from __future__ import annotations
@@ -30,24 +29,20 @@ IDS_PATH = RAW_DIR / 'SteppingSequenceID.csv'
 LOG_PATH = RAW_DIR / 'identification_controller_log.csv'
 
 FILETIME_UNIX_EPOCH = 116444736000000000
-LEAD_PITCH_M = 2.0e-3  # stage lead screw pitch: 2 mm/rev
+LEAD_PITCH_M = 2.0e-3
 CURRENT_SHORT = {'I_50pct': '50% I', 'I_100pct': '100% I'}
 D_RATES = ('0.125', '0.375', '1.25', '3.5', '9.5', '27.5', '70', '200')
 MEASURED_COLOR = '#136f63'
 COMMAND_COLOR = '#d1495b'
+SIMULATED_COLOR = '#e67e22'
+MODEL_LABEL = 'Rev 4.2 parallel LuGre + nonlinear detent torque'
 
-# D-rate/MRES combinations confirmed (README.md, "D_3.5 and D_9.5 panels
-# look wrong at coarser MRES") to complete far faster than commanded --
-# an execution-timing artifact in the controller, not a plotting bug.
-# Excluded from analysis; marked with a cross rather than the C-panel's
-# star.
 ANOMALOUS_D_RATES_BY_MRES = {
     '4': (),
     '2': ('3.5', '9.5'),
     '1': ('3.5', '9.5', '27.5'),
 }
 
-# Same four experiment-type colors as plot_full_raw_sequence.py's key.
 TYPE_COLORS = {
     'reference': '#454040',
     'creep': '#9C975B',
@@ -125,10 +120,6 @@ def measured_window(time_s, position_nm, sample_period_s, start_s, end_s):
 
 
 def command_series(rows, run_index, block_start_s, block_end_s, truncate=False):
-    """truncate=True stops the series right after the last real MOVE_ACK
-    instead of extending it flat to the block end -- use where the stage
-    is known not to hold the commanded value for the remainder of the
-    block (see the C-block investigation in README.md)."""
     moves = [
         r for r in rows if r['event'] == 'MOVE_ACK'
         and r['run_index'] == str(run_index) and r['ideal_position_rev']
@@ -157,22 +148,36 @@ def style_axis(ax):
     ax.tick_params(labelsize=7, colors=AXIS_COLOR)
 
 
-def build_montage(run_index, mres, current, rows, time_s, position_nm, sample_period_s):
+def sim_trace(sim_npz, block_name):
+    t_key, y_key = f'{block_name}_time_s', f'{block_name}_position_um'
+    if sim_npz is None or t_key not in sim_npz:
+        return None, None
+    return sim_npz[t_key], sim_npz[y_key]
+
+
+def build_montage(run_index, mres, current, rows, time_s, position_nm,
+                  sample_period_s, sim_npz):
     fig, axes = plt.subplots(2, 5, figsize=(22.0, 8.0))
     panels = list(axes.flat)
 
-    # Chronological order: BLOCK_0, C, then the 8 D plateaus ascending.
     ax_ref = panels[0]
-    for block_name, label, color in (
-            ('BLOCK_0_START', 'Block start', MEASURED_COLOR),
-            ('BLOCK_0_END', 'Block end', COMMAND_COLOR)):
+    for block_name, label, color, sim_style in (
+            ('BLOCK_0_START', 'Block start', MEASURED_COLOR, '-'),
+            ('BLOCK_0_END', 'Block end', COMMAND_COLOR, '--')):
         start_s, end_s = find_block(rows, run_index, block_name)
         t, y = measured_window(time_s, position_nm, sample_period_s, start_s, end_s)
         ax_ref.plot(t, y, color=color, lw=0.9, label=label)
+        sim_t, sim_y = sim_trace(sim_npz, block_name)
+        if sim_t is not None:
+            ax_ref.plot(
+                sim_t, sim_y, color=SIMULATED_COLOR, lw=1.1,
+                linestyle=sim_style, alpha=0.9,
+                label=f'Sim {label.split()[-1]}',
+            )
     ax_ref.set_title('BLOCK_0: start vs. end', fontsize=9,
                       color=TYPE_COLORS['reference'])
     style_axis(ax_ref)
-    ax_ref.legend(loc='best', fontsize=7, framealpha=0.9)
+    ax_ref.legend(loc='best', fontsize=6.5, framealpha=0.9)
 
     ax_c = panels[1]
     start_s, end_s = find_block(rows, run_index, 'C')
@@ -181,6 +186,10 @@ def build_montage(run_index, mres, current, rows, time_s, position_nm, sample_pe
     ax_c.plot(t, y, color=MEASURED_COLOR, lw=0.9, label='Measured')
     ax_c.step(cmd_t, cmd_y, where='post', color=COMMAND_COLOR, lw=1.0,
               linestyle='--', alpha=0.85, label='Commanded (not sustained; see note)')
+    sim_t, sim_y = sim_trace(sim_npz, 'C')
+    if sim_t is not None:
+        ax_c.plot(sim_t, sim_y, color=SIMULATED_COLOR, lw=1.1, alpha=0.9,
+                  label='Simulated')
     ax_c.plot(
         0.06, 0.92, marker='*', markersize=16, color='#b30000',
         markeredgecolor='black', markeredgewidth=0.6, transform=ax_c.transAxes,
@@ -205,6 +214,10 @@ def build_montage(run_index, mres, current, rows, time_s, position_nm, sample_pe
         ax.plot(t, y, color=MEASURED_COLOR, lw=0.8, label='Measured')
         ax.step(cmd_t, cmd_y, where='post', color=COMMAND_COLOR, lw=0.9,
                 alpha=0.85, label='Commanded')
+        sim_t, sim_y = sim_trace(sim_npz, block_name)
+        if sim_t is not None:
+            ax.plot(sim_t, sim_y, color=SIMULATED_COLOR, lw=0.9, alpha=0.9,
+                    label='Simulated')
         ax.set_title(f'D {rate} full-steps/s', fontsize=9, color=AXIS_COLOR)
         style_axis(ax)
         if rate in anomalous_rates:
@@ -224,8 +237,9 @@ def build_montage(run_index, mres, current, rows, time_s, position_nm, sample_pe
     fig.suptitle(
         f"Run {run_index} — MRES 1/{mres}, "
         f"{CURRENT_SHORT.get(current, current)} "
-        "(panels in chronological order: BLOCK_0 → C → D_0.125 → ... → D_200)",
-        fontsize=12.5,
+        "(panels in chronological order: BLOCK_0 → C → D_0.125 → ... → D_200) "
+        f"| Simulated model: {MODEL_LABEL}",
+        fontsize=11.5,
     )
     footnote_lines = [
         "★ C panel: the stage did not track the commanded ±40 µm "
@@ -238,17 +252,21 @@ def build_montage(run_index, mres, current, rows, time_s, position_nm, sample_pe
             "(controller execution artifact, not a plotting issue) and are "
             "excluded from analysis -- see README.md"
         )
+    footnote_lines.append(
+        f"Orange trace: {MODEL_LABEL}, simulated against the real recorded "
+        "command, independently per block from rest."
+    )
     fig.text(
         0.5, 0.012, "\n".join(footnote_lines),
-        ha='center', va='bottom', fontsize=8.5, color='#b30000',
+        ha='center', va='bottom', fontsize=8.0, color='#b30000',
     )
-    bottom_margin = 0.06 if any_anomalous else 0.03
-    fig.tight_layout(rect=(0, bottom_margin, 1, 0.94))
+    bottom_margin = 0.075 if any_anomalous else 0.05
+    fig.tight_layout(rect=(0, bottom_margin, 1, 0.93))
 
     folder_name = f'run_{run_index:02d}_mres_{mres}_{current.lower()}'
     out_dir = SUBPLOT_DIR / folder_name
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / 'block_montage.png'
+    out_path = out_dir / 'block_montage_simulated.png'
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
     return out_path
@@ -264,9 +282,15 @@ def main() -> None:
             and r['run_index'] == str(run_index)
         )
         mres, current = start_row['mres'], start_row['current']
+        folder_name = f'run_{run_index:02d}_mres_{mres}_{current.lower()}'
+        sim_path = SUBPLOT_DIR / folder_name / 'lugre_simulation.npz'
+        sim_npz = np.load(sim_path) if sim_path.exists() else None
+        if sim_npz is None:
+            print(f'Run {run_index}: WARNING no lugre_simulation.npz found, '
+                  f'skipping simulated trace')
         out_path = build_montage(
             run_index, mres, current, rows, time_s, position_nm,
-            sample_period_s,
+            sample_period_s, sim_npz,
         )
         print(f'Run {run_index}: {out_path}')
 

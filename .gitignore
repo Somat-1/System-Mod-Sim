@@ -15,3 +15,8 @@ Microstepping Test Data/v3/data/raw_local/SteppingSequenceID.csv
 # Raw Dewesoft chirp-test hardware export (~2.9 GB), same local-only policy
 # as above. Not regenerable -- keep a backup of it outside git.
 ESP32S3_TMC2209_Chirp_Test/tempTVAl.csv
+
+# OS/tooling noise, not source.
+Thumbs.db
+__pycache__/
+*.pyc

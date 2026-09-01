@@ -4,7 +4,7 @@
   "parent_baseline": "../../model_parameters.json",
   "reused_friction_parameters": "../Rev 4.1/model_parameters.json",
   "parameters": {
-    "L": 1.0e-3,
+    "L": 2.0e-3,
     "N_r": 50,
     "T_hold": 0.06,
     "T_d": 3.0e-3,
