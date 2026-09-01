@@ -1,12 +1,22 @@
 #!/usr/bin/env python3
 """Plot the complete raw v3 IDS encoder record, with each of the six
-run configurations shaded and labeled directly on the plot (no legend)."""
+run configurations shaded/labeled directly on the plot (no legend), the
+run-transition marker moves highlighted, and per-run subplots + data
+written to rendered_assets/individual_subplots/.
+
+The run-transition marker is the "CONFIG_0N_..." data-visible separator
+signature commanded by
+../../v2/scripts/run_identification_dedicated_controller.py
+(64 + 4*index full steps, negative-then-positive leap at 150 full
+steps/s, 1.0 s reverse dwell, 0.5 s settle) -- it is the physical
+"indicative move" that marks where one run ends and the next begins.
+"""
 
 from __future__ import annotations
 
 import csv
 import re
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 import matplotlib
@@ -17,11 +27,13 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 RAW_DIR = ROOT / 'data' / 'raw_local'
 ASSET_DIR = ROOT / 'rendered_assets'
+SUBPLOT_DIR = ASSET_DIR / 'individual_subplots'
 IDS_PATH = RAW_DIR / 'SteppingSequenceID.csv'
 LOG_PATH = RAW_DIR / 'identification_controller_log.csv'
 OUT_PATH = ASSET_DIR / 'full_raw_sequence.png'
 
 FILETIME_UNIX_EPOCH = 116444736000000000
+CURRENT_SHORT = {'I_50pct': '50% I', 'I_100pct': '100% I'}
 
 
 def parse_ids(path: Path):
@@ -47,8 +59,8 @@ def parse_ids(path: Path):
     )
     raw = numeric[:, 1].astype(np.uint32)
     # Encoder is nm-native (1 count = 1 nm). Relative to the first sample
-    # (which is defined as zero), correcting for 32-bit counter wraparound
-    # via signed deltas rather than a naive subtraction.
+    # (defined as zero), correcting for 32-bit counter wraparound via
+    # signed deltas rather than a naive subtraction.
     delta = np.diff(raw.astype(np.int64))
     delta[delta > 2**31] -= 2**32
     delta[delta < -(2**31)] += 2**32
@@ -57,16 +69,20 @@ def parse_ids(path: Path):
     position_nm[1:] = np.cumsum(delta)
     time_s = np.arange(raw.size, dtype=np.float64) * sample_period_ms * 1.0e-3
     start_epoch_s = (start_filetime - FILETIME_UNIX_EPOCH) / 1.0e7
-    return time_s, position_nm, start_epoch_s
+    return time_s, position_nm, start_epoch_s, sample_period_ms
 
 
-def parse_runs(path: Path, ids_start_epoch_s: float):
+def load_log_rows(path: Path, ids_start_epoch_s: float):
     rows = []
     with path.open('r', encoding='utf-8-sig', newline='') as handle:
         for row in csv.DictReader(handle):
             instant = datetime.fromisoformat(row['utc'])
             row['ids_time_s'] = instant.timestamp() - ids_start_epoch_s
             rows.append(row)
+    return rows
+
+
+def parse_runs(rows):
     runs = []
     for run_index in range(1, 7):
         start_row = next(
@@ -77,33 +93,42 @@ def parse_runs(path: Path, ids_start_epoch_s: float):
             r for r in rows
             if r['event'] == 'RUN_COMPLETE' and r['run_index'] == str(run_index)
         )
+        marker_start = next(
+            r for r in rows
+            if r['event'] == 'BLOCK_START' and r['run_index'] == str(run_index)
+            and r['block'].startswith('MARKER_CONFIG')
+        )
+        marker_end = next(
+            r for r in rows
+            if r['event'] == 'BLOCK_END' and r['run_index'] == str(run_index)
+            and r['block'].startswith('MARKER_CONFIG')
+        )
         runs.append({
             'run_index': run_index,
             'mres': start_row['mres'],
             'current': start_row['current'],
             'start_s': start_row['ids_time_s'],
             'end_s': end_row['ids_time_s'],
+            'marker_start_s': marker_start['ids_time_s'],
+            'marker_end_s': marker_end['ids_time_s'],
         })
     return runs
 
 
-CURRENT_SHORT = {'I_50pct': '50% I', 'I_100pct': '100% I'}
+def sample_bounds(start_s, end_s, sample_period_s, sample_count):
+    start = max(0, int(np.ceil(start_s / sample_period_s)))
+    end = min(sample_count, int(np.floor(end_s / sample_period_s)) + 1)
+    return start, end
 
 
-def main() -> None:
-    ASSET_DIR.mkdir(parents=True, exist_ok=True)
-    time_s, position_nm, start_epoch_s = parse_ids(IDS_PATH)
-    runs = parse_runs(LOG_PATH, start_epoch_s)
-
+def plot_overview(t_s, position_nm, runs, sample_period_ms):
     bin_samples = 50
     usable = position_nm.size - position_nm.size % bin_samples
-    t_min = time_s[:usable].reshape(-1, bin_samples).mean(axis=1) / 60.0
-    y_um = (
-        position_nm[:usable].reshape(-1, bin_samples).mean(axis=1) / 1000.0
-    )
+    t_min = t_s[:usable].reshape(-1, bin_samples).mean(axis=1) / 60.0
+    y_um = position_nm[:usable].reshape(-1, bin_samples).mean(axis=1) / 1000.0
 
     fig, ax = plt.subplots(figsize=(16.0, 6.0), constrained_layout=True)
-    ax.plot(t_min, y_um, color='#136f63', lw=0.7)
+    ax.plot(t_min, y_um, color='#136f63', lw=0.7, zorder=2)
 
     colors = ('#e8f1f2', '#f5e6cc')
     for run in runs:
@@ -111,7 +136,7 @@ def main() -> None:
         right = run['end_s'] / 60.0
         ax.axvspan(
             left, right, color=colors[(run['run_index'] - 1) % 2],
-            alpha=0.6, zorder=-1,
+            alpha=0.6, zorder=-2,
         )
         ax.text(
             (left + right) / 2.0, 0.97,
@@ -119,6 +144,17 @@ def main() -> None:
             f"{CURRENT_SHORT.get(run['current'], run['current'])}",
             transform=ax.get_xaxis_transform(), ha='center', va='top',
             fontsize=9,
+        )
+        # Highlight the run-transition marker move: the amplitude-coded
+        # negative-leap/dwell/return signature that announces this run.
+        marker_left = run['marker_start_s'] / 60.0
+        marker_right = run['marker_end_s'] / 60.0
+        ax.axvspan(
+            marker_left, marker_right, color='#c0392b', alpha=0.35,
+            zorder=-1,
+        )
+        ax.axvline(
+            marker_left, color='#c0392b', lw=1.1, linestyle='--', zorder=3,
         )
 
     ax.set_xlabel('Time (min)')
@@ -131,8 +167,68 @@ def main() -> None:
 
     fig.savefig(OUT_PATH, dpi=160)
     plt.close(fig)
+
+
+def plot_and_save_run(run, t_s, position_nm, sample_period_ms):
+    sample_period_s = sample_period_ms * 1.0e-3
+    first, last = sample_bounds(
+        run['start_s'], run['end_s'], sample_period_s, position_nm.size,
+    )
+    local_t_s = t_s[first:last] - run['start_s']
+    local_y_um = (position_nm[first:last] - position_nm[first]) / 1000.0
+
+    folder_name = (
+        f"run_{run['run_index']:02d}_mres_{run['mres']}_"
+        f"{run['current'].lower()}"
+    )
+    run_dir = SUBPLOT_DIR / folder_name
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    fig, ax = plt.subplots(figsize=(11.0, 5.0), constrained_layout=True)
+    ax.plot(local_t_s, local_y_um, color='#136f63', lw=0.6)
+    marker_span = (
+        run['marker_start_s'] - run['start_s'],
+        run['marker_end_s'] - run['start_s'],
+    )
+    ax.axvspan(*marker_span, color='#c0392b', alpha=0.35, zorder=-1)
+    ax.set_xlabel('Time since run start (s)')
+    ax.set_ylabel('Position (µm)')
+    ax.set_title(
+        f"Run {run['run_index']} — MRES 1/{run['mres']}, "
+        f"{CURRENT_SHORT.get(run['current'], run['current'])}"
+    )
+    ax.grid(True, alpha=0.3, linewidth=0.6)
+    ax.set_axisbelow(True)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.set_xlim(local_t_s[0], local_t_s[-1])
+    fig.savefig(run_dir / 'sequence_plot.png', dpi=160)
+    plt.close(fig)
+
+    np.savez_compressed(
+        run_dir / 'sequence_data.npz',
+        time_s=local_t_s,
+        position_um=local_y_um,
+        run_index=np.asarray(run['run_index']),
+        mres=np.asarray(run['mres']),
+        current=np.asarray(run['current']),
+        marker_span_s=np.asarray(marker_span),
+    )
+
+
+def main() -> None:
+    ASSET_DIR.mkdir(parents=True, exist_ok=True)
+    t_s, position_nm, start_epoch_s, sample_period_ms = parse_ids(IDS_PATH)
+    rows = load_log_rows(LOG_PATH, start_epoch_s)
+    runs = parse_runs(rows)
+
+    plot_overview(t_s, position_nm, runs, sample_period_ms)
+    for run in runs:
+        plot_and_save_run(run, t_s, position_nm, sample_period_ms)
+
     print(f'Samples: {position_nm.size:,}')
-    print(f'Saved: {OUT_PATH}')
+    print(f'Overview: {OUT_PATH}')
+    print(f'Per-run subfolders: {SUBPLOT_DIR}')
 
 
 if __name__ == '__main__':
