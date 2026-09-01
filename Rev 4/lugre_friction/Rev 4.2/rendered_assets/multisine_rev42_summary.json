@@ -64,10 +64,10 @@
     1000.0
   ],
   "workers": 12,
-  "orchestrator_wall_s": 42534.14216749999,
-  "cached_cases": 280,
+  "orchestrator_wall_s": 0.0,
+  "cached_cases": 420,
   "serial_worker_wall_s": 1106778.426803599,
-  "effective_parallel_speedup": 26.020941540212373,
+  "effective_parallel_speedup": null,
   "per_solver_amplitude_statistics": {
     "RK45": [
       {

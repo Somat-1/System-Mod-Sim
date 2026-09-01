@@ -19,6 +19,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
+from matplotlib.ticker import NullFormatter, ScalarFormatter
 
 from lugre_model_rev42 import N_STATES, LuGreModelRev42
 from multisine_rev42 import (
@@ -241,10 +242,20 @@ def blend(color, target, fraction: float):
     return tuple((1.0 - fraction) * color + fraction * target)
 
 
+# Display-only lower bound: the design excites down to F_LO_HZ (0.25 Hz),
+# but the response is flat and featureless below ~10 Hz, and the dead space
+# there just crowds the legend into the interesting region.
+PLOT_F_LO_HZ = 10.0
+
+
 def style_axes(axis) -> None:
     axis.set_xscale('log')
-    axis.set_xlim(F_LO_HZ, F_HI_HZ)
-    axis.grid(True, which='both', color='#cccccc', linewidth=0.45)
+    axis.set_xlim(PLOT_F_LO_HZ, F_HI_HZ)
+    axis.grid(True, which='major', color='#bbbbbb', linewidth=0.55)
+    axis.grid(True, which='minor', color='#e2e2e2', linewidth=0.35)
+    axis.xaxis.set_major_formatter(ScalarFormatter())
+    axis.xaxis.set_minor_formatter(NullFormatter())
+    axis.ticklabel_format(axis='x', style='plain')
 
 
 def plot_solver_comparison(grouped, amplitudes, solvers) -> None:

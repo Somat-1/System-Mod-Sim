@@ -1,0 +1,26 @@
+{
+  "step_travel_um": 0.3,
+  "command_edges": 256,
+  "results": {
+    "lugre_friction_and_detent": {
+      "peak_absolute_error_um": 0.486114806076986,
+      "final_error_nm": 26.002414999798003,
+      "maximum_stage_position_um": 9.841231993216859,
+      "minimum_stage_position_um": -9.841232020791448
+    },
+    "frictionless_baseline": {
+      "peak_absolute_error_um": 1.8505532914899754,
+      "final_error_nm": 0.6483492539669634,
+      "maximum_stage_position_um": 8.263940833035221,
+      "minimum_stage_position_um": -8.263940833035186
+    },
+    "frictionless_full_periodic_detent": {
+      "peak_absolute_error_um": 0.46593572037329845,
+      "final_error_nm": 0.6735419092948398,
+      "maximum_stage_position_um": 9.933713369567025,
+      "minimum_stage_position_um": -9.933713371977817
+    }
+  },
+  "maximum_newton_vs_lagrange_stage_difference_um": 0.0,
+  "note": "Newton and Lagrange frictionless baselines differ by at most 0 um and are merged into a single curve in the simplified figure."
+}
