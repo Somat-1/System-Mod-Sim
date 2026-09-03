@@ -7,7 +7,7 @@
     "L": 2.0e-3,
     "N_r": 50,
     "T_hold": 0.06,
-    "T_d": 3.0e-3,
+    "T_d": 5.0e-3,
     "I_m": 9.0e-7,
     "I_c": 1.18e-6,
     "I_s": 6.06e-7,
@@ -22,7 +22,7 @@
     "c_c": 2.4e-4,
     "c_s1": 3.7e-4,
     "c_s2": 2.0e-4,
-    "c_nut": 101.0,
+    "c_nut": 0.0,
     "c_brg": 37.2,
     "c_EM": 1.3283e-4,
 
@@ -40,7 +40,7 @@
     "Ts_sb": 2.2e-4,
     "vs_sb": 0.1,
 
-    "sigma0_way": 7.6e5,
+    "sigma0_way": 3.45e6,
     "sigma1_way": 776.716164374091,
     "sigma2_way": 0.4,
     "Fc_way": 3.0,
@@ -51,10 +51,12 @@
     "sigma1_target_zeta": 0.7
   },
   "parameter_notes": {
+    "physical_parameter_correction": "L=2 mm/rev and T_d=5 mN*m are the confirmed actual-system values (updated 2026-09-02). Existing rendered plots predate this correction and must be regenerated before quantitative use.",
     "topology": "k_nut/c_nut remain in K/C. The nut LuGre port is a parasitic pre-rolling friction path in parallel across the same relative coordinate.",
     "friction_source": "sigma0, sigma2, breakaway/Coulomb levels and Stribeck velocities are reused from Rev 4.1. Rev 4.1's current corrected support-bearing values are used.",
     "sigma1": "Set to 2*zeta*sqrt(sigma0*m_eff), zeta=0.7. m_eff is M_screw||M_s for nut, M_s for guideway and I_sb for support bearing.",
-    "c_nut_caveat": "The baseline c_nut=101 N*s/m is retained for a direct topology comparison. It overlaps dissipation represented by sigma1/sigma2 and should be identified or repartitioned before claiming a calibrated model.",
+    "sigma0_way_caveat": "UPDATED 2026-09-03: sigma0_way raised from 7.6e5 to 3.45e6 N/m. Source: measured D_0.125 full-step treads at MRES 1/1 (v3/rendered_assets/individual_subplots/calibration_bracketing/step4a_d0125_treads.png) are visibly square (median pre-jump creep fraction 13%, not the ~59% the old value implies), bracketing the presliding distance F_s,way/sigma0_way <= 1.3 um. 3.45e6 is that bound evaluated at the placeholder F_s_way=4.5 N and should be read as a LOWER bound on sigma0_way (a lower bound on the timestamp-corrected presliding distance further tightens this -- MOVE_ACK lags true motion onset by 30-50 ms, so some of the measured 'creep' is actually the leading edge of the commanded move, not compliance), not a precise fit -- see calibration_bracketing/RESULTS.md. sigma1_way (776.72 N*s/m) was NOT recomputed and is now inconsistent with the target-zeta=0.7 rule at the new sigma0_way (it now implies zeta~0.33, not 0.7) -- decide whether to recompute it before treating this as calibrated.",
+    "c_nut_caveat": "DECIDED 2026-09-02: c_nut set to 0 (was 101 N*s/m). c_nut, sigma1_nut, and sigma2_nut all act on the same relative velocity v_nut, so their contributions are linearly indistinguishable at any single operating point -- an identifiability problem, not a physics error. Fitting sigma1_nut with c_nut left nonzero would let the fit silently absorb whatever c_nut got wrong. Resolution: c_nut carries no dissipation; sigma1_nut (already set independently via the target-zeta rule below, with no reference to c_nut) and sigma2_nut carry all nut-port damping. k_nut (the load-bearing spring) is unaffected and unchanged.",
     "detent": "The linear k_d term is absent from the structural K matrix. T_d*sin(4*N_r*theta_m) is evaluated as a nonlinear generalized torque.",
     "smooth_abs": "The LuGre decay law uses sqrt(v^2+epsilon^2) with epsilon=1e-9 in the port velocity units."
   }

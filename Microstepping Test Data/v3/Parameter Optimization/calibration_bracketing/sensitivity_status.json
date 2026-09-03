@@ -1,0 +1,536 @@
+{
+  "schema": "step6-sensitivity-status-v1",
+  "note": "estimated_remaining_s is a rough projection from the average completed-job time; per-job time on this network share has varied by 10x+ run-to-run this session, so treat it as a very loose bound, not a real ETA.",
+  "started_at": "2026-09-03T09:12:28.992391+00:00",
+  "last_updated": "2026-09-03T10:24:56.385669+00:00",
+  "workers": 18,
+  "total_jobs": 104,
+  "completed_jobs": 104,
+  "failed_jobs": 0,
+  "pending_jobs": 0,
+  "elapsed_s": 4347.4,
+  "avg_completed_job_wall_s": 2396.9,
+  "estimated_remaining_s": null,
+  "jobs": {
+    "baseline|None|0.125": {
+      "status": "done",
+      "cost_um": 0.7744,
+      "job_wall_s": 114.5
+    },
+    "baseline|None|0.375": {
+      "status": "done",
+      "cost_um": 0.9253,
+      "job_wall_s": 266.5
+    },
+    "baseline|None|1.25": {
+      "status": "done",
+      "cost_um": 1.3254,
+      "job_wall_s": 1147.8
+    },
+    "baseline|None|3.5": {
+      "status": "done",
+      "cost_um": 21.2709,
+      "job_wall_s": 510.8
+    },
+    "baseline|None|9.5": {
+      "status": "done",
+      "cost_um": 21.0576,
+      "job_wall_s": 1538.8
+    },
+    "baseline|None|27.5": {
+      "status": "done",
+      "cost_um": 38.8717,
+      "job_wall_s": 1135.2
+    },
+    "baseline|None|70": {
+      "status": "done",
+      "cost_um": 148.9909,
+      "job_wall_s": 542.2
+    },
+    "baseline|None|200": {
+      "status": "done",
+      "cost_um": 891.2447,
+      "job_wall_s": 1151.6
+    },
+    "plus|sigma0_way|0.125": {
+      "status": "done",
+      "cost_um": 0.7743,
+      "job_wall_s": 88.3
+    },
+    "plus|sigma0_way|0.375": {
+      "status": "done",
+      "cost_um": 0.925,
+      "job_wall_s": 293.3
+    },
+    "plus|sigma0_way|1.25": {
+      "status": "done",
+      "cost_um": 1.325,
+      "job_wall_s": 1266.7
+    },
+    "plus|sigma0_way|3.5": {
+      "status": "done",
+      "cost_um": 21.2703,
+      "job_wall_s": 623.6
+    },
+    "plus|sigma0_way|9.5": {
+      "status": "done",
+      "cost_um": 21.057,
+      "job_wall_s": 1887.1
+    },
+    "plus|sigma0_way|27.5": {
+      "status": "done",
+      "cost_um": 38.8717,
+      "job_wall_s": 1318.4
+    },
+    "plus|sigma0_way|70": {
+      "status": "done",
+      "cost_um": 148.9909,
+      "job_wall_s": 547.8
+    },
+    "plus|sigma0_way|200": {
+      "status": "done",
+      "cost_um": 891.2446,
+      "job_wall_s": 1344.6
+    },
+    "minus|sigma0_way|0.125": {
+      "status": "done",
+      "cost_um": 0.7745,
+      "job_wall_s": 74.5
+    },
+    "minus|sigma0_way|0.375": {
+      "status": "done",
+      "cost_um": 0.9256,
+      "job_wall_s": 257.1
+    },
+    "minus|sigma0_way|1.25": {
+      "status": "done",
+      "cost_um": 1.3259,
+      "job_wall_s": 1482.1
+    },
+    "minus|sigma0_way|3.5": {
+      "status": "done",
+      "cost_um": 21.2717,
+      "job_wall_s": 567.5
+    },
+    "minus|sigma0_way|9.5": {
+      "status": "done",
+      "cost_um": 21.0584,
+      "job_wall_s": 2191.9
+    },
+    "minus|sigma0_way|27.5": {
+      "status": "done",
+      "cost_um": 38.8716,
+      "job_wall_s": 1592.3
+    },
+    "minus|sigma0_way|70": {
+      "status": "done",
+      "cost_um": 148.9908,
+      "job_wall_s": 854.3
+    },
+    "minus|sigma0_way|200": {
+      "status": "done",
+      "cost_um": 891.2447,
+      "job_wall_s": 1764.3
+    },
+    "plus|sigma1_way|0.125": {
+      "status": "done",
+      "cost_um": 0.7744,
+      "job_wall_s": 537.1
+    },
+    "plus|sigma1_way|0.375": {
+      "status": "done",
+      "cost_um": 0.9252,
+      "job_wall_s": 937.7
+    },
+    "plus|sigma1_way|1.25": {
+      "status": "done",
+      "cost_um": 1.3253,
+      "job_wall_s": 1752.7
+    },
+    "plus|sigma1_way|3.5": {
+      "status": "done",
+      "cost_um": 21.2694,
+      "job_wall_s": 1158.5
+    },
+    "plus|sigma1_way|9.5": {
+      "status": "done",
+      "cost_um": 21.0562,
+      "job_wall_s": 2280.4
+    },
+    "plus|sigma1_way|27.5": {
+      "status": "done",
+      "cost_um": 38.8711,
+      "job_wall_s": 2129.7
+    },
+    "plus|sigma1_way|70": {
+      "status": "done",
+      "cost_um": 148.9907,
+      "job_wall_s": 1567.5
+    },
+    "plus|sigma1_way|200": {
+      "status": "done",
+      "cost_um": 891.2447,
+      "job_wall_s": 2180.5
+    },
+    "minus|sigma1_way|0.125": {
+      "status": "done",
+      "cost_um": 0.7745,
+      "job_wall_s": 1224.0
+    },
+    "minus|sigma1_way|0.375": {
+      "status": "done",
+      "cost_um": 0.9254,
+      "job_wall_s": 1494.7
+    },
+    "minus|sigma1_way|1.25": {
+      "status": "done",
+      "cost_um": 1.3255,
+      "job_wall_s": 2194.5
+    },
+    "minus|sigma1_way|3.5": {
+      "status": "done",
+      "cost_um": 21.2726,
+      "job_wall_s": 1717.8
+    },
+    "minus|sigma1_way|9.5": {
+      "status": "done",
+      "cost_um": 21.0593,
+      "job_wall_s": 2494.2
+    },
+    "minus|sigma1_way|27.5": {
+      "status": "done",
+      "cost_um": 38.8724,
+      "job_wall_s": 2198.8
+    },
+    "minus|sigma1_way|70": {
+      "status": "done",
+      "cost_um": 148.9911,
+      "job_wall_s": 2038.8
+    },
+    "minus|sigma1_way|200": {
+      "status": "done",
+      "cost_um": 891.2446,
+      "job_wall_s": 2346.7
+    },
+    "plus|sigma2_way|0.125": {
+      "status": "done",
+      "cost_um": 0.7744,
+      "job_wall_s": 1599.5
+    },
+    "plus|sigma2_way|0.375": {
+      "status": "done",
+      "cost_um": 0.9253,
+      "job_wall_s": 1947.0
+    },
+    "plus|sigma2_way|1.25": {
+      "status": "done",
+      "cost_um": 1.3254,
+      "job_wall_s": 2441.3
+    },
+    "plus|sigma2_way|3.5": {
+      "status": "done",
+      "cost_um": 21.2709,
+      "job_wall_s": 2105.0
+    },
+    "plus|sigma2_way|9.5": {
+      "status": "done",
+      "cost_um": 21.0577,
+      "job_wall_s": 2767.1
+    },
+    "plus|sigma2_way|27.5": {
+      "status": "done",
+      "cost_um": 38.8717,
+      "job_wall_s": 2436.0
+    },
+    "plus|sigma2_way|70": {
+      "status": "done",
+      "cost_um": 148.9909,
+      "job_wall_s": 2238.1
+    },
+    "plus|sigma2_way|200": {
+      "status": "done",
+      "cost_um": 891.2447,
+      "job_wall_s": 2632.2
+    },
+    "minus|sigma2_way|0.125": {
+      "status": "done",
+      "cost_um": 0.7744,
+      "job_wall_s": 1906.3
+    },
+    "minus|sigma2_way|0.375": {
+      "status": "done",
+      "cost_um": 0.9253,
+      "job_wall_s": 2166.1
+    },
+    "minus|sigma2_way|1.25": {
+      "status": "done",
+      "cost_um": 1.3254,
+      "job_wall_s": 2693.4
+    },
+    "minus|sigma2_way|3.5": {
+      "status": "done",
+      "cost_um": 21.2708,
+      "job_wall_s": 2330.9
+    },
+    "minus|sigma2_way|9.5": {
+      "status": "done",
+      "cost_um": 21.0576,
+      "job_wall_s": 3032.9
+    },
+    "minus|sigma2_way|27.5": {
+      "status": "done",
+      "cost_um": 38.8717,
+      "job_wall_s": 2806.4
+    },
+    "minus|sigma2_way|70": {
+      "status": "done",
+      "cost_um": 148.9909,
+      "job_wall_s": 2536.6
+    },
+    "minus|sigma2_way|200": {
+      "status": "done",
+      "cost_um": 891.2447,
+      "job_wall_s": 2950.5
+    },
+    "plus|Fc_way|0.125": {
+      "status": "done",
+      "cost_um": 0.7743,
+      "job_wall_s": 2255.2
+    },
+    "plus|Fc_way|0.375": {
+      "status": "done",
+      "cost_um": 0.9249,
+      "job_wall_s": 2409.3
+    },
+    "plus|Fc_way|1.25": {
+      "status": "done",
+      "cost_um": 1.3248,
+      "job_wall_s": 2942.2
+    },
+    "plus|Fc_way|3.5": {
+      "status": "done",
+      "cost_um": 21.292,
+      "job_wall_s": 2514.7
+    },
+    "plus|Fc_way|9.5": {
+      "status": "done",
+      "cost_um": 21.0791,
+      "job_wall_s": 3151.6
+    },
+    "plus|Fc_way|27.5": {
+      "status": "done",
+      "cost_um": 38.9051,
+      "job_wall_s": 2895.6
+    },
+    "plus|Fc_way|70": {
+      "status": "done",
+      "cost_um": 149.0195,
+      "job_wall_s": 2632.6
+    },
+    "plus|Fc_way|200": {
+      "status": "done",
+      "cost_um": 891.2546,
+      "job_wall_s": 3103.2
+    },
+    "minus|Fc_way|0.125": {
+      "status": "done",
+      "cost_um": 0.7746,
+      "job_wall_s": 2418.4
+    },
+    "minus|Fc_way|0.375": {
+      "status": "done",
+      "cost_um": 0.9257,
+      "job_wall_s": 2638.9
+    },
+    "minus|Fc_way|1.25": {
+      "status": "done",
+      "cost_um": 1.3261,
+      "job_wall_s": 3179.9
+    },
+    "minus|Fc_way|3.5": {
+      "status": "done",
+      "cost_um": 21.2497,
+      "job_wall_s": 2819.4
+    },
+    "minus|Fc_way|9.5": {
+      "status": "done",
+      "cost_um": 21.0361,
+      "job_wall_s": 3481.7
+    },
+    "minus|Fc_way|27.5": {
+      "status": "done",
+      "cost_um": 38.8379,
+      "job_wall_s": 3265.1
+    },
+    "minus|Fc_way|70": {
+      "status": "done",
+      "cost_um": 148.9619,
+      "job_wall_s": 2969.5
+    },
+    "minus|Fc_way|200": {
+      "status": "done",
+      "cost_um": 891.2347,
+      "job_wall_s": 3345.3
+    },
+    "plus|Fs_way|0.125": {
+      "status": "done",
+      "cost_um": 0.7744,
+      "job_wall_s": 2705.7
+    },
+    "plus|Fs_way|0.375": {
+      "status": "done",
+      "cost_um": 0.9253,
+      "job_wall_s": 2856.8
+    },
+    "plus|Fs_way|1.25": {
+      "status": "done",
+      "cost_um": 1.3254,
+      "job_wall_s": 3397.5
+    },
+    "plus|Fs_way|3.5": {
+      "status": "done",
+      "cost_um": 21.2946,
+      "job_wall_s": 3076.8
+    },
+    "plus|Fs_way|9.5": {
+      "status": "done",
+      "cost_um": 21.0801,
+      "job_wall_s": 3688.9
+    },
+    "plus|Fs_way|27.5": {
+      "status": "done",
+      "cost_um": 38.8764,
+      "job_wall_s": 3519.4
+    },
+    "plus|Fs_way|70": {
+      "status": "done",
+      "cost_um": 148.9914,
+      "job_wall_s": 3258.2
+    },
+    "plus|Fs_way|200": {
+      "status": "done",
+      "cost_um": 891.2449,
+      "job_wall_s": 3601.9
+    },
+    "minus|Fs_way|0.125": {
+      "status": "done",
+      "cost_um": 0.7744,
+      "job_wall_s": 2935.2
+    },
+    "minus|Fs_way|0.375": {
+      "status": "done",
+      "cost_um": 0.9253,
+      "job_wall_s": 3128.5
+    },
+    "minus|Fs_way|1.25": {
+      "status": "done",
+      "cost_um": 1.3254,
+      "job_wall_s": 3663.6
+    },
+    "minus|Fs_way|3.5": {
+      "status": "done",
+      "cost_um": 21.2477,
+      "job_wall_s": 3270.7
+    },
+    "minus|Fs_way|9.5": {
+      "status": "done",
+      "cost_um": 21.0357,
+      "job_wall_s": 3807.9
+    },
+    "minus|Fs_way|27.5": {
+      "status": "done",
+      "cost_um": 38.8667,
+      "job_wall_s": 3592.4
+    },
+    "minus|Fs_way|70": {
+      "status": "done",
+      "cost_um": 148.99,
+      "job_wall_s": 3373.3
+    },
+    "minus|Fs_way|200": {
+      "status": "done",
+      "cost_um": 891.2444,
+      "job_wall_s": 3772.1
+    },
+    "plus|vs_way|0.125": {
+      "status": "done",
+      "cost_um": 0.7744,
+      "job_wall_s": 3179.6
+    },
+    "plus|vs_way|0.375": {
+      "status": "done",
+      "cost_um": 0.9253,
+      "job_wall_s": 3343.7
+    },
+    "plus|vs_way|1.25": {
+      "status": "done",
+      "cost_um": 1.3254,
+      "job_wall_s": 3822.4
+    },
+    "plus|vs_way|3.5": {
+      "status": "done",
+      "cost_um": 21.2824,
+      "job_wall_s": 3490.1
+    },
+    "plus|vs_way|9.5": {
+      "status": "done",
+      "cost_um": 21.0692,
+      "job_wall_s": 3968.9
+    },
+    "plus|vs_way|27.5": {
+      "status": "done",
+      "cost_um": 38.8776,
+      "job_wall_s": 3880.4
+    },
+    "plus|vs_way|70": {
+      "status": "done",
+      "cost_um": 148.9916,
+      "job_wall_s": 3667.8
+    },
+    "plus|vs_way|200": {
+      "status": "done",
+      "cost_um": 891.2448,
+      "job_wall_s": 3944.7
+    },
+    "minus|vs_way|0.125": {
+      "status": "done",
+      "cost_um": 0.7744,
+      "job_wall_s": 3414.0
+    },
+    "minus|vs_way|0.375": {
+      "status": "done",
+      "cost_um": 0.9253,
+      "job_wall_s": 3558.8
+    },
+    "minus|vs_way|1.25": {
+      "status": "done",
+      "cost_um": 1.3254,
+      "job_wall_s": 3994.4
+    },
+    "minus|vs_way|3.5": {
+      "status": "done",
+      "cost_um": 21.2579,
+      "job_wall_s": 3742.4
+    },
+    "minus|vs_way|9.5": {
+      "status": "done",
+      "cost_um": 21.0449,
+      "job_wall_s": 4225.5
+    },
+    "minus|vs_way|27.5": {
+      "status": "done",
+      "cost_um": 38.8665,
+      "job_wall_s": 4041.1
+    },
+    "minus|vs_way|70": {
+      "status": "done",
+      "cost_um": 148.9901,
+      "job_wall_s": 3808.1
+    },
+    "minus|vs_way|200": {
+      "status": "done",
+      "cost_um": 891.2445,
+      "job_wall_s": 4119.4
+    }
+  }
+}

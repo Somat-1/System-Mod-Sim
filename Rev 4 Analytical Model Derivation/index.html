@@ -1,0 +1,2342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Newton free-body derivation of the Rev 4 frictionless six-coordinate drivetrain model.">
+<title>Rev 4 Analytical Model Derivation - Newton Method</title>
+<script>
+window.MathJax={
+  tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']],tags:'ams'},
+  svg:{fontCache:'local'}
+};
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+:root{
+  --page:#f3f5f7;--paper:#fff;--ink:#18212d;--muted:#5d6877;--line:#d7dee7;
+  --accent:#22577a;--accent2:#2f7d68;--soft:#f7f9fb;--accent-soft:#eaf3f7;
+  --warn:#855a19;--warn-bg:#fff7e7;--shadow:0 18px 50px rgba(23,34,48,.08)
+}
+[data-theme="dark"]{
+  --page:#11161d;--paper:#18202a;--ink:#edf1f5;--muted:#aeb8c5;--line:#34404d;
+  --accent:#79b8dc;--accent2:#75c9af;--soft:#141b23;--accent-soft:#1c3442;
+  --warn:#efbf72;--warn-bg:#342a19;--shadow:none
+}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--page);color:var(--ink);font:16px/1.68 Inter,"Segoe UI",Arial,sans-serif}
+.page{width:min(1120px,calc(100% - 32px));margin:32px auto 72px;background:var(--paper);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);overflow:hidden}
+.hero{padding:54px 64px 46px;color:#fff;background:radial-gradient(circle at 88% 8%,rgba(255,255,255,.18),transparent 28%),linear-gradient(135deg,#173f5f,#22577a 55%,#2f7d68)}
+.eyebrow{margin:0 0 10px;font-size:.78rem;font-weight:750;letter-spacing:.12em;text-transform:uppercase;opacity:.82}
+h1{max-width:820px;margin:0;font:650 clamp(2.15rem,5vw,3.55rem)/1.08 Georgia,serif}
+.subtitle{max-width:790px;margin:20px 0 0;font-size:1.08rem;color:rgba(255,255,255,.86)}
+.status{display:flex;gap:10px;flex-wrap:wrap;margin-top:26px}
+.badge{padding:4px 11px;border:1px solid rgba(255,255,255,.34);border-radius:999px;background:rgba(255,255,255,.09);font-size:.78rem;font-weight:650}
+.toolbar{display:flex;justify-content:flex-end;padding:12px 24px;border-bottom:1px solid var(--line);background:var(--soft)}
+button{padding:7px 12px;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:8px;font:inherit;font-size:.82rem;cursor:pointer}
+button:hover{border-color:var(--accent);color:var(--accent)}
+main{padding:42px 64px 68px}.intro{display:grid;grid-template-columns:1.45fr .75fr;gap:28px;align-items:start;margin-bottom:38px}
+.lead{margin:0;font:1.2rem/1.62 Georgia,serif}
+.card,.note,.check{border:1px solid var(--line);border-radius:12px;background:var(--soft)}
+.card{padding:18px 20px}.card h2{margin:0 0 8px;font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;color:var(--accent)}
+.card p{margin:0;color:var(--muted);font-size:.91rem}
+nav{margin:0 0 52px;padding:22px 26px;border:1px solid var(--line);border-radius:12px}
+nav h2{margin:0 0 12px;font-size:.82rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+nav ol{columns:2;column-gap:42px;margin:0;padding-left:1.3rem}nav li{break-inside:avoid;margin:4px 0}
+nav a{color:var(--accent);text-decoration:none}nav a:hover{text-decoration:underline}
+section{scroll-margin-top:24px}section+section{margin-top:58px}
+.label{margin:0 0 6px;color:var(--accent2);font-size:.76rem;font-weight:750;letter-spacing:.12em;text-transform:uppercase}
+h2.title{margin:0 0 22px;padding-bottom:12px;border-bottom:2px solid var(--accent);font:1.8rem/1.25 Georgia,serif}
+h3{margin:30px 0 10px;font:1.22rem Georgia,serif}p{margin:10px 0}
+code{padding:2px 5px;border-radius:5px;background:var(--accent-soft);color:var(--accent);font:88% Consolas,monospace}
+figure{margin:24px 0 6px}figure img{display:block;width:100%;border:1px solid var(--line);border-radius:12px;background:#fff}
+figcaption{margin-top:9px;color:var(--muted);font-size:.86rem;text-align:center}
+.eq{margin:18px 0;padding:17px 20px;overflow-x:auto;border-left:4px solid var(--accent);border-radius:8px;background:var(--soft)}
+.eq.compact{padding-block:10px}mjx-container{max-width:100%;overflow-x:auto;overflow-y:hidden}
+.steps{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.step{display:grid;grid-template-columns:36px 1fr;gap:12px;padding:16px;border:1px solid var(--line);border-radius:11px}
+.step b{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--accent);color:#fff}
+.step h3{margin:1px 0 5px;font:700 1rem Inter,sans-serif}.step p{margin:0;color:var(--muted);font-size:.91rem}
+.note{margin:18px 0;padding:16px 18px;color:var(--muted);font-size:.93rem}.warning{border-color:#e8cf9f;background:var(--warn-bg);color:var(--warn)}
+table{width:100%;margin:18px 0;border-collapse:collapse;font-size:.91rem}
+th,td{padding:10px 12px;border:1px solid var(--line);text-align:left;vertical-align:top}th{background:var(--soft)}
+.checks{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.check{padding:17px}
+.check h3{margin:0 0 6px;font:700 .95rem Inter,sans-serif;color:var(--accent)}.check p{margin:0;color:var(--muted);font-size:.86rem}
+footer{padding:24px 64px 34px;border-top:1px solid var(--line);color:var(--muted);background:var(--soft);font-size:.82rem}
+@media(max-width:780px){.page{width:100%;margin:0;border:0;border-radius:0}.hero,main{padding-left:24px;padding-right:24px}.intro{grid-template-columns:1fr}.steps,.checks{grid-template-columns:1fr}nav ol{columns:1}footer{padding-inline:24px}}
+@media print{.page{width:100%;margin:0;border:0;box-shadow:none}.toolbar{display:none}.hero{color:#000;background:#fff;border-bottom:2px solid #000}.subtitle{color:#333}.badge{color:#000;border-color:#888}}
+</style>
+<style id="simple-layout">
+:root{--page:#fff;--paper:#fff;--ink:#111;--muted:#555;--line:#bbb;--accent:#111;--accent2:#111;--soft:#f6f6f6;--accent-soft:#f2f2f2;--shadow:none}
+body{background:#fff;color:#111;font-family:Arial,"Segoe UI",sans-serif;font-size:16px;line-height:1.55}
+.page{width:min(1000px,calc(100% - 32px));margin:24px auto 60px;border:0;border-radius:0;box-shadow:none;overflow:visible}
+.hero{padding:0 0 14px;color:#111;background:none;border-bottom:2px solid #111}
+.hero h1{max-width:none;margin:0;font:700 2rem/1.2 Arial,"Segoe UI",sans-serif}
+main{padding:22px 0 40px}
+.text-window{min-height:105px;margin:0 0 28px;padding:14px 16px;border:1px solid #999;background:#fafafa}
+.text-window strong{display:block;margin-bottom:6px}.text-window p{margin:0;color:#666}
+section+section{margin-top:34px}
+h2.title{margin:0 0 12px;padding:0 0 5px;border-bottom:1px solid #aaa;font:700 1.25rem/1.3 Arial,"Segoe UI",sans-serif}
+.label{font-size:.75rem;color:#555}
+.assumptions{margin:0;padding-left:22px}.assumptions li{margin:5px 0}
+figure{margin:12px 0 0}figure img{width:100%;border:1px solid #bbb;border-radius:0}
+.force-legend{margin:0 0 28px;font-size:.9rem}
+.force-legend th,.force-legend td{padding:7px 9px;border:1px solid #bbb}
+.force-legend th{background:#eee}.force-legend td:first-child{width:95px;text-align:center;font-weight:700}
+.red{color:#C21B1B;font-weight:700}.pink{color:#E58C86;font-weight:700}
+.derivation-toggle{margin:12px 0;border:1px solid #aaa;background:#fff}
+.derivation-toggle summary{padding:10px 12px;cursor:pointer;font-weight:700;background:#f1f1f1}
+.toggle-body{padding:10px 14px 14px}
+.detent-note{margin-top:14px;padding:12px 14px;border:1px solid #d94801;border-left:5px solid #d94801;background:#fff7f0}
+.detent-note h3{margin:0 0 6px;color:#b63e00;font:700 1rem Arial,"Segoe UI",sans-serif}
+.detent-note p{margin:5px 0}
+.chapter-title{margin:78px 0 20px;padding:18px 0 10px;border-top:5px solid #111;border-bottom:2px solid #111;font:700 1.65rem/1.25 Arial,"Segoe UI",sans-serif}
+main>.chapter-title:first-child{margin-top:0;padding-top:8px;border-top:0}
+main>section{margin-top:44px;padding-top:20px;border-top:2px solid #bbb}
+main>.text-window+section{margin-top:28px;padding-top:0;border-top:0}
+.figure-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.figure-grid figure{margin:0}.figure-grid figcaption{font-size:.85rem;color:#555}
+.outline-toggle{position:fixed;left:10px;top:10px;z-index:1002;padding:7px 10px;border:1px solid #777;background:#fff}
+.outline-sidebar{position:fixed;left:0;top:0;bottom:0;z-index:1001;width:260px;padding:52px 14px 20px;border-right:1px solid #aaa;background:#f5f5f5;overflow-y:auto;transition:transform .18s ease}
+.outline-sidebar h2{margin:0 0 12px;font-size:1.05rem}
+.outline-sidebar details{margin:8px 0;border-top:1px solid #bbb;padding-top:7px}
+.outline-sidebar summary{cursor:pointer;font-weight:700}
+.outline-sidebar ul{margin:7px 0 12px;padding-left:18px}.outline-sidebar li{margin:5px 0}
+.outline-sidebar a{color:#222;text-decoration:none;font-size:.9rem}.outline-sidebar a:hover{text-decoration:underline}
+body{padding-left:260px;transition:padding-left .18s ease}
+body.outline-collapsed{padding-left:0}
+body.outline-collapsed .outline-sidebar{transform:translateX(-100%)}
+.eq{position:relative;padding-top:10px;border-left:2px solid #555;border-radius:0;background:#f7f7f7}
+.eq.compact{padding-top:10px}
+.eq-header{display:flex;align-items:center;flex-wrap:wrap;gap:7px 12px;margin-bottom:8px;padding-bottom:7px;border-bottom:1px solid #d2d2d2}
+.eq-name{flex:1 1 220px;color:#444;font:700 .76rem/1.3 Arial,"Segoe UI",sans-serif;letter-spacing:.025em}
+.eq-copy-tools{position:static;display:flex;flex:0 0 auto;gap:5px;margin-left:auto}
+.eq-copy-button{min-width:82px;padding:4px 8px;border:1px solid #777;border-radius:3px;background:#fff;color:#111;font:600 .72rem/1.25 Arial,"Segoe UI",sans-serif;white-space:nowrap}
+.eq-copy-button[data-tone="white"]{border-color:#111;background:#222;color:#fff}
+.eq-copy-button[data-copy="latex"]{border-color:#555;background:#e9e9e9;color:#111}
+.eq-copy-button:hover,.eq-copy-button:focus-visible{outline:2px solid #888;outline-offset:1px}
+.eq-copy-button[data-state="ok"]{border-color:#237a3b;background:#eaf6ed;color:#175c2a}
+.eq-copy-button[data-state="error"]{border-color:#b42318;background:#fff0ef;color:#8f1a12}
+.parameter-table{font-size:.82rem}
+.parameter-table th,.parameter-table td{padding:6px 8px}
+.parameter-table td:first-child{white-space:nowrap;font-weight:700}
+.source-tag{display:inline-block;padding:1px 6px;border:1px solid #777;background:#fff;font-size:.72rem;font-weight:700;white-space:nowrap}
+.source-tag.preemptive{border-color:#a85d00;background:#fff7e8;color:#7a4300}
+.source-tag.documented{border-color:#2f6f3e;background:#eef8f0;color:#24572f}
+.source-tag.numerical{border-color:#555;background:#eee;color:#333}
+.simulation-run{margin:14px 0;border:1px solid #aaa;background:#fff}
+.simulation-run summary{padding:10px 12px;cursor:pointer;font-weight:700;background:#f1f1f1}
+.simulation-setup{margin:0 0 12px;padding-left:20px}
+.simulation-setup li{margin:4px 0}
+.simulation-run figure{margin:12px 0 20px}
+.simulation-run figcaption{text-align:left}
+.expanded-model .toggle-body{overflow-x:auto}
+.expanded-model .eq{font-size:.86rem}
+.figure-zoomable{cursor:zoom-in}
+.figure-zoomable:focus-visible{outline:3px solid #111;outline-offset:3px}
+.image-lightbox{position:fixed;inset:0;z-index:4000;display:none;grid-template-rows:auto 1fr;background:rgba(0,0,0,.92);color:#fff}
+.image-lightbox[data-open="true"]{display:grid}
+.lightbox-toolbar{display:flex;align-items:center;justify-content:flex-end;gap:7px;min-height:52px;padding:8px 14px;border-bottom:1px solid #555;background:#171717}
+.lightbox-title{min-width:0;margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.86rem}
+.lightbox-toolbar button{min-width:38px;padding:6px 10px;border:1px solid #aaa;border-radius:3px;background:#222;color:#fff;font-weight:700}
+.lightbox-toolbar button:hover,.lightbox-toolbar button:focus-visible{border-color:#fff;color:#fff;outline:2px solid #fff;outline-offset:1px}
+.lightbox-viewport{display:grid;place-items:center;min-width:0;min-height:0;overflow:hidden;cursor:zoom-out;touch-action:none}
+.lightbox-image{display:block;max-width:calc(100vw - 36px);max-height:calc(100vh - 86px);transform-origin:center center;will-change:transform;user-select:none;-webkit-user-drag:none}
+.lightbox-image[data-pannable="true"]{cursor:grab}
+.lightbox-image[data-dragging="true"]{cursor:grabbing}
+.note,.check{border-radius:0;background:#f7f7f7}
+footer{padding:16px 0;border-top:1px solid #aaa;background:#fff}
+@media(max-width:900px){body{padding-left:0}.outline-sidebar{box-shadow:3px 0 12px rgba(0,0,0,.15)}.figure-grid{grid-template-columns:1fr}}
+@media(max-width:700px){.page{width:calc(100% - 24px);margin:12px auto}.hero h1{font-size:1.55rem}.force-legend{font-size:.8rem}.eq{padding-top:10px}.eq.compact{padding-top:10px}.eq-copy-button{min-width:0;font-size:.68rem}.expanded-model .eq{font-size:.76rem}.chapter-title{margin-top:62px}}
+@media print{.eq-copy-tools,.image-lightbox{display:none!important}.chapter-title{break-before:page;margin-top:0}}
+</style>
+</head>
+<body>
+<button class="outline-toggle" id="outline-toggle" type="button" aria-controls="outline-sidebar" aria-expanded="true">Hide outline</button>
+<aside class="outline-sidebar" id="outline-sidebar" aria-label="Derivation outline">
+<h2>Outline</h2>
+<details open>
+<summary>Newton derivation</summary>
+<ul>
+<li><a href="#newton">Overview</a></li>
+<li><a href="#scope">Assumptions</a></li>
+<li><a href="#fbd">Free-body diagram</a></li>
+<li><a href="#coordinates">Coordinates</a></li>
+<li><a href="#elements">Torque expressions</a></li>
+<li><a href="#balances">Newton's second law</a></li>
+<li><a href="#matrices">Second-order model</a></li>
+<li><a href="#statespace">First-order state space</a></li>
+</ul>
+</details>
+<details open>
+<summary>Lagrange derivation</summary>
+<ul>
+<li><a href="#lagrange">Overview</a></li>
+<li><a href="#lagrange-figures">Figures</a></li>
+<li><a href="#lagrange-coordinates">Coordinates and deformations</a></li>
+<li><a href="#lagrange-kinetic">Kinetic energy</a></li>
+<li><a href="#lagrange-potential">Potential energy</a></li>
+<li><a href="#lagrange-dissipation">Rayleigh dissipation</a></li>
+<li><a href="#lagrange-equations">Euler-Lagrange equations</a></li>
+<li><a href="#lagrange-matrices">Second-order model</a></li>
+<li><a href="#lagrange-statespace">First-order state space</a></li>
+</ul>
+</details>
+<details open>
+<summary>Model equivalence</summary>
+<ul>
+<li><a href="#model-equivalence">Common state-space result</a></li>
+</ul>
+</details>
+<details open>
+<summary>Friction implementation</summary>
+<ul>
+<li><a href="#friction">Overview</a></li>
+<li><a href="#friction-plant">Structural plant</a></li>
+<li><a href="#friction-ports">Friction ports</a></li>
+<li><a href="#friction-signs">Reaction signs</a></li>
+<li><a href="#friction-parallel">Parallel nut branches</a></li>
+<li><a href="#friction-lugre">LuGre law</a></li>
+<li><a href="#friction-statespace">15-state model</a></li>
+<li><a href="#friction-expanded-equations">Expanded 15-state equations</a></li>
+<li><a href="#friction-recovery">Baseline recovery</a></li>
+</ul>
+</details>
+<details open>
+<summary>Model parameters and plots</summary>
+<ul>
+<li><a href="#model-results">Overview</a></li>
+<li><a href="#model-parameters">Parameter table</a></li>
+<li><a href="#simulation-plots">Simulation plots</a></li>
+<li><a href="#plots-frequency">Frequency-response runs</a></li>
+<li><a href="#plots-stepping">Stepping runs</a></li>
+<li><a href="#plots-multisine">Multisine runs</a></li>
+</ul>
+</details>
+<details open>
+<summary>Guyan model reduction</summary>
+<ul>
+<li><a href="#guyan">Overview</a></li>
+<li><a href="#guyan-partition">Master/slave partition</a></li>
+<li><a href="#guyan-ratios">Closed-form ratios</a></li>
+<li><a href="#guyan-transform">Transformation</a></li>
+<li><a href="#guyan-projection">Galerkin projection</a></li>
+<li><a href="#guyan-closed-forms">Reduced closed forms</a></li>
+<li><a href="#guyan-ports">Reduced friction ports</a></li>
+<li><a href="#guyan-friction">Seven-state friction model</a></li>
+<li><a href="#guyan-validation">Scope and verification</a></li>
+</ul>
+</details>
+</aside>
+
+<article class="page">
+<header class="hero">
+<h1>Analytical Derivation of the Model</h1>
+</header>
+<main>
+<h2 class="chapter-title" id="newton">Newton Analytical Derivation</h2>
+
+<div class="text-window">
+<strong>Model choices and sources</strong>
+<p>Placeholder: explain why six generalized coordinates are retained, which physical effects are included or excluded, the origin of the model parameters, and the analytical/reference sources used for this derivation.</p>
+</div>
+
+<section id="scope">
+<h2 class="title">Assumptions</h2>
+<ul class="assumptions">
+<li>Six independent generalized coordinates are retained: motor rotation, coupling rotation, screw rotation, support-bearing rotation, screw axial translation, and nut/stage translation.</li>
+<li>The torsional and axial structural elements are represented by linear spring-damper pairs.</li>
+<li>The screw-nut interface remains compliant rather than being imposed as a rigid kinematic constraint.</li>
+<li>Guideway, screw-nut, and support-bearing nonlinear friction reactions are set to zero in the frictionless baseline.</li>
+<li>The sinusoidal detent torque is linearized about the equilibrium for the linear state-space model.</li>
+<li>Structural and electromagnetic damping remain in the model when nonlinear friction is set to zero.</li>
+</ul>
+</section>
+
+<section id="fbd">
+<h2 class="title">Free-Body Diagram</h2>
+<figure><img src="rendered_assets/free_body_diagram.png" alt="Rev 4 drivetrain free-body diagram"></figure>
+<table class="force-legend">
+<thead><tr><th>Sketch label</th><th>Force or torque</th><th>Where it lives in the model</th></tr></thead>
+<tbody>
+<tr><td><span class="red">1</span></td><td><span class="red">\(T_{EM}\)</span></td><td>\(k_{EM}(\theta_{cmd}-\theta_m)\), split between \(\mathbf G\) and \(\mathbf K(1,1)\)</td></tr>
+<tr><td><span class="pink">2</span></td><td><span class="pink">\(T_{det}\)</span></td><td>\(-\mathbf e_mT_d\sin(4N_r\theta_m)\), nonlinear; tangent \(k_d\) deliberately not in \(\mathbf K\)</td></tr>
+<tr><td><span class="pink">3</span>, <span class="red">4</span></td><td><span class="pink">\(T_{c,react}\)</span> / <span class="red">\(T_{c,drive}\)</span></td><td>The two ends of \(k_c,c_c\) in \(\mathbf K,\mathbf C\), rows 1-2</td></tr>
+<tr><td><span class="pink">5</span>, <span class="red">6</span></td><td><span class="pink">\(T_{s1,react}\)</span> / <span class="red">\(T_{s1,drive}\)</span></td><td>\(k_{s1},c_{s1}\), rows 2-3</td></tr>
+<tr><td><span class="pink">8</span>, <span class="red">9</span></td><td><span class="pink">\(T_{s2,react}\)</span> / <span class="red">\(T_{s2,drive}\)</span></td><td>\(k_{s2},c_{s2}\), rows 3-4</td></tr>
+<tr><td><span class="pink">7</span></td><td><span class="pink">\(T_{fric,nut}\)</span></td><td>LuGre port <code>nut</code>, \(\mathbf J_{nut}=[0,0,r,0,1,-1]\)</td></tr>
+<tr><td><span class="red">12</span>, <span class="pink">13</span></td><td><span class="red">\(F_{ax,drive}\)</span> / <span class="pink">\(F_{ax,react}\)</span></td><td>\(k_{nut}\rho_{nut}+c_{nut}v_{nut}\), using the same \(\mathbf J_{nut}\)</td></tr>
+<tr><td><span class="pink">10</span></td><td><span class="pink">\(T_{fric,sb}\)</span></td><td>LuGre port <code>sb</code>, \(\mathbf J_{sb}=[0,0,0,1,0,0]\)</td></tr>
+<tr><td><span class="pink">11</span></td><td><span class="pink">\(F_{fric,s}\)</span></td><td>LuGre port <code>way</code>, \(\mathbf J_{way}=[0,0,0,0,0,1]\)</td></tr>
+<tr><td><span class="red">10</span></td><td><span class="red">\(F_{ext}\)</span></td><td>No counterpart in the current model</td></tr>
+</tbody>
+</table>
+</section>
+
+<section id="coordinates"><p class="label">Step 3</p>
+<details class="derivation-toggle">
+<summary>Coordinates and sign convention</summary>
+<div class="toggle-body">
+<p>Positive screw rotation drives positive axial translation. Define the lead conversion</p>
+<div class="eq compact">\[
+r\equiv\frac{L}{2\pi},\qquad x=r\theta.
+\tag{1}
+\]</div>
+<p>The generalized coordinate vector is</p>
+<div class="eq">\[
+\mathbf q=\begin{bmatrix}\theta_m&\theta_c&\theta_s&\theta_{sb}&x_s&x_n\end{bmatrix}^{\mathsf T}.
+\tag{2}
+\]</div>
+<table><thead><tr><th>Coordinate</th><th>Body</th><th>Inertia</th><th>Positive direction</th></tr></thead><tbody>
+<tr><td>\(\theta_m\)</td><td>Motor rotor</td><td>\(I_m\)</td><td>Drive rotation</td></tr>
+<tr><td>\(\theta_c\)</td><td>Bellows coupling</td><td>\(I_c\)</td><td>Drive rotation</td></tr>
+<tr><td>\(\theta_s\)</td><td>Screw rotation</td><td>\(I_s\)</td><td>Rotation producing \(+x\)</td></tr>
+<tr><td>\(\theta_{sb}\)</td><td>Support-bearing ring</td><td>\(I_{sb}\)</td><td>Drive rotation</td></tr>
+<tr><td>\(x_s\)</td><td>Screw axial motion</td><td>\(M_{screw}\)</td><td>Positive stage travel</td></tr>
+<tr><td>\(x_n\)</td><td>Nut and stage</td><td>\(M_s\)</td><td>Positive stage travel</td></tr>
+</tbody></table>
+<p>The screw-nut deformation is defined directly as</p>
+<div class="eq compact">\[
+\delta_{nut}=x_n-x_s-r\theta_s.
+\tag{3}
+\]</div>
+</div>
+</details>
+</section>
+
+<section id="elements"><p class="label">Step 4</p><h2 class="title">Torque and force expressions</h2>
+<h3>Motor torque</h3>
+<p>The commanded motor angle acts through the linearized electromagnetic stiffness. Rotor damping is implemented relative to the fixed frame.</p>
+<div class="eq">\[
+T_{EM}=k_{EM}(\theta_{cmd}-\theta_m),\qquad k_{EM}=N_rT_{hold},\qquad
+T_{EM,d}=-c_{EM}\dot\theta_m.
+\tag{4}
+\]</div>
+
+<div class="note warning">
+<strong>The motor torque also has a supply-current dependency.</strong>
+<div class="eq compact">\[
+T=K_t I.
+\]</div>
+<p>This comes into play later when simulating the system.</p>
+</div>
+
+<h3>Linearized detent torque</h3>
+<div class="eq">\[
+T_{det}=T_d\sin(4N_r\theta_m)
+\approx 4N_rT_d\,\theta_m=k_d\theta_m,\qquad k_d=4N_rT_d.
+\tag{5}
+\]</div>
+
+<h3>Torsional spring-damper torques</h3>
+<div class="eq">\[
+\begin{aligned}
+T_c&=k_c(\theta_m-\theta_c)+c_c(\dot\theta_m-\dot\theta_c),\\
+T_{s1}&=k_{s1}(\theta_c-\theta_s)+c_{s1}(\dot\theta_c-\dot\theta_s),\\
+T_{s2}&=k_{s2}(\theta_s-\theta_{sb})+c_{s2}(\dot\theta_s-\dot\theta_{sb}).
+\end{aligned}
+\tag{6}
+\]</div>
+
+<h3>Axial forces</h3>
+<div class="eq">\[
+\begin{aligned}
+F_{nut}&=k_{nut}\delta_{nut}+c_{nut}\dot\delta_{nut}\\
+&=k_{nut}(x_n-x_s-r\theta_s)
++c_{nut}(\dot x_n-\dot x_s-r\dot\theta_s),\\
+F_{brg}&=k_{brg}x_s+c_{brg}\dot x_s.
+\end{aligned}
+\tag{7}
+\]</div>
+<div class="note">The screw-nut force creates the reflected screw torque \(rF_{nut}\). From virtual work, \(T\,\delta\theta=F\,\delta x\) and \(\delta x=r\,\delta\theta\).</div>
+</section>
+
+<section id="balances"><p class="label">Step 5</p><h2 class="title">Apply Newton's second law</h2>
+<p>For each retained rotational or translational body, sum the applied torques or forces in the chosen positive direction:</p>
+<div class="eq compact">\[
+\boxed{\sum_j T_{ij}=I_i\ddot\theta_i},
+\qquad
+\boxed{\sum_j F_{ij}=M_i\ddot x_i}.
+\]</div>
+
+<details class="derivation-toggle">
+<summary>Full torque and force balances</summary>
+<div class="toggle-body">
+<div class="eq">\[
+\begin{aligned}
+T_{EM}-T_{det}-c_{EM}\dot\theta_m-T_c &= I_m\ddot\theta_m,\\
+T_c-T_{s1} &= I_c\ddot\theta_c,\\
+T_{s1}-rF_{nut}-T_{s2} &= I_s\ddot\theta_s,\\
+T_{s2} &= I_{sb}\ddot\theta_{sb},\\
+F_{nut}-F_{brg} &= M_{screw}\ddot x_s,\\
+-F_{nut} &= M_s\ddot x_n.
+\end{aligned}
+\tag{8}
+\]</div>
+<p>Every internal element appears on two bodies with equal magnitude and opposite sign.</p>
+</div>
+</details>
+
+<details class="derivation-toggle">
+<summary>Substituting and expanding the element laws</summary>
+<div class="toggle-body">
+<p>Substituting Equations (4)-(7) into the six balances gives</p>
+<div class="eq">\[
+\begin{aligned}
+I_m\ddot\theta_m={}&
+ k_{EM}(\theta_{cmd}-\theta_m)-k_d\theta_m-c_{EM}\dot\theta_m\\
+&-k_c(\theta_m-\theta_c)-c_c(\dot\theta_m-\dot\theta_c),\\[1ex]
+I_c\ddot\theta_c={}&
+ k_c(\theta_m-\theta_c)+c_c(\dot\theta_m-\dot\theta_c)\\
+&-k_{s1}(\theta_c-\theta_s)-c_{s1}(\dot\theta_c-\dot\theta_s),\\[1ex]
+I_s\ddot\theta_s={}&
+ k_{s1}(\theta_c-\theta_s)+c_{s1}(\dot\theta_c-\dot\theta_s)\\
+&-r\!\left[k_{nut}(x_n-x_s-r\theta_s)
++c_{nut}(\dot x_n-\dot x_s-r\dot\theta_s)\right]\\
+&-k_{s2}(\theta_s-\theta_{sb})-c_{s2}(\dot\theta_s-\dot\theta_{sb}),\\[1ex]
+I_{sb}\ddot\theta_{sb}={}&
+ k_{s2}(\theta_s-\theta_{sb})+c_{s2}(\dot\theta_s-\dot\theta_{sb}),\\[1ex]
+M_{screw}\ddot x_s={}&
+ k_{nut}(x_n-x_s-r\theta_s)
++c_{nut}(\dot x_n-\dot x_s-r\dot\theta_s)\\
+&-k_{brg}x_s-c_{brg}\dot x_s,\\[1ex]
+M_s\ddot x_n={}&
+-k_{nut}(x_n-x_s-r\theta_s)
+-c_{nut}(\dot x_n-\dot x_s-r\dot\theta_s).
+\end{aligned}
+\tag{9}
+\]</div>
+<p>All terms multiplying \(\mathbf q\), \(\dot{\mathbf q}\), and \(\ddot{\mathbf q}\) are moved to the left. The prescribed command term \(k_{EM}\theta_{cmd}\) remains on the right.</p>
+</div>
+</details>
+</section>
+
+<section id="matrices"><p class="label">Step 6</p><h2 class="title">Collect the second-order matrix model</h2>
+<div class="eq compact">\[
+\boxed{\mathbf M\ddot{\mathbf q}+\mathbf C\dot{\mathbf q}+\mathbf K\mathbf q
+=\mathbf G\theta_{cmd}}.
+\tag{10}
+\]</div>
+
+<details class="derivation-toggle">
+<summary>Mass, damping, stiffness, and command matrices</summary>
+<div class="toggle-body">
+<h3>Mass matrix</h3>
+<div class="eq compact">\[
+\mathbf M=\operatorname{diag}(I_m,I_c,I_s,I_{sb},M_{screw},M_s).
+\tag{11}
+\]</div>
+
+<h3>Damping matrix</h3>
+<div class="eq">\[
+\mathbf C=
+\begin{bmatrix}
+c_c+c_{EM}&-c_c&0&0&0&0\\
+-c_c&c_c+c_{s1}&-c_{s1}&0&0&0\\
+0&-c_{s1}&c_{s1}+c_{s2}+r^2c_{nut}&-c_{s2}&rc_{nut}&-rc_{nut}\\
+0&0&-c_{s2}&c_{s2}&0&0\\
+0&0&rc_{nut}&0&c_{brg}+c_{nut}&-c_{nut}\\
+0&0&-rc_{nut}&0&-c_{nut}&c_{nut}
+\end{bmatrix}.
+\tag{12}
+\]</div>
+
+<h3>Stiffness matrix</h3>
+<div class="eq">\[
+\mathbf K=
+\begin{bmatrix}
+k_c+k_{EM}+{\color{#d94801}k_d}&-k_c&0&0&0&0\\
+-k_c&k_c+k_{s1}&-k_{s1}&0&0&0\\
+0&-k_{s1}&k_{s1}+k_{s2}+r^2k_{nut}&-k_{s2}&rk_{nut}&-rk_{nut}\\
+0&0&-k_{s2}&k_{s2}&0&0\\
+0&0&rk_{nut}&0&k_{brg}+k_{nut}&-k_{nut}\\
+0&0&-rk_{nut}&0&-k_{nut}&k_{nut}
+\end{bmatrix}.
+\tag{13}
+\]</div>
+
+<h3>Command distribution</h3>
+<div class="eq compact">\[
+\mathbf G=\begin{bmatrix}k_{EM}&0&0&0&0&0\end{bmatrix}^{\mathsf T}.
+\tag{14}
+\]</div>
+</div>
+</details>
+
+<div class="detent-note">
+<h3>Why the detent term appears in the stiffness matrix</h3>
+<p>For this linear Newton/state-space model, the nonlinear detent torque is linearized at \(\theta_m=0\):</p>
+<div class="eq compact">\[
+T_d\sin(4N_r\theta_m)\approx k_d\theta_m,\qquad k_d=4N_rT_d.
+\]</div>
+<p>The tangent \(k_d\) therefore contributes to \(\mathbf K(1,1)\), highlighted in orange above. In the nonlinear friction model, the full sine torque is evaluated explicitly and \(k_d\) is omitted from the structural \(\mathbf K\) to avoid counting the detent torque twice.</p>
+</div>
+
+<div class="note">The symmetry of \(\mathbf C\) and \(\mathbf K\) follows from reciprocal linear elements. The \(rk_{nut}\) cross-term signs enforce the convention that positive screw rotation drives positive stage motion.</div>
+</section>
+
+
+
+<section id="statespace"><p class="label">Step 7</p><h2 class="title">Convert to first-order state space</h2>
+<p>Define the twelve-state vector</p>
+<div class="eq">\[
+\mathbf x=
+\begin{bmatrix}\mathbf q\\\dot{\mathbf q}\end{bmatrix}
+=
+\begin{bmatrix}
+\theta_m&\theta_c&\theta_s&\theta_{sb}&x_s&x_n&
+\dot\theta_m&\dot\theta_c&\dot\theta_s&\dot\theta_{sb}&\dot x_s&\dot x_n
+\end{bmatrix}^{\mathsf T}.
+\tag{15}
+\]</div>
+<p>Solving Equation (10) for acceleration gives</p>
+<div class="eq compact">\[
+\ddot{\mathbf q}=\mathbf M^{-1}
+\left(\mathbf G\theta_{cmd}-\mathbf C\dot{\mathbf q}-\mathbf K\mathbf q\right).
+\tag{16}
+\]</div>
+<p>Therefore,</p>
+<div class="eq">\[
+\boxed{\dot{\mathbf x}=\mathbf A\mathbf x+\mathbf B\theta_{cmd}}
+\tag{17}
+\]
+\[
+\mathbf A=
+\begin{bmatrix}
+\mathbf 0_{6\times6}&\mathbf I_{6\times6}\\
+-\mathbf M^{-1}\mathbf K&-\mathbf M^{-1}\mathbf C
+\end{bmatrix},
+\qquad
+\mathbf B=
+\begin{bmatrix}
+\mathbf 0_{6\times1}\\
+\mathbf M^{-1}\mathbf G
+\end{bmatrix}.
+\tag{18}
+\]</div>
+<p>For stage displacement as the output,</p>
+<div class="eq compact">\[
+y=x_n=\mathbf C_y\mathbf x,\qquad
+\mathbf C_y=
+\begin{bmatrix}0&0&0&0&0&1&0&0&0&0&0&0\end{bmatrix},\qquad D=0.
+\tag{19}
+\]</div>
+</section>
+
+
+<h2 class="chapter-title" id="lagrange">Lagrange Analytical Derivation</h2>
+<div class="text-window">
+<strong>Purpose of the second derivation</strong>
+<p>The Lagrange route independently reconstructs the same frictionless six-coordinate model from kinetic energy, potential energy, and Rayleigh dissipation. Agreement with the Newton derivation checks the matrix assembly and sign convention; it does not validate the provisional parameter values.</p>
+</div>
+
+<section id="lagrange-figures"><p class="label">Lagrange Step 1</p><h2 class="title">Illustrative and kinematic diagrams</h2>
+<div class="figure-grid">
+<figure>
+<img src="rendered_assets/lagrange_illustrative_diagram_placeholder.png" alt="Lagrange illustrative diagram">
+<figcaption>Illustrative diagram of the physical mechanism.</figcaption>
+</figure>
+<figure>
+<img src="rendered_assets/lagrange_kinematic_diagram_placeholder.svg" alt="Placeholder for the Lagrange kinematic diagram">
+<figcaption>Kinematic diagram showing coordinates, element deformations, and positive directions.</figcaption>
+</figure>
+</div>
+</section>
+
+<section id="lagrange-coordinates"><p class="label">Lagrange Step 2</p>
+<details class="derivation-toggle">
+<summary>Coordinates and element deformation rows</summary>
+<div class="toggle-body">
+<p>The Lagrange derivation retains the same coordinate vector and lead conversion as the Newton derivation:</p>
+<div class="eq">\[
+r=\frac{L}{2\pi},\qquad
+\mathbf q=
+\begin{bmatrix}
+\theta_m&\theta_c&\theta_s&\theta_{sb}&x_s&x_n
+\end{bmatrix}^{\mathsf T}.
+\tag{L1}
+\]</div>
+<p>Each linear element is described by a deformation coordinate</p>
+<div class="eq compact">\[
+\rho_i=\mathbf J_i\mathbf q.
+\tag{L2}
+\]</div>
+<table>
+<thead><tr><th>Element</th><th>Deformation \(\rho_i\)</th><th>Element row \(\mathbf J_i\)</th></tr></thead>
+<tbody>
+<tr><td>Coupling \(k_c,c_c\)</td><td>\(\theta_m-\theta_c\)</td><td>\([1,-1,0,0,0,0]\)</td></tr>
+<tr><td>Screw 1 \(k_{s1},c_{s1}\)</td><td>\(\theta_c-\theta_s\)</td><td>\([0,1,-1,0,0,0]\)</td></tr>
+<tr><td>Screw 2 \(k_{s2},c_{s2}\)</td><td>\(\theta_s-\theta_{sb}\)</td><td>\([0,0,1,-1,0,0]\)</td></tr>
+<tr><td>Nut contact \(k_{nut},c_{nut}\)</td><td>\(r\theta_s+x_s-x_n\)</td><td>\([0,0,r,0,1,-1]\)</td></tr>
+<tr><td>Axial bearing \(k_{brg},c_{brg}\)</td><td>\(x_s\)</td><td>\([0,0,0,0,1,0]\)</td></tr>
+<tr><td>Motor ground</td><td>\(\theta_m\)</td><td>\([1,0,0,0,0,0]\)</td></tr>
+</tbody>
+</table>
+<p>The nut deformation is therefore defined directly as</p>
+<div class="eq compact">\[
+\rho_{nut}=r\theta_s+x_s-x_n.
+\tag{L3}
+\]</div>
+<p>This is the opposite orientation to the Newton definition \(\delta_{nut}=x_n-x_s-r\theta_s\), so \(\rho_{nut}=-\delta_{nut}\). The stored and dissipated energies are unchanged because they contain the squared deformation or velocity.</p>
+</div>
+</details>
+</section>
+
+<section id="lagrange-kinetic"><p class="label">Lagrange Step 3</p><h2 class="title">Kinetic energy</h2>
+<p>The kinetic energy contains one term for every retained rotational inertia or translational mass:</p>
+<div class="eq">\[
+T=\frac12\left(
+I_m\dot\theta_m^2+I_c\dot\theta_c^2+I_s\dot\theta_s^2
++I_{sb}\dot\theta_{sb}^2+M_{screw}\dot x_s^2+M_s\dot x_n^2
+\right).
+\tag{L4}
+\]</div>
+<details class="derivation-toggle">
+<summary>Mass-matrix form</summary>
+<div class="toggle-body">
+<div class="eq">\[
+T=\frac12\dot{\mathbf q}^{\mathsf T}\mathbf M\dot{\mathbf q},
+\qquad
+\mathbf M=\operatorname{diag}
+\left(I_m,I_c,I_s,I_{sb},M_{screw},M_s\right).
+\tag{L5}
+\]</div>
+<p>The mass matrix is diagonal because the compliant screw–nut interface leaves screw rotation, screw translation, and nut/stage translation as independent coordinates.</p>
+</div>
+</details>
+</section>
+
+<section id="lagrange-potential"><p class="label">Lagrange Step 4</p><h2 class="title">Potential energy</h2>
+<p>The total conservative potential contains the structural springs, commanded electromagnetic spring, and detent potential:</p>
+<details class="derivation-toggle">
+<summary>Full potential-energy expression</summary>
+<div class="toggle-body">
+<div class="eq">\[
+\begin{aligned}
+V={}&
+\frac12k_c(\theta_m-\theta_c)^2
++\frac12k_{s1}(\theta_c-\theta_s)^2
++\frac12k_{s2}(\theta_s-\theta_{sb})^2\\
+&+\frac12k_{nut}(r\theta_s+x_s-x_n)^2
++\frac12k_{brg}x_s^2\\
+&+\frac12k_{EM}(\theta_{cmd}-\theta_m)^2
+-\frac{T_d}{4N_r}\cos(4N_r\theta_m).
+\end{aligned}
+\tag{L6}
+\]</div>
+</div>
+</details>
+
+<h3>Commanded electromagnetic spring</h3>
+<div class="eq">\[
+\frac12k_{EM}(\theta_{cmd}-\theta_m)^2
+=
+\frac12k_{EM}\theta_m^2
+-k_{EM}\theta_{cmd}\theta_m
++\frac12k_{EM}\theta_{cmd}^2.
+\tag{L7}
+\]</div>
+<p>The first term contributes \(k_{EM}\) to \(K_{11}\). The cross term produces \(\mathbf G=k_{EM}\mathbf e_m\), while the final term is independent of \(\mathbf q\).</p>
+
+<h3>Detent potential and linearization</h3>
+<div class="eq">\[
+V_{det}=-\frac{T_d}{4N_r}\cos(4N_r\theta_m),
+\qquad
+\frac{\partial V_{det}}{\partial\theta_m}
+=T_d\sin(4N_r\theta_m)
+\approx k_d\theta_m,
+\qquad k_d=4N_rT_d.
+\tag{L8}
+\]</div>
+<p>For the linear frictionless model, \(k_d\) contributes to \(K_{11}\) but not to the command vector \(\mathbf G\).</p>
+</section>
+
+<section id="lagrange-dissipation"><p class="label">Lagrange Step 5</p><h2 class="title">Rayleigh dissipation</h2>
+<p>The linear damping terms are collected in the Rayleigh dissipation function.</p>
+<details class="derivation-toggle">
+<summary>Full Rayleigh function</summary>
+<div class="toggle-body">
+<div class="eq">\[
+\begin{aligned}
+\mathcal R={}&
+\frac12c_c(\dot\theta_m-\dot\theta_c)^2
++\frac12c_{s1}(\dot\theta_c-\dot\theta_s)^2
++\frac12c_{s2}(\dot\theta_s-\dot\theta_{sb})^2\\
+&+\frac12c_{nut}(r\dot\theta_s+\dot x_s-\dot x_n)^2
++\frac12c_{brg}\dot x_s^2
++\frac12c_{EM}\dot\theta_m^2.
+\end{aligned}
+\tag{L9}
+\]</div>
+<p>The electromagnetic damping is grounded on \(\theta_m\); it does not introduce a \(\dot\theta_{cmd}\) input. No LuGre friction force or bristle state appears in \(\mathcal R\).</p>
+</div>
+</details>
+</section>
+
+<section id="lagrange-equations"><p class="label">Lagrange Step 6</p><h2 class="title">Apply the Euler–Lagrange equations</h2>
+<p>With \(\mathcal L=T-V\), the equation for each generalized coordinate \(q_i\) is</p>
+<div class="eq compact">\[
+\boxed{
+\frac{d}{dt}\left(\frac{\partial\mathcal L}{\partial\dot q_i}\right)
+-\frac{\partial\mathcal L}{\partial q_i}
++\frac{\partial\mathcal R}{\partial\dot q_i}=0
+}.
+\tag{L10}
+\]</div>
+
+<details class="derivation-toggle">
+<summary>Element-by-element matrix assembly rule</summary>
+<div class="toggle-body">
+<p>For an elastic element with deformation \(\rho_i=\mathbf J_i\mathbf q\),</p>
+<div class="eq">\[
+V_i=\frac12k_i(\mathbf J_i\mathbf q)^2,
+\qquad
+\frac{\partial V_i}{\partial\mathbf q}
+=k_i\mathbf J_i^{\mathsf T}\mathbf J_i\mathbf q.
+\tag{L11}
+\]</div>
+<p>Summing the elastic and damping contributions yields</p>
+<div class="eq compact">\[
+\boxed{\mathbf K=\sum_i k_i\mathbf J_i^{\mathsf T}\mathbf J_i},
+\qquad
+\boxed{\mathbf C=\sum_i c_i\mathbf J_i^{\mathsf T}\mathbf J_i}.
+\tag{L12}
+\]</div>
+<p>For example, the nut element row \(\mathbf J_{nut}=[0,0,r,0,1,-1]\) gives</p>
+<div class="eq">\[
+k_{nut}\mathbf J_{nut}^{\mathsf T}\mathbf J_{nut}=
+\begin{bmatrix}
+0&0&0&0&0&0\\
+0&0&0&0&0&0\\
+0&0&r^2k_{nut}&0&rk_{nut}&-rk_{nut}\\
+0&0&0&0&0&0\\
+0&0&rk_{nut}&0&k_{nut}&-k_{nut}\\
+0&0&-rk_{nut}&0&-k_{nut}&k_{nut}
+\end{bmatrix}.
+\tag{L13}
+\]</div>
+<p>The reflected \(r^2\) term and all four rotational–axial cross-term signs follow from this single outer product.</p>
+</div>
+</details>
+</section>
+
+<section id="lagrange-matrices"><p class="label">Lagrange Step 7</p><h2 class="title">Collect the second-order matrix model</h2>
+<p>After moving the electromagnetic command cross term to the right, the Lagrange equations become</p>
+<div class="eq compact">\[
+\boxed{
+\mathbf M\ddot{\mathbf q}
++\mathbf C\dot{\mathbf q}
++\mathbf K\mathbf q
+=\mathbf G\theta_{cmd}
+}.
+\tag{L14}
+\]</div>
+
+<details class="derivation-toggle">
+<summary>Assembled Lagrange matrices</summary>
+<div class="toggle-body">
+<h3>Mass matrix</h3>
+<div class="eq compact">\[
+\mathbf M=\operatorname{diag}(I_m,I_c,I_s,I_{sb},M_{screw},M_s).
+\tag{L15}
+\]</div>
+
+<h3>Damping matrix</h3>
+<div class="eq">\[
+\mathbf C=
+\begin{bmatrix}
+c_c+c_{EM}&-c_c&0&0&0&0\\
+-c_c&c_c+c_{s1}&-c_{s1}&0&0&0\\
+0&-c_{s1}&c_{s1}+c_{s2}+r^2c_{nut}&-c_{s2}&rc_{nut}&-rc_{nut}\\
+0&0&-c_{s2}&c_{s2}&0&0\\
+0&0&rc_{nut}&0&c_{brg}+c_{nut}&-c_{nut}\\
+0&0&-rc_{nut}&0&-c_{nut}&c_{nut}
+\end{bmatrix}.
+\tag{L16}
+\]</div>
+
+<h3>Stiffness matrix</h3>
+<div class="eq">\[
+\mathbf K=
+\begin{bmatrix}
+k_c+k_{EM}+{\color{#d94801}k_d}&-k_c&0&0&0&0\\
+-k_c&k_c+k_{s1}&-k_{s1}&0&0&0\\
+0&-k_{s1}&k_{s1}+k_{s2}+r^2k_{nut}&-k_{s2}&rk_{nut}&-rk_{nut}\\
+0&0&-k_{s2}&k_{s2}&0&0\\
+0&0&rk_{nut}&0&k_{brg}+k_{nut}&-k_{nut}\\
+0&0&-rk_{nut}&0&-k_{nut}&k_{nut}
+\end{bmatrix}.
+\tag{L17}
+\]</div>
+
+<h3>Command vector</h3>
+<div class="eq compact">\[
+\mathbf G=
+\begin{bmatrix}k_{EM}&0&0&0&0&0\end{bmatrix}^{\mathsf T}.
+\tag{L18}
+\]</div>
+</div>
+</details>
+
+<div class="note"><strong>Cross-check:</strong> these matrices are identical to the Newton matrices for the same coordinates, sign convention, detent linearization, and structural parameters.</div>
+</section>
+
+<section id="lagrange-statespace"><p class="label">Lagrange Step 8</p><h2 class="title">Convert to first-order state space</h2>
+<p>Define</p>
+<div class="eq compact">\[
+\mathbf x=
+\begin{bmatrix}\mathbf q\\\dot{\mathbf q}\end{bmatrix}.
+\tag{L19}
+\]</div>
+<p>Then</p>
+<div class="eq">\[
+\dot{\mathbf x}=\mathbf A\mathbf x+\mathbf B\theta_{cmd},
+\tag{L20}
+\]
+\[
+\mathbf A=
+\begin{bmatrix}
+\mathbf0_{6\times6}&\mathbf I_{6\times6}\\
+-\mathbf M^{-1}\mathbf K&-\mathbf M^{-1}\mathbf C
+\end{bmatrix},
+\qquad
+\mathbf B=
+\begin{bmatrix}
+\mathbf0_{6\times1}\\
+\mathbf M^{-1}\mathbf G
+\end{bmatrix}.
+\tag{L21}
+\]</div>
+<p>The stage-position output is</p>
+<div class="eq compact">\[
+y=x_n=\mathbf C_y\mathbf x,
+\qquad
+\mathbf C_y=
+\begin{bmatrix}0&0&0&0&0&1&0&0&0&0&0&0\end{bmatrix},
+\qquad D=0.
+\tag{L22}
+\]</div>
+</section>
+
+<h2 class="chapter-title" id="model-equivalence">Model Equivalence</h2>
+<section id="equivalence-state-space"><p class="label">Common result</p><h2 class="title">Newton and Lagrange arrive at the same state-space model</h2>
+<p>The two derivations use different assembly routes but the same coordinates, sign convention, structural elements, damping model, detent linearization, and zero-friction assumption.</p>
+
+<table>
+<thead><tr><th>Quantity</th><th>Newton route</th><th>Lagrange route</th></tr></thead>
+<tbody>
+<tr><td>\(\mathbf M\)</td><td>Collected from the six inertia terms in the body balances</td><td>Obtained from \(T=\tfrac12\dot{\mathbf q}^{\mathsf T}\mathbf M\dot{\mathbf q}\)</td></tr>
+<tr><td>\(\mathbf C\)</td><td>Collected from the spring-damper reaction terms</td><td>Obtained from \(\partial\mathcal R/\partial\dot{\mathbf q}\)</td></tr>
+<tr><td>\(\mathbf K\)</td><td>Collected from the elastic torque and force terms</td><td>Obtained from \(\partial V/\partial\mathbf q\)</td></tr>
+<tr><td>\(\mathbf G\)</td><td>Command torque left on the right-hand side</td><td>Electromagnetic cross term moved to the right-hand side</td></tr>
+</tbody>
+</table>
+
+<div class="eq compact">\[
+\boxed{
+\mathbf M_N=\mathbf M_L,\qquad
+\mathbf C_N=\mathbf C_L,\qquad
+\mathbf K_N=\mathbf K_L,\qquad
+\mathbf G_N=\mathbf G_L
+}.
+\tag{E1}
+\]</div>
+
+<p>Both derivations therefore reduce to the same second-order equation:</p>
+<div class="eq compact">\[
+\mathbf M\ddot{\mathbf q}
++\mathbf C\dot{\mathbf q}
++\mathbf K\mathbf q
+=\mathbf G\theta_{cmd}.
+\tag{E2}
+\]</div>
+
+<p>Using the common state definition</p>
+<div class="eq compact">\[
+\mathbf x=
+\begin{bmatrix}\mathbf q\\\dot{\mathbf q}\end{bmatrix},
+\tag{E3}
+\]</div>
+<p>gives identical first-order matrices:</p>
+<div class="eq">\[
+\boxed{
+\mathbf A_N=\mathbf A_L=
+\begin{bmatrix}
+\mathbf0&\mathbf I\\
+-\mathbf M^{-1}\mathbf K&-\mathbf M^{-1}\mathbf C
+\end{bmatrix}
+},
+\qquad
+\boxed{
+\mathbf B_N=\mathbf B_L=
+\begin{bmatrix}
+\mathbf0\\
+\mathbf M^{-1}\mathbf G
+\end{bmatrix}
+}.
+\tag{E4}
+\]</div>
+<div class="eq compact">\[
+\boxed{
+\mathbf C_{y,N}=\mathbf C_{y,L}
+=
+\begin{bmatrix}0&0&0&0&0&1&0&0&0&0&0&0\end{bmatrix},
+\qquad
+D_N=D_L=0
+}.
+\tag{E5}
+\]</div>
+
+<div class="note"><strong>Transition to friction:</strong> this common zero-friction model is the structural plant onto which the nonlinear friction ports should be added. The friction extension therefore needs to be derived only once; it applies to the shared Newton/Lagrange result.</div>
+</section>
+
+
+<h2 class="chapter-title" id="friction">Friction Implementation</h2>
+<div class="text-window">
+<strong>How friction is added to the common model</strong>
+<p>The friction-enabled model retains the shared six-coordinate structural plant and injects three nonlinear LuGre reactions through port Jacobians. At the screw–nut interface, the structural \(k_{nut}/c_{nut}\) path remains load-bearing and the LuGre element is an additional parallel pre-rolling friction path.</p>
+</div>
+
+<section id="friction-plant"><p class="label">Friction Step 1</p><h2 class="title">Retain the structural plant and restore the nonlinear detent</h2>
+<p>Use the same generalized coordinates and lead conversion:</p>
+<div class="eq compact">\[
+\mathbf q=
+\begin{bmatrix}
+\theta_m&\theta_c&\theta_s&\theta_{sb}&x_s&x_n
+\end{bmatrix}^{\mathsf T},
+\qquad r=\frac{L}{2\pi}.
+\tag{F1}
+\]</div>
+<p>The friction-enabled mechanical equation is</p>
+<div class="eq">\[
+\boxed{
+\mathbf M\ddot{\mathbf q}
++\mathbf C\dot{\mathbf q}
++\mathbf K_{struct}\mathbf q
+=
+\mathbf G\theta_{cmd}
++\mathbf Q_{fric}
+-\mathbf e_mT_d\sin(4N_r\theta_m)
+}.
+\tag{F2}
+\]</div>
+<div class="note"><strong>Detent convention:</strong> \(\mathbf K_{struct}\) includes \(k_{EM}\) but not \(k_d\). The exact sinusoidal detent torque is evaluated on the right-hand side, so its tangent must not also be embedded in the stiffness matrix.</div>
+
+<details class="derivation-toggle">
+<summary>Retained structural matrices</summary>
+<div class="toggle-body">
+<div class="eq compact">\[
+\mathbf M=\operatorname{diag}
+(I_m,I_c,I_s,I_{sb},M_{screw},M_s),
+\qquad
+\mathbf G=
+\begin{bmatrix}k_{EM}&0&0&0&0&0\end{bmatrix}^{\mathsf T}.
+\tag{F3}
+\]</div>
+<div class="eq">\[
+\mathbf K_{struct}=
+\begin{bmatrix}
+k_c+k_{EM}&-k_c&0&0&0&0\\
+-k_c&k_c+k_{s1}&-k_{s1}&0&0&0\\
+0&-k_{s1}&k_{s1}+k_{s2}+r^2k_{nut}&-k_{s2}&rk_{nut}&-rk_{nut}\\
+0&0&-k_{s2}&k_{s2}&0&0\\
+0&0&rk_{nut}&0&k_{brg}+k_{nut}&-k_{nut}\\
+0&0&-rk_{nut}&0&-k_{nut}&k_{nut}
+\end{bmatrix}.
+\tag{F4}
+\]</div>
+<div class="eq">\[
+\mathbf C=
+\begin{bmatrix}
+c_c+c_{EM}&-c_c&0&0&0&0\\
+-c_c&c_c+c_{s1}&-c_{s1}&0&0&0\\
+0&-c_{s1}&c_{s1}+c_{s2}+r^2c_{nut}&-c_{s2}&rc_{nut}&-rc_{nut}\\
+0&0&-c_{s2}&c_{s2}&0&0\\
+0&0&rc_{nut}&0&c_{brg}+c_{nut}&-c_{nut}\\
+0&0&-rc_{nut}&0&-c_{nut}&c_{nut}
+\end{bmatrix}.
+\tag{F5}
+\]</div>
+<p>The structural \(k_{nut}\) and \(c_{nut}\) terms are already present before the nonlinear nut friction force is evaluated.</p>
+</div>
+</details>
+</section>
+
+<section id="friction-ports"><p class="label">Friction Step 2</p><h2 class="title">Define the friction ports</h2>
+<p>For port \(p\), extract the scalar relative velocity from the mechanical coordinates using</p>
+<div class="eq compact">\[
+\boxed{v_p=\mathbf J_p\dot{\mathbf q}}.
+\tag{F6}
+\]</div>
+<table>
+<thead><tr><th>Port</th><th>Jacobian \(\mathbf J_p\)</th><th>Relative velocity</th></tr></thead>
+<tbody>
+<tr><td>Guideway</td><td>\([0,0,0,0,0,1]\)</td><td>\(v_{way}=\dot x_n\)</td></tr>
+<tr><td>Screw–nut</td><td>\([0,0,r,0,1,-1]\)</td><td>\(v_{nut}=r\dot\theta_s+\dot x_s-\dot x_n\)</td></tr>
+<tr><td>Support bearing</td><td>\([0,0,0,1,0,0]\)</td><td>\(v_{sb}=\dot\theta_{sb}\)</td></tr>
+</tbody>
+</table>
+</section>
+
+<section id="friction-signs"><p class="label">Friction Step 3</p><h2 class="title">Derive the generalized reaction signs</h2>
+<p>Let \(F_p\) be positive when it opposes positive \(v_p\). The power delivered to the mechanical coordinates must satisfy</p>
+<div class="eq">\[
+\dot{\mathbf q}^{\mathsf T}\mathbf Q_{fric,p}
+=-v_pF_p
+=-\dot{\mathbf q}^{\mathsf T}\mathbf J_p^{\mathsf T}F_p.
+\tag{F7}
+\]</div>
+<p>Therefore,</p>
+<div class="eq compact">\[
+\boxed{\mathbf Q_{fric,p}=-\mathbf J_p^{\mathsf T}F_p}.
+\tag{F8}
+\]</div>
+<p>Summing the three ports gives</p>
+<div class="eq">\[
+\mathbf Q_{fric}
+=-\mathbf J_{way}^{\mathsf T}F_{way}
+-\mathbf J_{nut}^{\mathsf T}F_{nut}
+-\mathbf J_{sb}^{\mathsf T}T_{sb}
+=
+\begin{bmatrix}
+0\\0\\-rF_{nut}\\-T_{sb}\\-F_{nut}\\F_{nut}-F_{way}
+\end{bmatrix}.
+\tag{F9}
+\]</div>
+</section>
+
+<section id="friction-parallel"><p class="label">Friction Step 4</p><h2 class="title">Keep the screw–nut branches in parallel</h2>
+<p>Define the oriented nut coordinate directly as</p>
+<div class="eq compact">\[
+\rho_{nut}=\mathbf J_{nut}\mathbf q
+=r\theta_s+x_s-x_n,
+\qquad
+v_{nut}=\dot\rho_{nut}.
+\tag{F10}
+\]</div>
+<p>The structural contact contributes</p>
+<div class="eq">\[
+\mathbf Q_{nut,struct}
+=-\mathbf J_{nut}^{\mathsf T}
+\left(k_{nut}\rho_{nut}+c_{nut}v_{nut}\right),
+\tag{F11}
+\]</div>
+<p>while the LuGre element contributes</p>
+<div class="eq compact">\[
+\mathbf Q_{nut,LuGre}
+=-\mathbf J_{nut}^{\mathsf T}F_{nut}.
+\tag{F12}
+\]</div>
+<p>The complete screw–nut contribution is therefore</p>
+<div class="eq">\[
+\boxed{
+\mathbf Q_{nut,total}
+=-\mathbf J_{nut}^{\mathsf T}
+\left(
+k_{nut}\rho_{nut}+c_{nut}v_{nut}+F_{nut}
+\right)
+}.
+\tag{F13}
+\]</div>
+<div class="note">The LuGre element does not replace \(k_{nut}\) or \(c_{nut}\) and does not cap the transmitted structural thrust at the breakaway-friction level.</div>
+</section>
+
+<section id="friction-lugre"><p class="label">Friction Step 5</p><h2 class="title">Apply the LuGre law at each port</h2>
+<p>Each port has one internal bristle state \(z_p\). The implementation regularizes the absolute velocity using</p>
+<div class="eq compact">\[
+s_p=\sqrt{v_p^2+\varepsilon^2}.
+\tag{F14}
+\]</div>
+<p>The Stribeck curve and bristle decay rate are</p>
+<div class="eq">\[
+g_p(v_p)
+=
+F_{c,p}
++\left(F_{s,p}-F_{c,p}\right)
+\exp\!\left[-\left(\frac{v_p}{v_{s,p}}\right)^2\right],
+\qquad
+\lambda_p=\frac{\sigma_{0,p}s_p}{g_p(v_p)}.
+\tag{F15}
+\]</div>
+<p>The bristle evolution and scalar friction reaction are</p>
+<div class="eq">\[
+\boxed{
+\dot z_p=v_p-\lambda_pz_p,
+\qquad
+F_p=\sigma_{0,p}z_p+\sigma_{1,p}\dot z_p+\sigma_{2,p}v_p
+}.
+\tag{F16}
+\]</div>
+<p>For the support-bearing port, \(F_p\) is interpreted as the torque \(T_{sb}\), with rotational parameter units.</p>
+</section>
+
+<section id="friction-statespace"><p class="label">Friction Step 6</p><h2 class="title">Assemble the nonlinear 15-state model</h2>
+<p>Let</p>
+<div class="eq">\[
+\mathbf v=\dot{\mathbf q},
+\qquad
+\mathbf z=
+\begin{bmatrix}z_{way}&z_{nut}&z_{sb}\end{bmatrix}^{\mathsf T},
+\qquad
+\mathbf x_{fric}=
+\begin{bmatrix}
+\mathbf q^{\mathsf T}&\mathbf v^{\mathsf T}&\mathbf z^{\mathsf T}
+\end{bmatrix}^{\mathsf T}.
+\tag{F17}
+\]</div>
+<p>The complete nonlinear state equations are</p>
+<div class="eq">\[
+\dot{\mathbf q}=\mathbf v,
+\tag{F18}
+\]
+\[
+\dot{\mathbf v}
+=
+\mathbf M^{-1}
+\left[
+\mathbf G\theta_{cmd}
+-\mathbf C\mathbf v
+-\mathbf K_{struct}\mathbf q
+-\mathbf e_mT_d\sin(4N_r\theta_m)
+-\sum_p\mathbf J_p^{\mathsf T}F_p
+\right],
+\tag{F19}
+\]
+\[
+\dot z_p
+=
+\mathbf J_p\mathbf v
+-\frac{
+\sigma_{0,p}
+\sqrt{(\mathbf J_p\mathbf v)^2+\varepsilon^2}
+}{
+g_p(\mathbf J_p\mathbf v)
+}z_p.
+\tag{F20}
+\]</div>
+
+<details class="derivation-toggle expanded-model" id="friction-expanded-equations">
+<summary>Full expanded 15-state equations</summary>
+<div class="toggle-body">
+<p>The nonlinear model does not have one constant state matrix \(\mathbf A\). Its complete vector field is obtained by evaluating the following scalar equations. Together they provide six coordinate derivatives, six mechanical accelerations, and three bristle-state derivatives.</p>
+
+<div class="eq">\[
+\begin{aligned}
+\frac{d\theta_m}{dt}&=\dot\theta_m,
+&
+\frac{d\theta_c}{dt}&=\dot\theta_c,
+&
+\frac{d\theta_s}{dt}&=\dot\theta_s,\\
+\frac{d\theta_{sb}}{dt}&=\dot\theta_{sb},
+&
+\frac{dx_s}{dt}&=\dot x_s,
+&
+\frac{dx_n}{dt}&=\dot x_n.
+\end{aligned}
+\tag{F20a}
+\]</div>
+
+<p>First evaluate the relative motion at the three friction ports:</p>
+<div class="eq">\[
+\begin{aligned}
+\rho_{nut}&=r\theta_s+x_s-x_n,\\
+v_{way}&=\dot x_n,\\
+v_{nut}&=r\dot\theta_s+\dot x_s-\dot x_n,\\
+v_{sb}&=\dot\theta_{sb}.
+\end{aligned}
+\tag{F20b}
+\]</div>
+
+<p>The port-specific Stribeck curves are</p>
+<div class="eq">\[
+\begin{aligned}
+g_{way}(v_{way})
+&=
+F_{c,way}
++
+\left(F_{s,way}-F_{c,way}\right)
+\exp\!\left[-\left(\frac{v_{way}}{v_{s,way}}\right)^2\right],\\
+g_{nut}(v_{nut})
+&=
+F_{c,nut}
++
+\left(F_{s,nut}-F_{c,nut}\right)
+\exp\!\left[-\left(\frac{v_{nut}}{v_{s,nut}}\right)^2\right],\\
+g_{sb}(v_{sb})
+&=
+T_{c,sb}
++
+\left(T_{s,sb}-T_{c,sb}\right)
+\exp\!\left[-\left(\frac{v_{sb}}{v_{s,sb}}\right)^2\right].
+\end{aligned}
+\tag{F20c}
+\]</div>
+
+<p>The three internal LuGre states evolve according to</p>
+<div class="eq">\[
+\begin{aligned}
+\dot z_{way}
+&=
+v_{way}
+-
+\frac{\sigma_{0,way}\sqrt{v_{way}^2+\varepsilon^2}}
+{g_{way}(v_{way})}\,z_{way},\\
+\dot z_{nut}
+&=
+v_{nut}
+-
+\frac{\sigma_{0,nut}\sqrt{v_{nut}^2+\varepsilon^2}}
+{g_{nut}(v_{nut})}\,z_{nut},\\
+\dot z_{sb}
+&=
+v_{sb}
+-
+\frac{\sigma_{0,sb}\sqrt{v_{sb}^2+\varepsilon^2}}
+{g_{sb}(v_{sb})}\,z_{sb}.
+\end{aligned}
+\tag{F20d}
+\]</div>
+
+<p>The corresponding scalar friction reactions are</p>
+<div class="eq">\[
+\begin{aligned}
+F_{way}
+&=
+\sigma_{0,way}z_{way}
++\sigma_{1,way}\dot z_{way}
++\sigma_{2,way}v_{way},\\
+F_{nut}
+&=
+\sigma_{0,nut}z_{nut}
++\sigma_{1,nut}\dot z_{nut}
++\sigma_{2,nut}v_{nut},\\
+T_{sb}
+&=
+\sigma_{0,sb}z_{sb}
++\sigma_{1,sb}\dot z_{sb}
++\sigma_{2,sb}v_{sb}.
+\end{aligned}
+\tag{F20e}
+\]</div>
+
+<p>Substitution into the six mechanical balances gives the fully expanded accelerations:</p>
+<div class="eq">\[
+\begin{aligned}
+\ddot\theta_m
+={}&
+\frac{1}{I_m}
+\Big[
+k_{EM}(\theta_{cmd}-\theta_m)
+-c_{EM}\dot\theta_m
+-k_c(\theta_m-\theta_c)
+-c_c(\dot\theta_m-\dot\theta_c)
+-T_d\sin(4N_r\theta_m)
+\Big],\\[1ex]
+\ddot\theta_c
+={}&
+\frac{1}{I_c}
+\Big[
+k_c(\theta_m-\theta_c)
++c_c(\dot\theta_m-\dot\theta_c)
+-k_{s1}(\theta_c-\theta_s)
+-c_{s1}(\dot\theta_c-\dot\theta_s)
+\Big],\\[1ex]
+\ddot\theta_s
+={}&
+\frac{1}{I_s}
+\Big[
+k_{s1}(\theta_c-\theta_s)
++c_{s1}(\dot\theta_c-\dot\theta_s)
+-k_{s2}(\theta_s-\theta_{sb})
+-c_{s2}(\dot\theta_s-\dot\theta_{sb})\\
+&\hspace{7.5em}
+-r\Big(
+k_{nut}(r\theta_s+x_s-x_n)
++c_{nut}(r\dot\theta_s+\dot x_s-\dot x_n)
++F_{nut}
+\Big)
+\Big],\\[1ex]
+\ddot\theta_{sb}
+={}&
+\frac{1}{I_{sb}}
+\Big[
+k_{s2}(\theta_s-\theta_{sb})
++c_{s2}(\dot\theta_s-\dot\theta_{sb})
+-T_{sb}
+\Big],\\[1ex]
+\ddot x_s
+={}&
+\frac{1}{M_{screw}}
+\Big[
+-k_{brg}x_s
+-c_{brg}\dot x_s
+-k_{nut}(r\theta_s+x_s-x_n)\\
+&\hspace{7.5em}
+-c_{nut}(r\dot\theta_s+\dot x_s-\dot x_n)
+-F_{nut}
+\Big],\\[1ex]
+\ddot x_n
+={}&
+\frac{1}{M_s}
+\Big[
+k_{nut}(r\theta_s+x_s-x_n)
++c_{nut}(r\dot\theta_s+\dot x_s-\dot x_n)
++F_{nut}
+-F_{way}
+\Big].
+\end{aligned}
+\tag{F20f}
+\]</div>
+
+<div class="note">The screw–nut structural force and LuGre force appear together in the \(\theta_s\), \(x_s\), and \(x_n\) equations because they are parallel reactions across the same relative coordinate. The support-bearing LuGre torque acts only in the \(\theta_{sb}\) balance, while the guideway force acts only in the \(x_n\) balance.</div>
+</div>
+</details>
+
+<details class="derivation-toggle">
+<summary>Evaluation sequence used by the implementation</summary>
+<div class="toggle-body">
+<ol>
+<li>Evaluate \(\theta_{cmd}\) and read the current mechanical and bristle states.</li>
+<li>Compute each port velocity \(v_p=\mathbf J_p\mathbf v\).</li>
+<li>Evaluate \(g_p\), \(\lambda_p\), \(\dot z_p\), and \(F_p\).</li>
+<li>Map the scalar reactions with \(-\mathbf J_p^{\mathsf T}F_p\).</li>
+<li>Evaluate the exact detent torque and solve Equation (F19) for acceleration.</li>
+</ol>
+</div>
+</details>
+</section>
+
+<section id="friction-recovery"><p class="label">Friction Step 7</p><h2 class="title">Recover the common frictionless state space</h2>
+<p>Set the three port reactions to zero and remove the three bristle states:</p>
+<div class="eq compact">\[
+F_{way}=F_{nut}=T_{sb}=0,
+\qquad
+\mathbf Q_{fric}=\mathbf0.
+\tag{F21}
+\]</div>
+<p>Linearizing the exact detent torque at \(\theta_m=0\) gives</p>
+<div class="eq compact">\[
+T_d\sin(4N_r\theta_m)\approx k_d\theta_m,
+\qquad
+k_d=4N_rT_d.
+\tag{F22}
+\]</div>
+<p>Equivalently, define</p>
+<div class="eq compact">\[
+\mathbf K
+=
+\mathbf K_{struct}
++k_d\mathbf e_m\mathbf e_m^{\mathsf T}.
+\tag{F23}
+\]</div>
+<p>Equations (F2) and (F21)–(F23) then reduce exactly to the shared Newton–Lagrange model:</p>
+<div class="eq compact">\[
+\boxed{
+\mathbf M\ddot{\mathbf q}
++\mathbf C\dot{\mathbf q}
++\mathbf K\mathbf q
+=
+\mathbf G\theta_{cmd}
+}.
+\tag{F24}
+\]</div>
+
+<details class="derivation-toggle">
+<summary>Implementation and parameter caveats</summary>
+<div class="toggle-body">
+<ul>
+<li>The nonlinear model has no unique amplitude-independent Bode response; its frequency response must be defined from a stated operating-point linearization.</li>
+<li>The friction-model Bode implementation uses the analytical Jacobian of the complete 15-state vector field and checks it against a complex-step numerical Jacobian.</li>
+<li>The friction levels are reused from Rev 4.1 rather than newly identified.</li>
+<li>The \(\sigma_1\) values are initialized using \(\sigma_1=2\zeta\sqrt{\sigma_0m_{eff}}\) with \(\zeta=0.7\); this is an initialization rule, not identification.</li>
+<li>The retained \(c_{nut}\) overlaps the dissipation represented by LuGre \(\sigma_1\) and \(\sigma_2\), so the damping split must be identified before treating the combined model as calibrated.</li>
+</ul>
+</div>
+</details>
+</section>
+
+<h2 class="chapter-title" id="model-results">Model Parameters and Simulation Plots</h2>
+<div class="text-window">
+<strong>Parameters and numerical evidence</strong>
+<p>This chapter records the parameter set used by the friction-enabled model and groups the existing simulation outputs by run configuration.</p>
+</div>
+
+<section id="model-parameters"><p class="label">Model Data</p><h2 class="title">Parameter set and provenance</h2>
+<p>The values below are the parameters used by the friction implementation. The provenance labels follow the notes in <code>Rev 4/model_parameters.json</code>, <code>Rev 4.1/model_parameters.json</code>, and the friction-model parameter file. “Datasheet/source” is used only where the workspace contains an explicit documented value or range. “Pre-emptive” identifies a carried-over placeholder, estimate, tuning choice, or initialization that still requires identification or verification.</p>
+<div class="note"><strong>Physical-parameter correction (2 September 2026).</strong> The actual system uses a 2 mm/rev lead screw and a detent-torque amplitude of 5 mN·m. These values supersede the earlier 1 mm/rev and 3 mN·m entries. Consequently, \(r=L/(2\pi)=3.18310\times10^{-4}\) m/rad and the zero-angle detent tangent is \(k_d=4N_rT_d=1.0\) N·m/rad.</div>
+
+<details class="derivation-toggle">
+<summary>Model parameter table — values, meanings, and provenance</summary>
+<div class="toggle-body">
+<table class="parameter-table">
+<thead><tr><th>Parameter</th><th>Value</th><th>Unit</th><th>Meaning</th><th>Basis</th></tr></thead>
+<tbody>
+<tr><td>\(L\)</td><td>\(2.0\times10^{-3}\)</td><td>m/rev</td><td>Lead-screw lead</td><td><span class="source-tag documented">Confirmed system</span> actual 2 mm/rev lead</td></tr>
+<tr><td>\(N_r\)</td><td>50</td><td>—</td><td>Rotor tooth count</td><td><span class="source-tag documented">Datasheet/source</span> derived from the documented \(1.8^\circ\) full-step angle</td></tr>
+<tr><td>\(T_{hold}\)</td><td>0.06</td><td>N·m</td><td>Motor holding torque</td><td><span class="source-tag preemptive">Pre-emptive</span> carried from Rev 3; source document marks it TBD</td></tr>
+<tr><td>\(T_d\)</td><td>\(5.0\times10^{-3}\)</td><td>N·m</td><td>Detent-torque amplitude</td><td><span class="source-tag documented">Confirmed system</span> actual 5 mN·m amplitude</td></tr>
+<tr><td>\(r=L/(2\pi)\)</td><td>\(3.18310\times10^{-4}\)</td><td>m/rad</td><td>Rotation-to-translation conversion</td><td><span class="source-tag documented">Derived</span> calculated from the confirmed 2 mm/rev screw lead</td></tr>
+<tr><td>\(k_{EM}=N_rT_{hold}\)</td><td>3.0</td><td>N·m/rad</td><td>Electromagnetic restoring stiffness</td><td><span class="source-tag preemptive">Pre-emptive</span> derived using placeholder \(T_{hold}\)</td></tr>
+<tr><td>\(k_d=4N_rT_d\)</td><td>1.0</td><td>N·m/rad</td><td>Zero-angle detent tangent used only in linear comparisons</td><td><span class="source-tag documented">Derived</span> the nonlinear simulation uses the full periodic torque instead</td></tr>
+<tr><td>\(I_m\)</td><td>\(9.0\times10^{-7}\)</td><td>kg·m²</td><td>Rotor inertia</td><td><span class="source-tag preemptive">Pre-emptive</span> Rev 3 placeholder</td></tr>
+<tr><td>\(I_c\)</td><td>\(1.18\times10^{-6}\)</td><td>kg·m²</td><td>Coupling inertia</td><td><span class="source-tag preemptive">Pre-emptive</span> Rev 3 placeholder</td></tr>
+<tr><td>\(I_s\)</td><td>\(6.06\times10^{-7}\)</td><td>kg·m²</td><td>Screw rotational inertia</td><td><span class="source-tag preemptive">Pre-emptive</span> solid-cylinder estimate from screw geometry</td></tr>
+<tr><td>\(I_{sb}\)</td><td>\(1.5\times10^{-7}\)</td><td>kg·m²</td><td>Support-bearing inner-ring inertia</td><td><span class="source-tag preemptive">Pre-emptive</span> order-of-magnitude estimate</td></tr>
+<tr><td>\(M_{screw}\)</td><td>0.0758</td><td>kg</td><td>Axially moving screw mass</td><td><span class="source-tag preemptive">Pre-emptive</span> solid-cylinder estimate</td></tr>
+<tr><td>\(M_s\)</td><td>0.405</td><td>kg</td><td>Lumped nut and stage mass</td><td><span class="source-tag preemptive">Pre-emptive</span> sum of the Rev 3 nut and stage masses</td></tr>
+<tr><td>\(k_c\)</td><td>68.75</td><td>N·m/rad</td><td>Coupling torsional stiffness</td><td><span class="source-tag preemptive">Pre-emptive</span> carried from Rev 3</td></tr>
+<tr><td>\(k_{s1}\)</td><td>211</td><td>N·m/rad</td><td>Motor-side screw torsional stiffness</td><td><span class="source-tag preemptive">Pre-emptive</span> carried from Rev 3</td></tr>
+<tr><td>\(k_{s2}\)</td><td>211</td><td>N·m/rad</td><td>Bearing-side screw torsional stiffness</td><td><span class="source-tag preemptive">Pre-emptive</span> carried from Rev 3</td></tr>
+<tr><td>\(k_{nut}\)</td><td>\(1.0\times10^8\)</td><td>N/m</td><td>Load-bearing screw–nut contact stiffness</td><td><span class="source-tag preemptive">Pre-emptive</span> carried from the Rev 3 contact model</td></tr>
+<tr><td>\(k_{brg}\)</td><td>\(1.14\times10^7\)</td><td>N/m</td><td>Support-bearing axial stiffness</td><td><span class="source-tag documented">Datasheet/source</span> midpoint of the documented \(7.5\text{–}15.3\times10^6\) N/m range</td></tr>
+<tr><td>\(c_c\)</td><td>\(2.4\times10^{-4}\)</td><td>N·m·s/rad</td><td>Coupling torsional damping</td><td><span class="source-tag preemptive">Pre-emptive</span> 2% critical-damping estimate</td></tr>
+<tr><td>\(c_{s1}\)</td><td>\(3.7\times10^{-4}\)</td><td>N·m·s/rad</td><td>Motor-side screw damping</td><td><span class="source-tag preemptive">Pre-emptive</span> 2% critical-damping estimate</td></tr>
+<tr><td>\(c_{s2}\)</td><td>\(2.0\times10^{-4}\)</td><td>N·m·s/rad</td><td>Bearing-side screw damping</td><td><span class="source-tag preemptive">Pre-emptive</span> 2% critical-damping estimate</td></tr>
+<tr><td>\(c_{nut}\)</td><td>101</td><td>N·s/m</td><td>Structural screw–nut contact damping</td><td><span class="source-tag preemptive">Pre-emptive</span> 2% critical estimate; overlaps LuGre damping</td></tr>
+<tr><td>\(c_{brg}\)</td><td>37.2</td><td>N·s/m</td><td>Support-bearing axial damping</td><td><span class="source-tag preemptive">Pre-emptive</span> 2% critical-damping estimate</td></tr>
+<tr><td>\(c_{EM}\)</td><td>\(1.3283\times10^{-4}\)</td><td>N·m·s/rad</td><td>Electromagnetic rotor damping to ground</td><td><span class="source-tag preemptive">Pre-emptive</span> tuned so mode 1 has \(\zeta=0.02\)</td></tr>
+
+<tr><td>\(\sigma_{0,nut}\)</td><td>\(2.0\times10^6\)</td><td>N/m</td><td>Nut LuGre bristle stiffness</td><td><span class="source-tag preemptive">Pre-emptive</span> reused from the Rev 3 nut-site estimate</td></tr>
+<tr><td>\(\sigma_{1,nut}\)</td><td>500.291</td><td>N·s/m</td><td>Nut bristle micro-damping</td><td><span class="source-tag preemptive">Pre-emptive</span> initialized from \(\zeta=0.7\)</td></tr>
+<tr><td>\(\sigma_{2,nut}\)</td><td>0.25</td><td>N·s/m</td><td>Nut viscous-friction coefficient</td><td><span class="source-tag preemptive">Pre-emptive</span> reused from Rev 3</td></tr>
+<tr><td>\(F_{c,nut}\)</td><td>0.5</td><td>N</td><td>Nut Coulomb-friction level</td><td><span class="source-tag preemptive">Pre-emptive</span> estimated from preload and assumed screw efficiency</td></tr>
+<tr><td>\(F_{s,nut}\)</td><td>0.75</td><td>N</td><td>Nut static-friction level</td><td><span class="source-tag preemptive">Pre-emptive</span> set to \(1.5F_c\)</td></tr>
+<tr><td>\(v_{s,nut}\)</td><td>\(2.0\times10^{-4}\)</td><td>m/s</td><td>Nut Stribeck velocity</td><td><span class="source-tag preemptive">Pre-emptive</span> reused from Rev 3</td></tr>
+
+<tr><td>\(\sigma_{0,sb}\)</td><td>0.076</td><td>N·m/rad</td><td>Support-bearing bristle stiffness</td><td><span class="source-tag preemptive">Pre-emptive</span> corrected trial value; not identified</td></tr>
+<tr><td>\(\sigma_{1,sb}\)</td><td>\(1.49479\times10^{-4}\)</td><td>N·m·s/rad</td><td>Support-bearing micro-damping</td><td><span class="source-tag preemptive">Pre-emptive</span> initialized from \(\zeta=0.7\)</td></tr>
+<tr><td>\(\sigma_{2,sb}\)</td><td>\(1.0\times10^{-5}\)</td><td>N·m·s/rad</td><td>Support-bearing viscous friction</td><td><span class="source-tag preemptive">Pre-emptive</span> reused from Rev 3</td></tr>
+<tr><td>\(T_{c,sb}\)</td><td>\(1.5\times10^{-4}\)</td><td>N·m</td><td>Support-bearing Coulomb torque</td><td><span class="source-tag preemptive">Pre-emptive</span> order-of-magnitude estimate</td></tr>
+<tr><td>\(T_{s,sb}\)</td><td>\(2.2\times10^{-4}\)</td><td>N·m</td><td>Support-bearing static torque</td><td><span class="source-tag preemptive">Pre-emptive</span> set to approximately \(1.47T_c\)</td></tr>
+<tr><td>\(v_{s,sb}\)</td><td>0.1</td><td>rad/s</td><td>Support-bearing Stribeck velocity</td><td><span class="source-tag preemptive">Pre-emptive</span> reused from Rev 3 with cross-domain caveat</td></tr>
+
+<tr><td>\(\sigma_{0,way}\)</td><td>\(7.6\times10^5\)</td><td>N/m</td><td>Guideway bristle stiffness</td><td><span class="source-tag preemptive">Pre-emptive</span> reused from the Rev 3 guideway estimate</td></tr>
+<tr><td>\(\sigma_{1,way}\)</td><td>776.716</td><td>N·s/m</td><td>Guideway bristle micro-damping</td><td><span class="source-tag preemptive">Pre-emptive</span> initialized from \(\zeta=0.7\)</td></tr>
+<tr><td>\(\sigma_{2,way}\)</td><td>0.4</td><td>N·s/m</td><td>Guideway viscous-friction coefficient</td><td><span class="source-tag preemptive">Pre-emptive</span> reused from Rev 3</td></tr>
+<tr><td>\(F_{c,way}\)</td><td>3.0</td><td>N</td><td>Guideway Coulomb-friction level</td><td><span class="source-tag preemptive">Pre-emptive</span> order-of-magnitude estimate</td></tr>
+<tr><td>\(F_{s,way}\)</td><td>4.5</td><td>N</td><td>Guideway static-friction level</td><td><span class="source-tag preemptive">Pre-emptive</span> set to \(1.5F_c\)</td></tr>
+<tr><td>\(v_{s,way}\)</td><td>\(2.5\times10^{-4}\)</td><td>m/s</td><td>Guideway Stribeck velocity</td><td><span class="source-tag preemptive">Pre-emptive</span> reused from Rev 3</td></tr>
+
+<tr><td>\(\varepsilon\)</td><td>\(1.0\times10^{-9}\)</td><td>port velocity unit</td><td>Smooth-\(|v|\) regularization</td><td><span class="source-tag numerical">Numerical choice</span> selected for differentiability at zero speed</td></tr>
+<tr><td>\(\zeta_{\sigma_1}\)</td><td>0.7</td><td>—</td><td>Target used to initialize all \(\sigma_1\)</td><td><span class="source-tag preemptive">Pre-emptive</span> initialization rule, not an identified damping ratio</td></tr>
+</tbody>
+</table>
+<div class="note">The structural \(c_{nut}=101\) N·s/m is retained in parallel with LuGre \(\sigma_1\) and \(\sigma_2\). This is deliberate for the topology comparison, but it can double-count dissipation; the split must be identified before the model is described as calibrated.</div>
+</div>
+</details>
+</section>
+
+<section id="simulation-plots"><p class="label">Simulation Results</p><h2 class="title">Plots and run configurations</h2>
+<p>Each result group below states the excitation and model convention used to generate it. The figures are existing outputs from <code>Rev 4/lugre_friction/Rev 4.2/rendered_assets</code>.</p>
+<div class="note warning"><strong>Plot status.</strong> The figures below are retained from the earlier parameter set with \(L=1\) mm/rev and \(T_d=3\) mN·m. They have not been regenerated and therefore do not represent the corrected physical parameter set quantitatively.</div>
+
+<details class="simulation-run" id="plots-frequency" open>
+<summary>Run family A — operating-point frequency-response comparisons</summary>
+<div class="toggle-body">
+<ul class="simulation-setup">
+<li>The full 15-state friction model is linearized at a frozen stage velocity of 5 mm/s; the command-to-stage response \(x_n/\theta_{cmd}\) is evaluated from 0 to 8 kHz.</li>
+<li>The analytical Jacobian is checked against a complex-step Jacobian, and a zero-friction regression recovers the Rev 4 baseline modes.</li>
+<li>The pitch study uses 0.1–8 kHz, linearizes the periodic detent at \(\theta_m=0\), and separates frictionless, detent-only, and LuGre-plus-detent cases for 1 mm and 2 mm screw leads.</li>
+</ul>
+<div class="figure-grid">
+<figure>
+<img src="../Rev 4/lugre_friction/Rev 4.2/rendered_assets/bode_rev42_vs_frictionless.png" alt="Locally linearized friction-model Bode response compared with the frictionless Rev 4 baseline">
+<figcaption>Local tangent comparison at 5 mm/s. This is an operating-point linearization, not an amplitude-independent Bode response of the nonlinear model.</figcaption>
+</figure>
+<figure>
+<img src="../Rev 4/lugre_friction/Rev 4.2/rendered_assets/bode_three_case_overlay_pitch_1mm_vs_2mm.png" alt="Three-case Bode comparison for one and two millimetre lead-screw pitch">
+<figcaption>Pitch and model-term comparison: solid curves use the 1 mm lead and dashed curves use the 2 mm lead.</figcaption>
+</figure>
+</div>
+</div>
+</details>
+
+<details class="simulation-run" id="plots-stepping" open>
+<summary>Run family B — nonlinear stepping and tracking</summary>
+<div class="toggle-body">
+<ul class="simulation-setup">
+<li>The command pattern is \(2f,1b,1f,1b,1f,4b,1f,1b,1f,1b,2f\), which returns to the starting position.</li>
+<li>The standard montage crosses full-step and 16× microstep commands with settled 250 ms and fast 4 ms firing intervals. The nonlinear segments use piecewise Radau integration with the analytical friction-model Jacobian and \(r_{tol}=10^{-6}\).</li>
+<li>The settled 0.3 µm and 10 µm studies use 256 command edges at 250 ms per edge. They compare LuGre plus the exact periodic detent, the common Newton/Lagrange frictionless baseline, and a frictionless model with the exact periodic detent.</li>
+</ul>
+<figure>
+<img src="../Rev 4/lugre_friction/Rev 4.2/rendered_assets/stepping_montage_rev42.png" alt="Full-step and microstep nonlinear friction-model stepping montage">
+<figcaption>Four standard stepping cases. Position and tracking error show how command resolution and the available settling time change the response.</figcaption>
+</figure>
+<div class="figure-grid">
+<figure>
+<img src="../Rev 4/lugre_friction/Rev 4.2/rendered_assets/stepping_0.3um_settled_simplified.png" alt="Settled 0.3 micrometre step sequence comparison">
+<figcaption>0.3 µm settled sequence. The Newton and Lagrange frictionless trajectories are numerically identical and therefore share one curve.</figcaption>
+</figure>
+<figure>
+<img src="../Rev 4/lugre_friction/Rev 4.2/rendered_assets/stepping_10um_settled_simplified.png" alt="Settled 10 micrometre step sequence comparison">
+<figcaption>10 µm settled sequence using the same 256-edge pattern, allowing the friction and detent effects to be compared at a larger travel increment.</figcaption>
+</figure>
+</div>
+</div>
+</details>
+
+<details class="simulation-run" id="plots-multisine" open>
+<summary>Run family C — nonlinear random-odd multisine identification</summary>
+<div class="toggle-body">
+<ul class="simulation-setup">
+<li>A 4 s periodic multisine is sampled at 65,536 Hz, giving 0.25 Hz resolution over the excited 0.25–7,999.75 Hz band.</li>
+<li>There are 370 excited odd lines and 749 deliberately omitted odd detection lines. Seven random-phase realizations are averaged after periodic convergence, with three periods retained.</li>
+<li>Thirty RMS command levels span 5% to 1000% of the guideway static-bristle-deflection equivalent. Both RK45 and Radau are run; Radau uses the analytical Jacobian. The complete sweep contains 420 successful cases.</li>
+</ul>
+<figure>
+<img src="../Rev 4/lugre_friction/Rev 4.2/rendered_assets/multisine_bode_amplitude_sweep.png" alt="Amplitude-dependent multisine best linear approximation from presliding to gross slip">
+<figcaption>Amplitude-dependent best linear approximation (BLA). The changing resonance and phase make explicit that the nonlinear friction model has no single amplitude-independent frequency response.</figcaption>
+</figure>
+<div class="figure-grid">
+<figure>
+<img src="../Rev 4/lugre_friction/Rev 4.2/rendered_assets/multisine_bode_solvers.png" alt="RK45 and Radau multisine solver comparison">
+<figcaption>RK45–Radau agreement at the smallest excitation, also shown against the local rest tangent.</figcaption>
+</figure>
+<figure>
+<img src="../Rev 4/lugre_friction/Rev 4.2/rendered_assets/multisine_resonance_convergence.png" alt="Resonance convergence with increasing multisine amplitude">
+<figcaption>Tracked resonance locations and magnitudes versus excitation. The primary band settles within 0.2 dB beyond 200% \(F_s\); the secondary band requires roughly 950% \(F_s\).</figcaption>
+</figure>
+</div>
+<figure>
+<img src="../Rev 4/lugre_friction/Rev 4.2/rendered_assets/multisine_run_statistics.png" alt="Multisine solver effort convergence and guideway slip statistics">
+<figcaption>Run cost, convergence period, function evaluations, and guideway steady-slip fraction for both solvers across the amplitude sweep.</figcaption>
+</figure>
+</div>
+</details>
+</section>
+
+<h2 class="chapter-title" id="guyan">Guyan Model Order Reduction</h2>
+<div class="text-window">
+<strong>Reduction used in the workspace</strong>
+<p>The supplied classical Guyan model retains \(\theta_m\) and \(x_n\), statically eliminates \(\theta_c,\theta_s,\theta_{sb},x_s\), and projects the full matrices with the stated Galerkin transformation. No optional diagonal mass tuning and no improved reduced system (IRS) correction are applied.</p>
+</div>
+
+<section id="guyan-partition"><p class="label">Guyan Step 1</p><h2 class="title">Partition master and slave coordinates</h2>
+<div class="eq">\[
+\mathbf q_r=
+\begin{bmatrix}\theta_m\\x_n\end{bmatrix},
+\qquad
+\mathbf q_s=
+\begin{bmatrix}\theta_c\\\theta_s\\\theta_{sb}\\x_s\end{bmatrix}.
+\tag{G1}
+\]</div>
+<p>Partition the static stiffness equation according to master and slave coordinates:</p>
+<div class="eq">\[
+\begin{bmatrix}
+\mathbf K_{mm}&\mathbf K_{ms}\\
+\mathbf K_{sm}&\mathbf K_{ss}
+\end{bmatrix}
+\begin{bmatrix}\mathbf q_r\\\mathbf q_s\end{bmatrix}
+=
+\begin{bmatrix}\mathbf f_m\\\mathbf0\end{bmatrix}.
+\tag{G2}
+\]</div>
+<p>Neglecting slave inertia in the constraint equation gives</p>
+<div class="eq compact">\[
+\mathbf K_{sm}\mathbf q_r+\mathbf K_{ss}\mathbf q_s=\mathbf0,
+\qquad
+\boxed{\mathbf q_s=-\mathbf K_{ss}^{-1}\mathbf K_{sm}\mathbf q_r}.
+\tag{G3}
+\]</div>
+<p>This defines the numerical static-condensation transformation. The workspace implementation evaluates the equivalent supplied closed form below and checks it against Equation (G3).</p>
+</section>
+
+<section id="guyan-ratios"><p class="label">Guyan Step 2</p><h2 class="title">Define the supplied closed-form ratios</h2>
+<p>Let \(\ell=L/(2\pi)\), equal to the lead conversion denoted \(r\) in the preceding chapters. The implemented ratios are</p>
+<div class="eq">\[
+\beta=\frac{k_{nut}}{k_{nut}+k_{brg}},
+\qquad
+\kappa=
+\left(\frac1{k_{nut}}+\frac1{k_{brg}}\right)^{-1},
+\tag{G4}
+\]
+\[
+k_{ch}=
+\left(\frac1{k_c}+\frac1{k_{s1}}\right)^{-1},
+\qquad
+\nu=\frac{\ell^2\kappa}{k_{ch}+\ell^2\kappa},
+\qquad
+\mu=\frac{k_{s1}}{k_c+k_{s1}}.
+\tag{G5}
+\]</div>
+<p>The effective axial stiffness quantities used by the closed forms are</p>
+<div class="eq compact">\[
+k_{ax}=\kappa(1-\nu),
+\qquad
+\gamma=\frac{k_{ax}}{k_{nut}}.
+\tag{G6}
+\]</div>
+</section>
+
+<section id="guyan-transform"><p class="label">Guyan Step 3</p><h2 class="title">Construct the two-master transformation</h2>
+<p>Restore the original six-coordinate ordering and write</p>
+<div class="eq compact">\[
+\boxed{\mathbf q=\mathbf T\mathbf q_r}.
+\tag{G7}
+\]</div>
+<p>The supplied closed-form transformation is</p>
+<div class="eq">\[
+\boxed{
+\mathbf T=
+\begin{bmatrix}
+1&0\\
+1-\mu\nu&\mu\nu/\ell\\
+1-\nu&\nu/\ell\\
+1-\nu&\nu/\ell\\
+-\ell\beta(1-\nu)&\beta(1-\nu)\\
+0&1
+\end{bmatrix}
+}.
+\tag{G8}
+\]</div>
+<details class="derivation-toggle">
+<summary>Coordinate reconstruction</summary>
+<div class="toggle-body">
+<div class="eq">\[
+\begin{aligned}
+\theta_m&=\theta_m,\\
+\theta_c&=(1-\mu\nu)\theta_m+\frac{\mu\nu}{\ell}x_n,\\
+\theta_s&=(1-\nu)\theta_m+\frac{\nu}{\ell}x_n,\\
+\theta_{sb}&=(1-\nu)\theta_m+\frac{\nu}{\ell}x_n,\\
+x_s&=-\ell\beta(1-\nu)\theta_m+\beta(1-\nu)x_n,\\
+x_n&=x_n.
+\end{aligned}
+\tag{G9}
+\]</div>
+</div>
+</details>
+</section>
+
+<section id="guyan-projection"><p class="label">Guyan Step 4</p><h2 class="title">Project the full model</h2>
+<p>Substitute \(\mathbf q=\mathbf T\mathbf q_r\) into the full equation and premultiply by \(\mathbf T^{\mathsf T}\). The reduced matrices are exactly</p>
+<div class="eq">\[
+\boxed{
+\mathbf M_r=\mathbf T^{\mathsf T}\mathbf M\mathbf T,
+\qquad
+\mathbf C_r=\mathbf T^{\mathsf T}\mathbf C\mathbf T,
+\qquad
+\mathbf K_r=\mathbf T^{\mathsf T}\mathbf K\mathbf T,
+\qquad
+\mathbf b_r=\mathbf T^{\mathsf T}\mathbf b
+}.
+\tag{G10}
+\]</div>
+<p>With the physical command column</p>
+<div class="eq compact">\[
+\mathbf b=
+\begin{bmatrix}k_{EM}&0&0&0&0&0\end{bmatrix}^{\mathsf T},
+\tag{G11}
+\]</div>
+<p>the reduced frictionless equation is</p>
+<div class="eq compact">\[
+\boxed{
+\mathbf M_r\ddot{\mathbf q}_r
++\mathbf C_r\dot{\mathbf q}_r
++\mathbf K_r\mathbf q_r
+=
+\mathbf b_r\theta_{cmd}
+}.
+\tag{G12}
+\]</div>
+</section>
+
+<section id="guyan-closed-forms"><p class="label">Guyan Step 5</p><h2 class="title">Use the implemented reduced closed forms</h2>
+<p>The projected stiffness has the supplied two-coordinate form</p>
+<div class="eq">\[
+\boxed{
+\mathbf K_r=
+\begin{bmatrix}
+k_{EM}+k_d+\ell^2k_{ax}&-\ell k_{ax}\\
+-\ell k_{ax}&k_{ax}
+\end{bmatrix}
+},
+\qquad
+\mathbf b_r=
+\begin{bmatrix}k_{EM}\\0\end{bmatrix}.
+\tag{G13}
+\]</div>
+<p>Let \(I_\Sigma=I_s+I_{sb}\). The reduced mass matrix is</p>
+<div class="eq compact">\[
+\mathbf M_r=
+\begin{bmatrix}m_{11}&m_{12}\\m_{12}&m_{22}\end{bmatrix},
+\tag{G14}
+\]</div>
+<details class="derivation-toggle">
+<summary>Closed-form reduced mass entries</summary>
+<div class="toggle-body">
+<div class="eq">\[
+\begin{aligned}
+m_{11}={}&
+I_m
++I_c(1-\mu\nu)^2
++I_\Sigma(1-\nu)^2
++M_{screw}\ell^2\beta^2(1-\nu)^2,\\[1ex]
+m_{12}={}&
+I_c(1-\mu\nu)\frac{\mu\nu}{\ell}
++I_\Sigma(1-\nu)\frac{\nu}{\ell}
+-M_{screw}\ell\beta^2(1-\nu)^2,\\[1ex]
+m_{22}={}&
+I_c\left(\frac{\mu\nu}{\ell}\right)^2
++I_\Sigma\left(\frac{\nu}{\ell}\right)^2
++M_{screw}\beta^2(1-\nu)^2
++M_s.
+\end{aligned}
+\tag{G15}
+\]</div>
+</div>
+</details>
+<p>The damping matrix is retained exactly through the stated projection \(\mathbf C_r=\mathbf T^{\mathsf T}\mathbf C\mathbf T\); no diagonal damping approximation is introduced.</p>
+</section>
+
+<section id="guyan-ports"><p class="label">Guyan Step 6</p><h2 class="title">Project the friction ports</h2>
+<p>For every full-model port,</p>
+<div class="eq compact">\[
+v_p=\mathbf J_p\dot{\mathbf q}
+=\mathbf J_p\mathbf T\dot{\mathbf q}_r
+=\mathbf J_{p,r}\dot{\mathbf q}_r,
+\qquad
+\boxed{\mathbf J_{p,r}=\mathbf J_p\mathbf T}.
+\tag{G16}
+\]</div>
+<p>The implemented reduced rows are</p>
+<div class="eq">\[
+\mathbf J_{way,r}=
+\begin{bmatrix}0&1\end{bmatrix},
+\qquad
+\mathbf J_{sb,r}=
+\begin{bmatrix}1-\nu&\nu/\ell\end{bmatrix},
+\tag{G17}
+\]
+\[
+\mathbf J_{nut,r}
+=(1-\beta)(1-\nu)
+\begin{bmatrix}\ell&-1\end{bmatrix}
+=(1-\beta)
+\left(\ell\mathbf J_{sb,r}-\mathbf J_{way,r}\right).
+\tag{G18}
+\]</div>
+<p>The reduced generalized friction reaction remains power-consistent:</p>
+<div class="eq compact">\[
+\boxed{
+\mathbf Q_{fric,r}
+=-\sum_p\mathbf J_{p,r}^{\mathsf T}F_p
+}.
+\tag{G19}
+\]</div>
+</section>
+
+<section id="guyan-friction"><p class="label">Guyan Step 7</p><h2 class="title">Apply the friction model to the reduced model</h2>
+<p>For the nonlinear reduced model, project the structural stiffness with the linear detent removed. The exact detent torque is retained explicitly:</p>
+<div class="eq">\[
+\boxed{
+\mathbf M_r\ddot{\mathbf q}_r
++\mathbf C_r\dot{\mathbf q}_r
++\mathbf K_{r,struct}\mathbf q_r
+=
+\mathbf b_r\theta_{cmd}
+-\sum_p\mathbf J_{p,r}^{\mathsf T}F_p
+-
+\begin{bmatrix}
+T_d\sin(4N_r\theta_m)\\0
+\end{bmatrix}
+}.
+\tag{G20}
+\]</div>
+<p>The retained nonlinear state has seven entries:</p>
+<div class="eq">\[
+\mathbf x_{r,fric}=
+\begin{bmatrix}
+\mathbf q_r^{\mathsf T}&
+\dot{\mathbf q}_r^{\mathsf T}&
+z_{way}&z_{nut}&z_{sb}
+\end{bmatrix}^{\mathsf T}.
+\tag{G21}
+\]</div>
+<p>With \(\mathbf v_r=\dot{\mathbf q}_r\), the state equations are</p>
+<div class="eq">\[
+\dot{\mathbf q}_r=\mathbf v_r,
+\tag{G22}
+\]
+\[
+\dot{\mathbf v}_r
+=
+\mathbf M_r^{-1}
+\left[
+\mathbf b_r\theta_{cmd}
+-\mathbf C_r\mathbf v_r
+-\mathbf K_{r,struct}\mathbf q_r
+-\sum_p\mathbf J_{p,r}^{\mathsf T}F_p
+-
+\begin{bmatrix}
+T_d\sin(4N_r\theta_m)\\0
+\end{bmatrix}
+\right],
+\tag{G23}
+\]
+\[
+\dot z_p
+=
+\mathbf J_{p,r}\mathbf v_r
+-
+\frac{
+\sigma_{0,p}
+\sqrt{(\mathbf J_{p,r}\mathbf v_r)^2+\varepsilon^2}
+}{
+g_p(\mathbf J_{p,r}\mathbf v_r)
+}z_p.
+\tag{G24}
+\]</div>
+<div class="note">The structural \(k_{nut}/c_{nut}\) transmission path remains inside \(\mathbf K_{r,struct}\) and \(\mathbf C_r\). The projected nut LuGre reaction is still an additional parallel branch.</div>
+</section>
+
+<section id="guyan-validation"><p class="label">Guyan Step 8</p><h2 class="title">Scope, verification, and existing outputs</h2>
+<ul class="assumptions">
+<li>Masters: \(\theta_m,x_n\).</li>
+<li>Eliminated coordinates: \(\theta_c,\theta_s,\theta_{sb},x_s\).</li>
+<li>No optional diagonal mass tuning is applied.</li>
+<li>No IRS correction is applied.</li>
+<li>The closed-form transformation is checked against numerical static condensation.</li>
+<li>The projected mass and stiffness are checked against the implemented closed forms.</li>
+<li>The reduced and full frictionless models are checked for identical DC gain under the same physical command vector.</li>
+<li>The nonlinear reduced model has no unique amplitude-independent Bode response; the supplied friction Bode is the analytical small-signal linearization at the zero-velocity, zero-bristle equilibrium.</li>
+</ul>
+
+<details class="derivation-toggle">
+<summary>Existing Guyan verification plots</summary>
+<div class="toggle-body">
+<div class="figure-grid">
+<figure>
+<img src="../Rev 4/Guyan Model Reduction/rendered_assets/guyan_bode.png" alt="Two-master Guyan command-to-stage Bode response">
+<figcaption>Untuned two-master Guyan Bode and phase response.</figcaption>
+</figure>
+<figure>
+<img src="../Rev 4/Guyan Model Reduction/rendered_assets/guyan_vs_frictionless_bode.png" alt="Guyan and full frictionless model Bode comparison">
+<figcaption>Two-master Guyan response overlaid with the full six-coordinate frictionless baseline.</figcaption>
+</figure>
+</div>
+</div>
+</details>
+
+<details class="derivation-toggle">
+<summary>Workspace implementation files</summary>
+<div class="toggle-body">
+<ul>
+<li><code>Rev 4/Guyan Model Reduction/guyan_model.py</code>: full matrices, supplied closed-form transformation, projection, reduced port rows, modes, and frequency response.</li>
+<li><code>Rev 4/Guyan Model Reduction/generate_guyan_bode.py</code>: closed-form verification, DC check, and Bode generation.</li>
+<li><code>Rev 4/Guyan Model Reduction/Guyan w Friction/guyan_friction_model.py</code>: projected LuGre ports, exact detent torque, seven-state nonlinear model, and analytical linearization.</li>
+</ul>
+</div>
+</details>
+</section>
+
+</main>
+<footer>Rev 4 Analytical Model Derivation · Newton, Lagrange, friction implementation, and Guyan reduction</footer>
+</article>
+<script>
+const outlineButton=document.getElementById('outline-toggle');
+outlineButton.addEventListener('click',function(){
+  const collapsed=document.body.classList.toggle('outline-collapsed');
+  outlineButton.textContent=collapsed?'Show outline':'Hide outline';
+  outlineButton.setAttribute('aria-expanded',String(!collapsed));
+});
+
+function portableLatexSource(source){
+  const displays=Array.from(source.matchAll(/\\\[([\s\S]*?)\\\]/g));
+  if(!displays.length){return source.trim();}
+  return displays.map(function(match){
+    return match[1].trim();
+  }).join('\n\n');
+}
+
+const equationNamesByKey={
+  'motor-torque-constant':'Motor Torque Constant',
+  '1':'Lead conversion',
+  '2':'Generalized coordinate vector',
+  '3':'Screw–nut deformation',
+  '4':'Electromagnetic motor torque',
+  '5':'Linearized detent torque',
+  '6':'Torsional element torques',
+  '7':'Axial element forces',
+  'newton-core':'Newton force and torque balance laws',
+  '8':'Six-coordinate Newton balance equations',
+  '9':'Expanded Newton equations',
+  '10':'Second-order matrix model',
+  '11':'Mass matrix',
+  '12':'Damping matrix',
+  '13':'Stiffness matrix',
+  '14':'Command input vector',
+  'detent-linearization':'Detent-torque linearization',
+  '15':'First-order state vector',
+  '16':'Generalized acceleration',
+  '17,18':'State-space system and matrices',
+  '19':'Stage-position output equation',
+  'L1':'Lagrange coordinates and lead conversion',
+  'L2':'Element deformation through its Jacobian',
+  'L3':'Oriented screw–nut deformation',
+  'L4':'Kinetic energy',
+  'L5':'Matrix form of kinetic energy',
+  'L6':'Potential energy',
+  'L7':'Electromagnetic potential expansion',
+  'L8':'Detent potential and tangent stiffness',
+  'L9':'Rayleigh dissipation function',
+  'L10':'Euler–Lagrange equation with dissipation',
+  'L11':'Element stiffness contribution',
+  'L12':'Assembled stiffness and damping matrices',
+  'L13':'Screw–nut stiffness contribution',
+  'L14':'Lagrange second-order model',
+  'L15':'Lagrange mass matrix',
+  'L16':'Lagrange damping matrix',
+  'L17':'Lagrange stiffness matrix',
+  'L18':'Lagrange command vector',
+  'L19':'Lagrange state vector',
+  'L20,L21':'Lagrange state-space system and matrices',
+  'L22':'Lagrange stage-output equation',
+  'E1':'Newton–Lagrange matrix equality',
+  'E2':'Common second-order model',
+  'E3':'Common state vector',
+  'E4':'Common state-space matrices',
+  'E5':'Common stage-output equation',
+  'F1':'Friction-model coordinates',
+  'F2':'Nonlinear mechanical balance',
+  'F3':'Mass matrix and command vector',
+  'F4':'Structural stiffness matrix',
+  'F5':'Structural damping matrix',
+  'F6':'Friction-port relative velocity',
+  'F7':'Friction virtual-power identity',
+  'F8':'Generalized friction reaction',
+  'F9':'Total generalized friction vector',
+  'F10':'Screw–nut relative coordinate and velocity',
+  'F11':'Structural screw–nut reaction',
+  'F12':'LuGre screw–nut reaction',
+  'F13':'Total parallel screw–nut reaction',
+  'F14':'Regularized port speed',
+  'F15':'Stribeck curve and bristle decay rate',
+  'F16':'LuGre bristle evolution and friction force',
+  'F17':'Friction-model state vector',
+  'F18,F19,F20':'Complete nonlinear 15-state model',
+  'F20a':'Six kinematic state equations',
+  'F20b':'Port velocities and screw–nut deformation',
+  'F20c':'Port-specific Stribeck curves',
+  'F20d':'Three LuGre bristle-state equations',
+  'F20e':'Port friction forces and torque',
+  'F20f':'Six expanded mechanical acceleration equations',
+  'F21':'Frictionless port conditions',
+  'F22':'Detent-torque linearization',
+  'F23':'Detent-augmented stiffness matrix',
+  'F24':'Recovered frictionless second-order model',
+  'G1':'Retained and eliminated coordinates',
+  'G2':'Partitioned static stiffness system',
+  'G3':'Static slave-coordinate condensation',
+  'G4,G5':'Equivalent stiffness ratios',
+  'G6':'Axial coupling ratio',
+  'G7':'Guyan coordinate transformation',
+  'G8':'Guyan transformation matrix',
+  'G9':'Expanded Guyan coordinate reconstruction',
+  'G10':'Projected reduced matrices',
+  'G11':'Full command vector',
+  'G12':'Reduced second-order model',
+  'G13':'Reduced stiffness and command vector',
+  'G14':'Reduced mass-matrix form',
+  'G15':'Reduced mass-matrix coefficients',
+  'G16':'Reduced friction-port Jacobian',
+  'G17,G18':'Reduced port Jacobians',
+  'G19':'Reduced generalized friction reaction',
+  'G20':'Reduced nonlinear mechanical model',
+  'G21':'Reduced friction-model state vector',
+  'G22,G23,G24':'Complete reduced seven-state model'
+};
+
+function equationSourceKey(source){
+  const tags=Array.from(source.matchAll(/\\tag\{([^}]+)\}/g)).map(function(match){
+    return match[1];
+  });
+  if(tags.length){return tags.join(',');}
+  if(source.includes('T=K_t I')){return 'motor-torque-constant';}
+  if(source.includes('\\sum_j T_{ij}')){return 'newton-core';}
+  if(source.includes('T_d\\sin(4N_r\\theta_m)')){return 'detent-linearization';}
+  return '';
+}
+
+const equationLatexSources=new WeakMap();
+const equationDisplayNames=new WeakMap();
+document.querySelectorAll('.eq').forEach(function(block){
+  const source=portableLatexSource(block.textContent);
+  equationLatexSources.set(
+    block,
+    source
+  );
+  equationDisplayNames.set(
+    block,
+    equationNamesByKey[equationSourceKey(source)]||'Displayed equation'
+  );
+});
+
+function setCopyStatus(button,label,state){
+  button.textContent=label;
+  button.dataset.state=state||'';
+  window.setTimeout(function(){
+    button.textContent=button.dataset.defaultLabel;
+    delete button.dataset.state;
+  },1600);
+}
+
+function svgToImage(svg,color){
+  return new Promise(function(resolve,reject){
+    const rect=svg.getBoundingClientRect();
+    const viewBox=svg.viewBox&&svg.viewBox.baseVal;
+    const width=rect.width||(viewBox&&viewBox.width)||1;
+    const height=rect.height||(viewBox&&viewBox.height)||1;
+    const copy=svg.cloneNode(true);
+    copy.setAttribute('xmlns','http://www.w3.org/2000/svg');
+    copy.setAttribute('width',String(width));
+    copy.setAttribute('height',String(height));
+    copy.style.color=color;
+    copy.style.background='transparent';
+    copy.querySelectorAll('[fill="currentColor"]').forEach(function(node){
+      node.setAttribute('fill',color);
+    });
+    copy.querySelectorAll('[stroke="currentColor"]').forEach(function(node){
+      node.setAttribute('stroke',color);
+    });
+    const source=new XMLSerializer().serializeToString(copy);
+    const url=URL.createObjectURL(new Blob([source],{type:'image/svg+xml;charset=utf-8'}));
+    const image=new Image();
+    image.onload=function(){
+      URL.revokeObjectURL(url);
+      resolve({image:image,width:width,height:height});
+    };
+    image.onerror=function(){
+      URL.revokeObjectURL(url);
+      reject(new Error('The equation SVG could not be rendered.'));
+    };
+    image.src=url;
+  });
+}
+
+function canvasToPng(canvas){
+  return new Promise(function(resolve,reject){
+    canvas.toBlob(function(blob){
+      if(blob){resolve(blob);}
+      else{reject(new Error('The PNG could not be created.'));}
+    },'image/png');
+  });
+}
+
+function downloadPng(blob,filename){
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement('a');
+  link.href=url;
+  link.download=filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(function(){URL.revokeObjectURL(url);},1000);
+}
+
+function legacyCopyText(text){
+  const field=document.createElement('textarea');
+  field.value=text;
+  field.setAttribute('readonly','');
+  field.style.position='fixed';
+  field.style.left='-9999px';
+  field.style.top='0';
+  document.body.appendChild(field);
+  field.select();
+  const copied=document.execCommand('copy');
+  field.remove();
+  if(!copied){throw new Error('Text clipboard access was denied.');}
+}
+
+async function copyEquationLatex(block,button){
+  const source=equationLatexSources.get(block);
+  if(!source){
+    setCopyStatus(button,'Source unavailable','error');
+    return;
+  }
+  button.disabled=true;
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      try{
+        await navigator.clipboard.writeText(source);
+      }catch(clipboardError){
+        legacyCopyText(source);
+      }
+    }else{
+      legacyCopyText(source);
+    }
+    setCopyStatus(button,'Copied','ok');
+  }catch(error){
+    console.error(error);
+    setCopyStatus(button,'Copy failed','error');
+  }finally{
+    button.disabled=false;
+  }
+}
+
+async function copyEquationPng(block,tone,button){
+  const svgs=Array.from(block.querySelectorAll('mjx-container svg'));
+  if(!svgs.length){
+    setCopyStatus(button,'Math unavailable','error');
+    return;
+  }
+  button.disabled=true;
+  button.textContent='Rendering...';
+  try{
+    const color=tone==='white'?'#ffffff':'#000000';
+    const rendered=await Promise.all(svgs.map(function(svg){return svgToImage(svg,color);}));
+    const padding=18;
+    const gap=12;
+    const logicalWidth=Math.max.apply(null,rendered.map(function(item){return item.width;}))+padding*2;
+    const logicalHeight=rendered.reduce(function(sum,item){return sum+item.height;},0)+gap*(rendered.length-1)+padding*2;
+    const scale=Math.max(1,Math.min(3,14000/logicalWidth,14000/logicalHeight));
+    const canvas=document.createElement('canvas');
+    canvas.width=Math.ceil(logicalWidth*scale);
+    canvas.height=Math.ceil(logicalHeight*scale);
+    const context=canvas.getContext('2d');
+    context.scale(scale,scale);
+    context.clearRect(0,0,logicalWidth,logicalHeight);
+    let y=padding;
+    rendered.forEach(function(item){
+      context.drawImage(item.image,(logicalWidth-item.width)/2,y,item.width,item.height);
+      y+=item.height+gap;
+    });
+    const blob=await canvasToPng(canvas);
+    const section=block.closest('section');
+    const stem=((section&&section.id)||'equation').replace(/[^a-z0-9_-]+/gi,'-');
+    if(navigator.clipboard&&window.ClipboardItem){
+      try{
+        await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
+        setCopyStatus(button,'Copied','ok');
+      }catch(clipboardError){
+        downloadPng(blob,stem+'-'+tone+'.png');
+        setCopyStatus(button,'Downloaded','ok');
+      }
+    }else{
+      downloadPng(blob,stem+'-'+tone+'.png');
+      setCopyStatus(button,'Downloaded','ok');
+    }
+  }catch(error){
+    console.error(error);
+    setCopyStatus(button,'Copy failed','error');
+  }finally{
+    button.disabled=false;
+  }
+}
+
+function addEquationCopyTools(){
+  document.querySelectorAll('.eq').forEach(function(block){
+    if(block.querySelector('.eq-copy-tools')){return;}
+    const header=document.createElement('div');
+    header.className='eq-header';
+    const name=document.createElement('span');
+    name.className='eq-name';
+    name.textContent=equationDisplayNames.get(block)||'Displayed equation';
+    header.appendChild(name);
+    const tools=document.createElement('div');
+    tools.className='eq-copy-tools';
+    tools.setAttribute('aria-label','Copy equation');
+    ['black','white'].forEach(function(tone){
+      const button=document.createElement('button');
+      button.type='button';
+      button.className='eq-copy-button';
+      button.dataset.tone=tone;
+      button.dataset.defaultLabel=tone==='black'?'Black PNG':'White PNG';
+      button.textContent=button.dataset.defaultLabel;
+      button.title='Copy as transparent PNG with '+tone+' equation text';
+      button.setAttribute('aria-label',button.title);
+      button.addEventListener('click',function(){
+        copyEquationPng(block,tone,button);
+      });
+      tools.appendChild(button);
+    });
+    const latexButton=document.createElement('button');
+    latexButton.type='button';
+    latexButton.className='eq-copy-button';
+    latexButton.dataset.copy='latex';
+    latexButton.dataset.defaultLabel='LaTeX';
+    latexButton.textContent=latexButton.dataset.defaultLabel;
+    latexButton.title='Copy LaTeX source for Overleaf or Notion';
+    latexButton.setAttribute('aria-label',latexButton.title);
+    latexButton.addEventListener('click',function(){
+      copyEquationLatex(block,latexButton);
+    });
+    tools.appendChild(latexButton);
+    header.appendChild(tools);
+    block.prepend(header);
+  });
+}
+
+function addFigureLightbox(){
+  const figureImages=Array.from(document.querySelectorAll('main figure img'));
+  if(!figureImages.length){return;}
+
+  const viewer=document.createElement('div');
+  viewer.className='image-lightbox';
+  viewer.dataset.open='false';
+  viewer.setAttribute('role','dialog');
+  viewer.setAttribute('aria-modal','true');
+  viewer.setAttribute('aria-hidden','true');
+  viewer.setAttribute('aria-label','Expanded figure viewer');
+  viewer.innerHTML=
+    '<div class="lightbox-toolbar">'+
+      '<span class="lightbox-title"></span>'+
+      '<button type="button" data-action="out" aria-label="Zoom out">−</button>'+
+      '<button type="button" data-action="reset" aria-label="Reset zoom">100%</button>'+
+      '<button type="button" data-action="in" aria-label="Zoom in">+</button>'+
+      '<button type="button" data-action="close" aria-label="Close expanded figure">Close</button>'+
+    '</div>'+
+    '<div class="lightbox-viewport">'+
+      '<img class="lightbox-image" alt="">'+
+    '</div>';
+  document.body.appendChild(viewer);
+
+  const toolbar=viewer.querySelector('.lightbox-toolbar');
+  const title=viewer.querySelector('.lightbox-title');
+  const viewport=viewer.querySelector('.lightbox-viewport');
+  const expandedImage=viewer.querySelector('.lightbox-image');
+  const resetButton=viewer.querySelector('[data-action="reset"]');
+  const closeButton=viewer.querySelector('[data-action="close"]');
+  let zoom=1;
+  let offsetX=0;
+  let offsetY=0;
+  let dragStartX=0;
+  let dragStartY=0;
+  let startOffsetX=0;
+  let startOffsetY=0;
+  let activePointer=null;
+  let returnFocus=null;
+  let previousOverflow='';
+
+  function applyImageTransform(){
+    expandedImage.style.transform=
+      'translate('+offsetX+'px,'+offsetY+'px) scale('+zoom+')';
+    expandedImage.dataset.pannable=String(zoom>1);
+    resetButton.textContent=Math.round(zoom*100)+'%';
+  }
+
+  function setZoom(nextZoom){
+    zoom=Math.max(1,Math.min(8,nextZoom));
+    if(zoom===1){
+      offsetX=0;
+      offsetY=0;
+    }
+    applyImageTransform();
+  }
+
+  function resetView(){
+    zoom=1;
+    offsetX=0;
+    offsetY=0;
+    applyImageTransform();
+  }
+
+  function openFigure(source){
+    returnFocus=source;
+    previousOverflow=document.body.style.overflow;
+    expandedImage.src=source.currentSrc||source.src;
+    expandedImage.alt=source.alt||'Expanded figure';
+    title.textContent=source.alt||'Expanded figure';
+    resetView();
+    viewer.dataset.open='true';
+    viewer.setAttribute('aria-hidden','false');
+    document.body.style.overflow='hidden';
+    closeButton.focus();
+  }
+
+  function closeFigure(){
+    viewer.dataset.open='false';
+    viewer.setAttribute('aria-hidden','true');
+    document.body.style.overflow=previousOverflow;
+    activePointer=null;
+    delete expandedImage.dataset.dragging;
+    if(returnFocus){returnFocus.focus();}
+  }
+
+  toolbar.addEventListener('click',function(event){
+    const button=event.target.closest('button[data-action]');
+    if(!button){return;}
+    const action=button.dataset.action;
+    if(action==='in'){setZoom(zoom*1.35);}
+    if(action==='out'){setZoom(zoom/1.35);}
+    if(action==='reset'){resetView();}
+    if(action==='close'){closeFigure();}
+  });
+
+  viewer.addEventListener('click',function(event){
+    if(event.target===viewer||event.target===viewport){closeFigure();}
+  });
+
+  viewport.addEventListener('wheel',function(event){
+    event.preventDefault();
+    setZoom(zoom*(event.deltaY<0?1.18:1/1.18));
+  },{passive:false});
+
+  expandedImage.addEventListener('dblclick',function(event){
+    event.preventDefault();
+    setZoom(zoom===1?2:1);
+  });
+
+  expandedImage.addEventListener('pointerdown',function(event){
+    if(zoom<=1){return;}
+    activePointer=event.pointerId;
+    dragStartX=event.clientX;
+    dragStartY=event.clientY;
+    startOffsetX=offsetX;
+    startOffsetY=offsetY;
+    expandedImage.dataset.dragging='true';
+    expandedImage.setPointerCapture(event.pointerId);
+  });
+
+  expandedImage.addEventListener('pointermove',function(event){
+    if(event.pointerId!==activePointer){return;}
+    offsetX=startOffsetX+event.clientX-dragStartX;
+    offsetY=startOffsetY+event.clientY-dragStartY;
+    applyImageTransform();
+  });
+
+  function endDrag(event){
+    if(event.pointerId!==activePointer){return;}
+    activePointer=null;
+    delete expandedImage.dataset.dragging;
+  }
+  expandedImage.addEventListener('pointerup',endDrag);
+  expandedImage.addEventListener('pointercancel',endDrag);
+
+  document.addEventListener('keydown',function(event){
+    if(viewer.dataset.open!=='true'){return;}
+    if(event.key==='Escape'){closeFigure();}
+    if(event.key==='+'||event.key==='='){event.preventDefault();setZoom(zoom*1.35);}
+    if(event.key==='-'){event.preventDefault();setZoom(zoom/1.35);}
+    if(event.key==='0'){event.preventDefault();resetView();}
+  });
+
+  figureImages.forEach(function(image){
+    image.classList.add('figure-zoomable');
+    image.tabIndex=0;
+    image.setAttribute('role','button');
+    image.setAttribute(
+      'aria-label','Open larger view: '+(image.alt||'figure')
+    );
+    image.addEventListener('click',function(){openFigure(image);});
+    image.addEventListener('keydown',function(event){
+      if(event.key==='Enter'||event.key===' '){
+        event.preventDefault();
+        openFigure(image);
+      }
+    });
+  });
+}
+
+window.addEventListener('load',function(){
+  addFigureLightbox();
+  const ready=window.MathJax&&MathJax.startup&&MathJax.startup.promise;
+  if(ready){
+    ready.then(addEquationCopyTools).catch(addEquationCopyTools);
+  }else{
+    addEquationCopyTools();
+  }
+});
+</script>
+</body>
+</html>

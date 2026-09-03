@@ -39,6 +39,12 @@ LOG_PATH = RAW_DIR / 'identification_controller_log.csv'
 OUT_PATH = ASSET_DIR / 'full_raw_sequence.png'
 
 FILETIME_UNIX_EPOCH = 116444736000000000
+# Controller-driving PC's clock reads ~0.32s ahead of the Dewesoft IDS
+# acquisition PC's clock (unsynchronized machines). Calibrated from the
+# very first Block 0 reference move (a fast, sharp ~20ms step) across all
+# 6 runs: measured-to-commanded offset = 0.313-0.324s (mean 0.319s,
+# sigma 4ms) -- see README.md, "Controller/IDS clock skew".
+CONTROLLER_CLOCK_SKEW_S = 0.319
 CURRENT_SHORT = {'I_50pct': '50% I', 'I_100pct': '100% I'}
 HIGHLIGHT_ALPHA = 0.15
 # Conditioning uses the given yellow at the same low alpha as the rest, it
@@ -125,7 +131,9 @@ def load_log_rows(path: Path, ids_start_epoch_s: float):
     with path.open('r', encoding='utf-8-sig', newline='') as handle:
         for row in csv.DictReader(handle):
             instant = datetime.fromisoformat(row['utc'])
-            row['ids_time_s'] = instant.timestamp() - ids_start_epoch_s
+            row['ids_time_s'] = (
+                instant.timestamp() - ids_start_epoch_s - CONTROLLER_CLOCK_SKEW_S
+            )
             rows.append(row)
     return rows
 

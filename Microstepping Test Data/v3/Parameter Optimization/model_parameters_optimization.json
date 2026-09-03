@@ -1,0 +1,78 @@
+{
+  "schema": "v3-parameter-optimization-v1",
+  "source": "Rev 4/lugre_friction/Rev 4.2/model_parameters.json (Rev 4.2 parallel LuGre + nonlinear detent torque, 15-state)",
+  "notes": {
+    "purpose": "Partitions the Rev 4.2 model's parameters for a friction-parameter identification pass against the v3 hardware campaign. fixed_parameters are treated as known/given (geometry, inertia, structural stiffness/damping) and are not touched by the optimizer. current_dependent_parameters are derived per run from the actual drive/hold current rather than held at one constant value. variable_parameters are the LuGre friction parameters proposed for optimization, each with a starting value (copied from Rev 4.2's calibration) and a proposed bound -- review and adjust both before running anything.",
+    "units": "SI throughout: N, m, s, rad, N*m, N*m/rad, N*s/m, kg, kg*m^2, unless noted otherwise.",
+    "review_needed": "Bounds below are a first-pass proposal (roughly 0.1x-10x the current value, or a physically-motivated range for velocities/forces) -- not derived from any prior sensitivity study. Adjust before use."
+  },
+
+  "fixed_parameters": {
+    "L": {"value": 2.0e-3, "description": "Lead screw pitch"},
+    "N_r": {"value": 50, "description": "Rotor tooth count / detent spatial frequency factor"},
+    "T_d": {"value": 5.0e-3, "description": "Detent (cogging) torque amplitude -- from the motor's spec sheet (5 mN*m at 400 mA); distinct physical mechanism from LuGre friction; candidate to promote to variable_parameters later if the detent-torque panels don't fit well, but left fixed for now"},
+    "I_m": {"value": 9.0e-7, "description": "Motor rotor inertia"},
+    "I_c": {"value": 1.18e-6, "description": "Coupling inertia"},
+    "I_s": {"value": 6.06e-7, "description": "Screw inertia"},
+    "I_sb": {"value": 1.5e-7, "description": "Support bearing inertia"},
+    "M_screw": {"value": 0.0758, "description": "Screw mass"},
+    "M_s": {"value": 0.405, "description": "Stage mass"},
+    "k_c": {"value": 68.75, "description": "Coupling stiffness"},
+    "k_s1": {"value": 211.0, "description": "Screw segment 1 stiffness"},
+    "k_s2": {"value": 211.0, "description": "Screw segment 2 stiffness"},
+    "k_nut": {"value": 1.0e8, "description": "Nut structural (load-carrying) stiffness"},
+    "k_brg": {"value": 1.14e7, "description": "Support bearing structural stiffness"},
+    "c_c": {"value": 2.4e-4, "description": "Coupling structural damping"},
+    "c_s1": {"value": 3.7e-4, "description": "Screw segment 1 structural damping"},
+    "c_s2": {"value": 2.0e-4, "description": "Screw segment 2 structural damping"},
+    "c_nut": {"value": 0.0, "description": "Nut structural damping -- DECIDED 2026-09-02: fixed to 0 to resolve double-counting with sigma1_nut/sigma2_nut (all three act on the same v_nut and are otherwise linearly indistinguishable at a single operating point). sigma1_nut/sigma2_nut now carry all nut-port dissipation; k_nut (the load-bearing spring) is unaffected."},
+    "c_brg": {"value": 37.2, "description": "Support bearing structural damping"},
+    "c_EM": {"value": 1.3283e-4, "description": "Electromagnetic (motor phase) damping"},
+    "smooth_velocity_epsilon": {"value": 1.0e-9, "description": "Numerical regularization for the LuGre smooth-abs(v) term, not a physical parameter"},
+    "sigma1_target_zeta": {"value": 0.7, "description": "Damping ratio used when the parent model derived sigma1 from sigma0 -- kept as a record; sigma1 itself is listed under variable_parameters below since the optimizer may want to move it independently"}
+  },
+
+  "current_dependent_parameters": {
+    "T_hold": {
+      "base_value_Nm": 0.060,
+      "base_current_A": 0.400,
+      "formula": "T_hold(I) = sqrt(2) * K_t * I",
+      "K_t_Nm_per_A": 0.10606601717798213,
+      "description": "Peak holding torque amplitude (drives k_em = N_r * T_hold, the motor's linearized electromagnetic stiffness). Rev 4.2's model_parameters.json hard-codes this at the 0.060 N*m / 400 mA nameplate value for every run; v3's six runs actually alternate between two current levels (200 mA and 400 mA peak, i.e. SC command value, hold current = run current per the v2 BACKLOG), so T_hold should be recomputed per run rather than held fixed. See README.md, \"Current-dependent holding torque\" for the state-space derivation and simulate_block_responses.py for the applied per-run override.",
+      "levels": {
+        "I_50pct": {"peak_ma": 200, "T_hold_Nm": 0.030},
+        "I_100pct": {"peak_ma": 400, "T_hold_Nm": 0.060}
+      }
+    }
+  },
+
+  "variable_parameters": {
+    "way": {
+      "description": "Linear guideway friction port (Jacobian couples to stage velocity x_n_dot directly)",
+      "sigma0_way": {"value": 3.45e6, "bounds": [3.45e6, 1.0e7], "units": "N/m", "description": "Bristle stiffness -- UPDATED 2026-09-03 from 7.6e5. Measured D_0.125 full-step treads at MRES 1/1 are visibly square (13% median creep fraction, not the ~59% 7.6e5 implies), bracketing presliding distance F_s,way/sigma0_way <= 1.3 um; 3.45e6 is that bound at the placeholder F_s_way=4.5 N. This is a LOWER bound, not a fitted point -- the true value could be higher (a timestamp-lag correction on the same measurement would tighten the bound further upward, not lower it). Bounds set to [3.45e6, 1.0e7] accordingly: do not let the optimizer search below the lower bound. See calibration_bracketing/RESULTS.md (step 4a) for the full derivation."},
+      "sigma1_way": {"value": 776.716164374091, "bounds": [50.0, 5000.0], "units": "N*s/m", "description": "Bristle damping (parent set via 2*zeta*sqrt(sigma0*M_s), zeta=0.7 -- coupled to sigma0_way if that relation is kept). NOT recomputed after sigma0_way's 2026-09-03 update -- at the new sigma0_way this value now implies zeta~0.33, not 0.7. Decide whether to recompute via the target-zeta rule or let the optimizer fit it independently of that rule before treating this as calibrated."},
+      "sigma2_way": {"value": 0.4, "bounds": [0.0, 2.0], "units": "N*s/m", "description": "Viscous friction"},
+      "Fc_way": {"value": 3.0, "bounds": [0.5, 10.0], "units": "N", "description": "Coulomb (kinetic) friction level"},
+      "Fs_way": {"value": 4.5, "bounds": [0.5, 15.0], "units": "N", "description": "Static/breakaway friction level (keep >= Fc_way)"},
+      "vs_way": {"value": 2.5e-4, "bounds": [5.0e-5, 5.0e-3], "units": "m/s", "description": "Stribeck velocity"}
+    },
+    "nut": {
+      "description": "Leadscrew-nut parasitic pre-rolling friction port (parallel to the k_nut/c_nut load path)",
+      "sigma0_nut": {"value": 2.0e6, "bounds": [2.0e5, 2.0e7], "units": "N/m", "description": "Bristle stiffness"},
+      "sigma1_nut": {"value": 500.2912629196554, "bounds": [50.0, 5000.0], "units": "N*s/m", "description": "Bristle damping (parent set via 2*zeta*sqrt(sigma0*m_eff), m_eff = M_screw||M_s, zeta=0.7)"},
+      "sigma2_nut": {"value": 0.25, "bounds": [0.0, 2.0], "units": "N*s/m", "description": "Viscous friction"},
+      "Fc_nut": {"value": 0.5, "bounds": [0.05, 3.0], "units": "N", "description": "Coulomb (kinetic) friction level"},
+      "Fs_nut": {"value": 0.75, "bounds": [0.05, 4.0], "units": "N", "description": "Static/breakaway friction level (keep >= Fc_nut)"},
+      "vs_nut": {"value": 2.0e-4, "bounds": [5.0e-5, 5.0e-3], "units": "m/s", "description": "Stribeck velocity"}
+    },
+    "sb": {
+      "description": "Support bearing friction port (rotational, torque units -- Tc/Ts instead of Fc/Fs)",
+      "sigma0_sb": {"value": 0.076, "bounds": [0.01, 1.0], "units": "N*m/rad", "description": "Bristle stiffness"},
+      "sigma1_sb": {"value": 1.4947909552843835e-4, "bounds": [1.0e-5, 1.0e-2], "units": "N*m*s/rad", "description": "Bristle damping (parent set via 2*zeta*sqrt(sigma0*I_sb), zeta=0.7)"},
+      "sigma2_sb": {"value": 1.0e-5, "bounds": [0.0, 1.0e-3], "units": "N*m*s/rad", "description": "Viscous friction"},
+      "Tc_sb": {"value": 1.5e-4, "bounds": [1.0e-5, 1.0e-3], "units": "N*m", "description": "Coulomb (kinetic) friction level"},
+      "Ts_sb": {"value": 2.2e-4, "bounds": [1.0e-5, 1.5e-3], "units": "N*m", "description": "Static/breakaway friction level (keep >= Tc_sb)"},
+      "vs_sb": {"value": 0.1, "bounds": [0.01, 2.0], "units": "rad/s", "description": "Stribeck velocity"}
+    }
+  }
+}

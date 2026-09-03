@@ -2,10 +2,10 @@
   "build_id": "rev4-6dof-placeholder-20260817",
   "schema": "rev4-model-parameters-v1",
   "parameters": {
-    "L": 1.0e-3,
+    "L": 2.0e-3,
     "N_r": 50,
     "T_hold": 0.06,
-    "T_d": 3.0e-3,
+    "T_d": 5.0e-3,
     "I_m": 9.0e-7,
     "I_c": 1.18e-6,
     "I_s": 6.06e-7,
@@ -25,10 +25,10 @@
     "c_EM": 1.3283e-4
   },
   "parameter_notes": {
-    "L": "Screw lead. Given. Source: BOM, KGT-F1-08-01.",
+    "L": "Screw lead. Confirmed actual system value: 2 mm/rev (updated 2026-09-02; supersedes the earlier 1 mm/rev assumption).",
     "N_r": "Rotor teeth. Given. Source: 1.8 deg step angle.",
     "T_hold": "Holding torque. PLACEHOLDER, TBD in source doc. Reused from Rev 3 model_parameters.json 'holding_torque'.",
-    "T_d": "Detent torque amplitude. Source doc gives ~3e-3 N*m directly.",
+    "T_d": "Detent torque amplitude. Confirmed actual system value: 5e-3 N*m (5 mN*m), updated 2026-09-02; supersedes the earlier 3e-3 N*m value.",
     "I_m": "Rotor inertia. PLACEHOLDER, TBD in source doc. Reused from Rev 3 'J_m'.",
     "I_c": "Coupling inertia. PLACEHOLDER, TBD in source doc. Reused from Rev 3 'J_c'.",
     "I_s": "Screw rotational inertia. PLACEHOLDER, TBD in source doc. Computed as a solid-cylinder estimate (0.5*m*r^2) from Rev 3 screw geometry (density 7850 kg/m^3, diameter 8mm, length 192mm) since no I_s value exists anywhere in the workspace.",

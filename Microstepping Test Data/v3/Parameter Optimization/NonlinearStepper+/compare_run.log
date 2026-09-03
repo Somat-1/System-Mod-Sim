@@ -1,0 +1,24 @@
+Parsing IDS + log once...
+  done in 47.2s
+Saved \\mult-fp01.hitdom.lan\project2\Internships\Tomas Valentinas\Sytem Mod & Sim\Microstepping Test Data\v3\Parameter Optimization\NonlinearStepper+\torque_law_linear_vs_optionA.png
+8 jobs, 8 workers
+('0.125', 'linear'): cost=0.7744 um, max|err|=0.5407 deg (t=59.4s)
+('0.125', 'optionA'): cost=0.7746 um, max|err|=0.5408 deg (t=62.4s)
+('3.5', 'linear'): cost=21.2709 um, max|err|=0.1258 deg (t=272.5s)
+('3.5', 'optionA'): cost=21.2711 um, max|err|=0.1260 deg (t=278.3s)
+('70', 'linear'): cost=148.9909 um, max|err|=0.1835 deg (t=305.5s)
+('70', 'optionA'): cost=148.9912 um, max|err|=0.1845 deg (t=314.8s)
+('200', 'linear'): cost=891.2447 um, max|err|=0.3138 deg (t=607.8s)
+('200', 'optionA'): cost=891.2451 um, max|err|=0.3188 deg (t=619.6s)
+
+=== Summary: cost vs. measurement (um) and peak tracking error (deg) ===
+   block   linear cost     optA cost   linear max|err|   optA max|err|  pull-out @
+D_ 0.125        0.7744        0.7746            0.5407          0.5408       1.80°
+D_   3.5       21.2709       21.2711            0.1258          0.1260       1.80°
+D_    70      148.9909      148.9912            0.1835          0.1845       1.80°
+D_   200      891.2447      891.2451            0.3138          0.3188       1.80°
+Saved \\mult-fp01.hitdom.lan\project2\Internships\Tomas Valentinas\Sytem Mod & Sim\Microstepping Test Data\v3\Parameter Optimization\NonlinearStepper+\compare_D_3.5.png
+Saved \\mult-fp01.hitdom.lan\project2\Internships\Tomas Valentinas\Sytem Mod & Sim\Microstepping Test Data\v3\Parameter Optimization\NonlinearStepper+\compare_D_70.png
+Saved \\mult-fp01.hitdom.lan\project2\Internships\Tomas Valentinas\Sytem Mod & Sim\Microstepping Test Data\v3\Parameter Optimization\NonlinearStepper+\compare_D_200.png
+Saved \\mult-fp01.hitdom.lan\project2\Internships\Tomas Valentinas\Sytem Mod & Sim\Microstepping Test Data\v3\Parameter Optimization\NonlinearStepper+\compare_linear_vs_optionA.json
+Total wall time: 621.5s

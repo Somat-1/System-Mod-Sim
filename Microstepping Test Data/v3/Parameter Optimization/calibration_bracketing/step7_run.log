@@ -1,0 +1,31 @@
+Parsing IDS + log once...
+  done in 47.2s
+12 jobs, 12 workers
+('70', 'no_detent'): cost_vs_measured=148.9832 um (t=17.0s)
+('200', 'no_detent'): cost_vs_measured=891.2384 um (t=17.5s)
+('3.5', 'no_way_friction'): cost_vs_measured=20.8353 um (t=33.5s)
+('0.125', 'full'): cost_vs_measured=0.7744 um (t=55.2s)
+('0.125', 'no_detent'): cost_vs_measured=0.6822 um (t=58.4s)
+('0.125', 'no_way_friction'): cost_vs_measured=0.7794 um (t=91.5s)
+('70', 'no_way_friction'): cost_vs_measured=148.6961 um (t=104.5s)
+('3.5', 'full'): cost_vs_measured=21.2709 um (t=280.9s)
+('70', 'full'): cost_vs_measured=148.9909 um (t=329.0s)
+('3.5', 'no_detent'): cost_vs_measured=21.2609 um (t=418.1s)
+('200', 'no_way_friction'): cost_vs_measured=891.1441 um (t=472.3s)
+('200', 'full'): cost_vs_measured=891.2447 um (t=537.8s)
+
+=== Trajectory-shape contribution: RMS(full - ablated), um ===
+   block     no_detent   no_way_friction   dominant term
+D_ 0.125        0.3626            0.0741          detent
+D_   3.5        0.3953            0.4970        friction
+D_    70        0.4656            0.4104          detent
+D_   200        0.9875            0.4058          detent
+
+=== cost vs measurement per variant, um (context vs step6 baseline) ===
+   block        full     no_detent   no_way_friction
+D_ 0.125      0.7744        0.6822            0.7794
+D_   3.5     21.2709       21.2609           20.8353
+D_    70    148.9909      148.9832          148.6961
+D_   200    891.2447      891.2384          891.1441
+
+Total wall time: 538.1s

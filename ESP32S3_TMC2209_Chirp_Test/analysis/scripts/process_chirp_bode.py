@@ -26,20 +26,24 @@ for this file size, and the STFT/synchronous-detection is plain FFT/numpy.
 """
 
 import time
+from pathlib import Path
+
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-CSV_PATH = "/Users/tomasvalentinas/Documents/System-Mod-Sim/ESP32S3_TMC2209_Chirp_Test/tempTVAl.csv"
-PLOT_DIR = "/Users/tomasvalentinas/Documents/System-Mod-Sim/ESP32S3_TMC2209_Chirp_Test/analysis/plots"
+PROJECT_DIR = Path(__file__).resolve().parents[2]
+CSV_PATH = PROJECT_DIR / "tempTVAl.csv"
+PLOT_DIR = PROJECT_DIR / "analysis" / "plots"
 
-# Column order assumed [time, AI0, AI1, AI2]; AI1 (index 2) is the primary/x axis.
+# Column order assumed [time, AI0, AI1, AI2]; AI0 (index 1) is the primary/x axis.
 COL_TIME = 0
 COL_AI0 = 1
 COL_AI1 = 2
 COL_AI2 = 3
-CHANNEL_NAMES = {COL_AI0: "AI0", COL_AI1: "AI1 (x, primary)", COL_AI2: "AI2"}
+PRIMARY_COL = COL_AI0
+CHANNEL_NAMES = {COL_AI0: "AI0 (x, primary)", COL_AI1: "AI1", COL_AI2: "AI2"}
 
 NOTCH_LOW_HZ, NOTCH_HIGH_HZ = 120.0, 230.0
 F_LO, F_HI = 1.0, 1000.0
@@ -227,7 +231,7 @@ def make_bode_plots(freq_grid, up_mag, down_mag, out_prefix, title_prefix):
             ax.grid(True, which="both", alpha=0.3)
             ax.legend()
             fig.tight_layout()
-            out_path = f"{PLOT_DIR}/{out_prefix}_{norm_suffix}_{scale_suffix}.png"
+            out_path = PLOT_DIR / f"{out_prefix}_{norm_suffix}_{scale_suffix}.png"
             fig.savefig(out_path, dpi=150)
             plt.close(fig)
             log(f"  saved {out_path}")
@@ -253,20 +257,21 @@ def make_offaxis_overview(freq_grid, mags_by_channel, out_path):
 
 
 def main():
+    PLOT_DIR.mkdir(parents=True, exist_ok=True)
     arr = load_csv(CSV_PATH)
     t = arr[:, COL_TIME].astype(np.float64)
     fs, dt = sample_rate(t)
     total_s = t[-1] - t[0]
     log(f"total recorded duration: {total_s:.2f}s ({len(t)} samples)")
 
-    ai1 = arr[:, COL_AI1]
-    (rate_up, b_up), (rate_dn, b_dn) = locate_and_fit_sweeps(ai1, fs, total_s)
+    primary = arr[:, PRIMARY_COL]
+    (rate_up, b_up), (rate_dn, b_dn) = locate_and_fit_sweeps(primary, fs, total_s)
 
     freq_grid = np.linspace(F_LO, F_HI, 1000)
 
     log("computing synchronous-detection magnitude curves ...")
     results = {}
-    for col in (COL_AI1, COL_AI0, COL_AI2):
+    for col in (COL_AI0, COL_AI1, COL_AI2):
         ch = arr[:, col]
         t0s = time.time()
         up_mag = sweep_magnitude_curve(ch, fs, rate_up, b_up, freq_grid)
@@ -276,17 +281,23 @@ def main():
             f"(up: {np.isfinite(up_mag).sum()}/{len(freq_grid)} valid, "
             f"down: {np.isfinite(down_mag).sum()}/{len(freq_grid)} valid)")
 
-    up_mag1, down_mag1 = results[COL_AI1]
-    make_bode_plots(freq_grid, up_mag1, down_mag1, "bode_AI1", "Bode: AI1 (x, primary)")
+    up_mag_primary, down_mag_primary = results[PRIMARY_COL]
+    make_bode_plots(
+        freq_grid,
+        up_mag_primary,
+        down_mag_primary,
+        "bode_AI0",
+        "Bode: AI0 (x, primary)",
+    )
 
     make_offaxis_overview(
         freq_grid,
         {col: results[col][0] for col in (COL_AI0, COL_AI1, COL_AI2)},
-        f"{PLOT_DIR}/bode_all_axes_overview.png",
+        PLOT_DIR / "bode_all_axes_overview.png",
     )
 
     np.savez(
-        f"{PLOT_DIR}/bode_data.npz",
+        PLOT_DIR / "bode_data.npz",
         freq_grid=freq_grid,
         up_mag_AI0=results[COL_AI0][0], down_mag_AI0=results[COL_AI0][1],
         up_mag_AI1=results[COL_AI1][0], down_mag_AI1=results[COL_AI1][1],
