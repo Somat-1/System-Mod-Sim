@@ -59,7 +59,7 @@ SCRIPTS_DIR = V3_ROOT / 'scripts'
 OUT_DIR = Path(__file__).resolve().parent
 
 RUN_INDEX = 2
-RATES = ('9.5', '200')
+RATES = ('9.5',)
 N_CYCLES = 10  # detent cycles shown per cruise window
 WINDOW_START_FROM_BLOCK_S = 5.0
 FFT_SAMPLE_HZ = 5000.0
@@ -243,6 +243,7 @@ def cruise_zoom_data(run_index: int, rate: str) -> dict:
         first_trapezoid['value_start']
         + (first_trapezoid['value_end'] - first_trapezoid['value_start']) * frac
     ) * 2.0 * np.pi
+    theta_err_deg = np.degrees(theta_cmd - theta_m)
     motor_torque = k_em * (theta_cmd - theta_m)  # T_motor = k_em*(theta_cmd - theta_m), k_em = N_r*T_hold
     motor_force = motor_torque / lead
 
@@ -264,7 +265,7 @@ def cruise_zoom_data(run_index: int, rate: str) -> dict:
 
     return {
         'rate': rate, 't': t, 'v_cmd': v_cmd, 'v_sim': v_sim,
-        'motor_force': motor_force,
+        'motor_force': motor_force, 'theta_err_deg': theta_err_deg,
         'detent_force': detent_force, 'detent_hz': detent_hz,
         'friction_way': friction_way, 'friction_nut': friction_nut,
         'friction_sb_force': friction_sb_force,
@@ -293,17 +294,20 @@ def plot_column(fig, axes_col, result):
     axes_col[1].plot(t_ms, result['v_sim'] * 1000.0, color=ROW_COLOR, lw=0.9, zorder=2)
     style_row(axes_col[1], 'Simulated stage\nvelocity v_sim (mm/s)')
 
-    axes_col[2].plot(t_ms, result['detent_force'], color=ROW_COLOR, lw=1.0, zorder=2)
-    style_row(axes_col[2], 'Detent contribution\n(-T_detent / lead) (N)')
+    axes_col[2].plot(t_ms, result['theta_err_deg'], color=ROW_COLOR, lw=1.0, zorder=2)
+    style_row(axes_col[2], 'Tracking error\ntheta_cmd - theta_m (deg)')
 
-    axes_col[3].plot(t_ms, result['friction_way'], color=ROW_COLOR, lw=1.0, zorder=2)
-    style_row(axes_col[3], 'Guideway friction\n(way), load-side (N)')
+    axes_col[3].plot(t_ms, result['detent_force'], color=ROW_COLOR, lw=1.0, zorder=2)
+    style_row(axes_col[3], 'Detent contribution\n(-T_detent / lead) (N)')
 
-    axes_col[4].plot(t_ms, result['friction_nut'], color=ROW_COLOR, lw=1.0, zorder=2)
-    style_row(axes_col[4], 'Leadscrew-nut friction\n(nut), load-side (N)')
+    axes_col[4].plot(t_ms, result['friction_way'], color=ROW_COLOR, lw=1.0, zorder=2)
+    style_row(axes_col[4], 'Guideway friction\n(way), load-side (N)')
 
-    axes_col[5].plot(t_ms, result['friction_sb_force'], color=ROW_COLOR, lw=1.0, zorder=2)
-    style_row(axes_col[5], 'Bearing friction (sb),\nload-side equiv. (N)')
+    axes_col[5].plot(t_ms, result['friction_nut'], color=ROW_COLOR, lw=1.0, zorder=2)
+    style_row(axes_col[5], 'Leadscrew-nut friction\n(nut), load-side (N)')
+
+    axes_col[6].plot(t_ms, result['friction_sb_force'], color=ROW_COLOR, lw=1.0, zorder=2)
+    style_row(axes_col[6], 'Bearing friction (sb),\nload-side equiv. (N)')
 
     axes_col[0].set_title(
         f"D {result['rate']} full-steps/s\n"
@@ -318,7 +322,7 @@ def main() -> None:
     print(f'Figure B: cruise-window zoom, run {RUN_INDEX}, rates {RATES}', flush=True)
     started = time.perf_counter()
     results = {}
-    with ProcessPoolExecutor(max_workers=2) as pool:
+    with ProcessPoolExecutor(max_workers=len(RATES)) as pool:
         futures = {
             pool.submit(cruise_zoom_data, RUN_INDEX, rate): rate for rate in RATES
         }
@@ -327,8 +331,8 @@ def main() -> None:
             results[rate] = future.result()
             print(f'  done D_{rate} ({time.perf_counter()-started:.1f}s)', flush=True)
 
-    n_rows = 6
-    fig, axes = plt.subplots(n_rows, len(RATES), figsize=(7.5 * len(RATES), 13.0), squeeze=False)
+    n_rows = 7
+    fig, axes = plt.subplots(n_rows, len(RATES), figsize=(7.5 * len(RATES), 14.5), squeeze=False)
     for col, rate in enumerate(RATES):
         plot_column(fig, [axes[row][col] for row in range(n_rows)], results[rate])
 
@@ -340,7 +344,7 @@ def main() -> None:
     )
     fig.tight_layout(rect=(0, 0.02, 1, 0.93))
 
-    out_path = OUT_DIR / 'figureB_cruise_zoom_D9.5_D200.png'
+    out_path = OUT_DIR / 'figureB_cruise_zoom_D9.5.png'
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
     print(f'Saved {out_path}', flush=True)
