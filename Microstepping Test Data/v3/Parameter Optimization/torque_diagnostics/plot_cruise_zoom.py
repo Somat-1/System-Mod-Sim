@@ -4,11 +4,10 @@
 frequency with sane amplitude, and does v_way really cross zero."
 
 Rules applied (see chat discussion that produced this folder):
-  1. Never plot a whole block -- a 20 s D_200 block contains ~4000 detent
-     cycles, which no static plot can resolve. Window = 10 detent cycles,
-     centered in the middle of the cruise (constant-velocity) phase,
-     since the detent forcing frequency in Hz equals the commanded
-     full-steps/s rate exactly here (4*N_r = 200 = MOTOR_FULL_STEPS_PER_REV).
+  1. Never plot a whole block.  Both windows begin 5 s after their respective
+     block starts and show 10 detent cycles.  Their durations are calculated
+     from the reconstructed (real-time-scaled) cruise speed, rather than the
+     nominal D-rate label, so the two columns contain comparable cycle counts.
   2. One signal per row, stacked, sharex, each independently autoscaled --
      never overlaid, never sharing a y-axis across rows of different units.
   3. Linear y-axis with a zero line for every row -- no symlog, since a
@@ -51,17 +50,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import solve_ivp
 
-V3_ROOT = Path(r"\\mult-fp01.hitdom.lan\project2\Internships\Tomas Valentinas\Sytem Mod & Sim\Microstepping Test Data\v3")
+V3_ROOT = Path(__file__).resolve().parents[2]
 RAW_DIR = V3_ROOT / 'data' / 'raw_local'
 IDS_PATH = RAW_DIR / 'SteppingSequenceID.csv'
 LOG_PATH = RAW_DIR / 'identification_controller_log.csv'
-REV42_SCRIPTS = Path(r"\\mult-fp01.hitdom.lan\project2\Internships\Tomas Valentinas\Sytem Mod & Sim\Rev 4\lugre_friction\Rev 4.2\scripts")
+REV42_SCRIPTS = V3_ROOT.parents[1] / 'Rev 4' / 'lugre_friction' / 'Rev 4.2' / 'scripts'
 SCRIPTS_DIR = V3_ROOT / 'scripts'
 OUT_DIR = Path(__file__).resolve().parent
 
 RUN_INDEX = 2
 RATES = ('9.5', '200')
 N_CYCLES = 10  # detent cycles shown per cruise window
+WINDOW_START_FROM_BLOCK_S = 5.0
 FFT_SAMPLE_HZ = 5000.0
 FILETIME_UNIX_EPOCH = 116444736000000000
 CONTROLLER_CLOCK_SKEW_S = 0.319
@@ -79,6 +79,7 @@ PEAK_MA_BY_CURRENT_LEVEL = {'I_50pct': 200, 'I_100pct': 400}
 
 AXIS_COLOR = '#333333'
 ROW_COLOR = '#1f77b4'
+DRIVE_COLOR = '#d62728'
 ZERO_COLOR = '#9a9a9a'
 
 
@@ -135,8 +136,10 @@ def cruise_zoom_data(run_index: int, rate: str) -> dict:
     )
 
     block_name = f'D_{rate}'
-    start_epoch_s = parse_ids(IDS_PATH)
-    rows = load_log_rows(LOG_PATH, start_epoch_s)
+    # Only controller-event time differences are used below.  Keeping Unix
+    # timestamps directly is equivalent to subtracting the IDS epoch/skew,
+    # because that common offset cancels in every block-relative time.
+    rows = load_log_rows(LOG_PATH, 0.0)
     start_s, end_s = find_block(rows, run_index, block_name)
     segments = reconstruct_segments(rows, run_index, start_s, end_s)
 
@@ -157,14 +160,23 @@ def cruise_zoom_data(run_index: int, rate: str) -> dict:
     sb_values = _port_values(model.p, 'sb')
 
     first_trapezoid = next(s for s in segments if s['kind'] == 'trapezoid')
-    detent_hz = float(rate)  # forcing frequency in Hz == commanded full-steps/s rate
+    # reconstruct_segments rescales the theoretical trapezoid to the actual
+    # logged move interval.  Use that reconstructed cruise speed: the nominal
+    # D-rate label is not necessarily the speed represented by this timeline.
+    cruise_rotor_rev_s = abs(
+        first_trapezoid['value_end'] - first_trapezoid['value_start']
+    ) / (first_trapezoid['duration_s'] + first_trapezoid['t_accel_s'])
+    detent_hz = cruise_rotor_rev_s * MOTOR_FULL_STEPS_PER_REV
     window_s = N_CYCLES / detent_hz
-    cruise_mid = (
-        first_trapezoid['t0'] + first_trapezoid['t_accel_s']
-        + 0.5 * first_trapezoid['duration_s']
-    )
-    win_t0 = cruise_mid - 0.5 * window_s
-    win_t1 = cruise_mid + 0.5 * window_s
+    win_t0 = WINDOW_START_FROM_BLOCK_S
+    win_t1 = win_t0 + window_s
+    cruise_t0 = first_trapezoid['t0'] + first_trapezoid['t_accel_s']
+    cruise_t1 = cruise_t0 + first_trapezoid['duration_s']
+    if win_t0 < cruise_t0 or win_t1 > cruise_t1:
+        raise RuntimeError(
+            f'{block_name}: requested {win_t0:.3f}..{win_t1:.3f}s window '
+            f'is outside cruise {cruise_t0:.3f}..{cruise_t1:.3f}s'
+        )
 
     v_cmd = float(rate) * model.p['L'] / MOTOR_FULL_STEPS_PER_REV  # m/s, exact cruise value
 
@@ -174,6 +186,12 @@ def cruise_zoom_data(run_index: int, rate: str) -> dict:
         t0, t1 = seg['t0'], seg['t1']
         if t1 <= t0:
             continue
+        # Figure B only uses the first trapezoid through the end of the
+        # displayed window.  Integration after that instant cannot affect
+        # earlier states, so do not spend several minutes solving the unseen
+        # remainder of the outbound move, return move, and final hold.
+        if seg is first_trapezoid:
+            t1 = min(t1, win_t1)
         if seg['kind'] == 'hold':
             theta_command = seg['value_start'] * 2.0 * np.pi
 
@@ -205,6 +223,7 @@ def cruise_zoom_data(run_index: int, rate: str) -> dict:
             win_theta_m.append(sol.y[0, mask])
             win_vel.append(sol.y[N_Q:2 * N_Q, mask])
             win_z.append(sol.y[2 * N_Q:2 * N_Q + len(PORTS), mask])
+            break
 
     t = np.concatenate(win_t)
     theta_m = np.concatenate(win_theta_m)
@@ -228,7 +247,11 @@ def cruise_zoom_data(run_index: int, rate: str) -> dict:
     motor_force = motor_torque / lead
 
     detent_torque = t_d * np.sin(4.0 * n_r * theta_m)
-    detent_force = detent_torque / lead
+    # The rotor equation contains ``... + T_motor - T_detent``.  Plot the
+    # signed contribution actually applied to that equation, rather than the
+    # positive constitutive detent law, so this figure reads as a force
+    # balance without requiring the viewer to infer the leading minus sign.
+    detent_force = -detent_torque / lead
 
     z_way, z_nut, z_sb = z[PORTS.index('way')], z[PORTS.index('nut')], z[PORTS.index('sb')]
     v_way = model.jacobians['way'] @ vel
@@ -245,7 +268,7 @@ def cruise_zoom_data(run_index: int, rate: str) -> dict:
         'detent_force': detent_force, 'detent_hz': detent_hz,
         'friction_way': friction_way, 'friction_nut': friction_nut,
         'friction_sb_force': friction_sb_force,
-        'window_s': window_s, 'lead': lead,
+        'window_s': window_s, 'window_start_s': win_t0, 'lead': lead,
     }
 
 
@@ -264,32 +287,28 @@ def style_row(ax, ylabel):
 def plot_column(fig, axes_col, result):
     t_ms = (result['t'] - result['t'][0]) * 1000.0
 
-    axes_col[0].plot(t_ms, np.full_like(t_ms, result['v_cmd']) * 1000.0,
-                      color=ROW_COLOR, lw=1.2, zorder=2)
-    style_row(axes_col[0], 'Commanded\nvelocity (mm/s)')
+    axes_col[0].plot(t_ms, result['motor_force'], color=DRIVE_COLOR, lw=1.0, zorder=2)
+    style_row(axes_col[0], 'Motor drive torque,\nload-side equiv. (N)')
 
     axes_col[1].plot(t_ms, result['v_sim'] * 1000.0, color=ROW_COLOR, lw=0.9, zorder=2)
     style_row(axes_col[1], 'Simulated stage\nvelocity v_sim (mm/s)')
 
-    axes_col[2].plot(t_ms, result['motor_force'], color=ROW_COLOR, lw=1.0, zorder=2)
-    style_row(axes_col[2], 'Motor drive torque,\nload-side equiv. (N)')
+    axes_col[2].plot(t_ms, result['detent_force'], color=ROW_COLOR, lw=1.0, zorder=2)
+    style_row(axes_col[2], 'Detent contribution\n(-T_detent / lead) (N)')
 
-    axes_col[3].plot(t_ms, result['detent_force'], color=ROW_COLOR, lw=1.0, zorder=2)
-    style_row(axes_col[3], 'Detent, load-side\nequiv. force (N)')
+    axes_col[3].plot(t_ms, result['friction_way'], color=ROW_COLOR, lw=1.0, zorder=2)
+    style_row(axes_col[3], 'Guideway friction\n(way), load-side (N)')
 
-    axes_col[4].plot(t_ms, result['friction_way'], color=ROW_COLOR, lw=1.0, zorder=2)
-    style_row(axes_col[4], 'Guideway friction\n(way), load-side (N)')
+    axes_col[4].plot(t_ms, result['friction_nut'], color=ROW_COLOR, lw=1.0, zorder=2)
+    style_row(axes_col[4], 'Leadscrew-nut friction\n(nut), load-side (N)')
 
-    axes_col[5].plot(t_ms, result['friction_nut'], color=ROW_COLOR, lw=1.0, zorder=2)
-    style_row(axes_col[5], 'Leadscrew-nut friction\n(nut), load-side (N)')
-
-    axes_col[6].plot(t_ms, result['friction_sb_force'], color=ROW_COLOR, lw=1.0, zorder=2)
-    style_row(axes_col[6], 'Bearing friction (sb),\nload-side equiv. (N)')
+    axes_col[5].plot(t_ms, result['friction_sb_force'], color=ROW_COLOR, lw=1.0, zorder=2)
+    style_row(axes_col[5], 'Bearing friction (sb),\nload-side equiv. (N)')
 
     axes_col[0].set_title(
         f"D {result['rate']} full-steps/s\n"
-        f"detent forcing = {result['detent_hz']:.1f} Hz, "
-        f"window = {result['window_s']*1000:.1f} ms ({N_CYCLES} cycles)",
+        f"window = {result['window_s']*1000:.1f} ms ({N_CYCLES} cycles), "
+        f"starts at {result['window_start_s']:.1f} s",
         fontsize=9.5,
     )
     axes_col[-1].set_xlabel('Time within window (ms)', fontsize=8)
@@ -308,16 +327,15 @@ def main() -> None:
             results[rate] = future.result()
             print(f'  done D_{rate} ({time.perf_counter()-started:.1f}s)', flush=True)
 
-    n_rows = 7
-    fig, axes = plt.subplots(n_rows, len(RATES), figsize=(7.5 * len(RATES), 15.0), squeeze=False)
+    n_rows = 6
+    fig, axes = plt.subplots(n_rows, len(RATES), figsize=(7.5 * len(RATES), 13.0), squeeze=False)
     for col, rate in enumerate(RATES):
         plot_column(fig, [axes[row][col] for row in range(n_rows)], results[rate])
 
     fig.suptitle(
-        'Figure B -- Run 2 (MRES 1/4, 100% I): cruise-window zoom, '
-        'motor-side detent/bearing torque converted to load-side equivalent '
-        'force (F = T / lead). Linear axes, zero line drawn, one signal per '
-        'row, never overlaid.',
+        'Figure B -- Run 2 (MRES 1/4, 100% I): cruise-window force balance\n'
+        'Motor torque converted with F = T / lead; detent shown as its '
+        'signed opposing contribution.',
         fontsize=11,
     )
     fig.tight_layout(rect=(0, 0.02, 1, 0.93))
