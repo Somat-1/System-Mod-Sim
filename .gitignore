@@ -20,3 +20,6 @@ ESP32S3_TMC2209_Chirp_Test/tempTVAl.csv
 Thumbs.db
 __pycache__/
 *.pyc
+
+# Local scratch work and hardware runners that must never be committed.
+/temp/

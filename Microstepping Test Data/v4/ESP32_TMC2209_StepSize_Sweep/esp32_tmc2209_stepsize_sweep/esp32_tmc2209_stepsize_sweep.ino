@@ -102,7 +102,12 @@ void logEvent(const char *event, int direction, const char *stepKind) {
     s2gb = driver.s2gb();
     ola = driver.ola();
     olb = driver.olb();
-    stallguardFlag = driver.stallguard();
+    // TMCStepper's TMC2208Stepper/TMC2209Stepper classes have no
+    // stallguard() method -- DRV_STATUS has no such bit for this chip
+    // family (that accessor only exists on the unrelated TMC2130-family
+    // base class). Left false; SG_RESULT above is the real per-chip
+    // StallGuard4 load value, logged as-is.
+    stallguardFlag = false;
     csActual = driver.cs_actual();
   }
   Serial.printf(
