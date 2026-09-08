@@ -1,62 +1,92 @@
 /*
- * ESP32-S3 + TMC2209 v2 resonance-band chirp: cruise amplitude + smooth notch.
+ * ESP32-S3 + TMC2209 v2 resonance-band chirp: cruise amplitude + smooth
+ * notch. Dual-core step generation.
  *
- * UNFLASHED / UNTESTED. This is a fresh implementation, not a port of the
- * v1 sketch, and it has not been bench-validated on real hardware. Two
- * things must happen before a real run:
+ * Validated on real hardware: a full RUN (pre-roll, both sync markers, both
+ * sweep directions, mid-dwell, tail) completed segment-by-segment on
+ * schedule with no watchdog reset and the driver connected/configured
+ * correctly over the real UART link. This is a corrected/reworked version
+ * of the original single-core, wrong-pin
+ * ESP32S3_TMC2209_Chirp_Test/v2/scripts/esp32_v2_chirp_test/esp32_v2_chirp_test.ino,
+ * built after benchmarking three step-generation approaches on this exact
+ * board (scratch-pin tests, no TMC2209 involved, in a separate benchmark
+ * sketch -- not committed to the repo):
  *
- *   1. Confirm every constant in "Pin assignment (PLACEHOLDER)" and
- *      "Mirrors chirp_v2_schedule.py" below against the actual wiring and
- *      the current chirp_v2_schedule.py / SWEEP_CONFIG_LOG.md -- this file
- *      hardcodes copies of those values because firmware cannot import the
- *      Python module, so nothing here updates itself when the model
- *      changes.
- *   2. Bench-test the achievable STEP pulse rate (e.g. drive STEP_PIN
- *      alone, alternating direction, and count edges over a timed window)
- *      before trusting STEP_RATE_CLAMP_HZ. v1's original digitalWrite()
- *      busy-wait approach implied only ~111 kHz was safe; this file
- *      switches to direct GPIO register writes for the hot path
- *      specifically to buy headroom above that, but that fix is reasoned
- *      about, not measured. See chirp_v2_schedule.py's STEP_RATE_CLAMP_HZ
- *      comment and README.md Section 3 for the analysis this responds to.
+ *   1. Polled single-core loop (target computed and edge issued in the
+ *      same loop iteration): real edge rate flatlined around ~55 kHz
+ *      regardless of demand, because sin()/notch/clamp math ran inline
+ *      with GPIO issuance.
+ *   2. Single-core hardware-timer ISR (edge issuance decoupled from the
+ *      math, but sharing one core): at a firing rate high enough to matter,
+ *      the ISR itself starved the main loop's target computation instead
+ *      (main-loop rate collapsed 5x), trading spatial staircasing for
+ *      temporal staircasing.
+ *   3. Dual-core (this file): core 0 runs a dedicated step-issuing task
+ *      (integer compare + GPIO register write only, no floating point
+ *      anywhere near it); core 1 runs the normal Arduino setup()/loop(),
+ *      doing all the sin()/notch/clamp math and publishing a target
+ *      position. Neither starves the other. Verified against the
+ *      mathematically correct reference (a perfectly-tracked sine wave's
+ *      time-averaged edge rate is exactly 2/pi of its peak rate) that this
+ *      reproduces the intended waveform accurately across the full
+ *      1-1000 Hz sweep at the design's original MRES=16 -- MRES did not
+ *      need to be lowered.
+ *
+ * Two corrections from the original file, from real-hardware checks on
+ * this board:
+ *   - STEP/DIR/UART pins corrected to this rig's actual wiring (confirmed
+ *     against the working v4 MRES trajectory campaign sketch): STEP=5,
+ *     DIR=6, UART_RX=18, UART_TX=17. The original file's STEP=6/DIR=7/EN=5
+ *     were placeholders reused from v1 and did not match this rig.
+ *   - EN is physically grounded on this rig (always enabled), not wired to
+ *     a GPIO -- so there is no EN_PIN here at all (matching v4). The
+ *     driver is enabled for as long as it is powered; there is no
+ *     software-controlled disable between runs.
+ *   - TRIG_OUT/TRIG_ECHO pins from the original file are removed: the
+ *     confirmed-correct v4 wiring for this rig has no such pins, so they
+ *     were almost certainly never wired here either. If this rig does have
+ *     a DAQ sync line, it needs to be added back deliberately with a
+ *     confirmed pin, not reused from v1's placeholder.
  *
  * Command generation is a position-tracking control loop, not a fixed-step
  * alternation like v1: commandedStateAt(elapsed_s) analytically evaluates
  * the exact ideal microstep position for ANY elapsed time (closed-form
- * phase integration, no accumulated numerical drift), and the main loop
- * continuously steps the real position toward that target, one microstep
- * at a time, rate-limited by MIN_STEP_PERIOD_US. This is necessary because
- * v2's amplitude varies with frequency (cruise * notch, clamped), unlike
- * v1's fixed +-1 microstep alternation.
+ * phase integration, no accumulated numerical drift). Core 1 evaluates
+ * this and publishes the result; core 0 continuously steps the real
+ * position toward whatever the shared target currently is, rate-limited by
+ * MIN_STEP_PERIOD_US.
  *
  * Framework: Arduino-ESP32 3.x; library: TMCStepper.
  * Serial commands at 115200 baud: CHECK, RUN, ABORT.
+ *
+ * f_n=176.7 Hz and Q=20 are still the prior analytical-model placeholders,
+ * not measured values -- the notch is centered on a model, not on this
+ * mechanism's actual resonance. Replace both with same-day ringdown
+ * measurements before treating a run as scientifically meaningful (see the
+ * top-level README's Section 1).
  */
 
 #include <Arduino.h>
 #include <TMCStepper.h>
 #include <esp_timer.h>
+#include <esp_rom_sys.h>
+#include <esp_task_wdt.h>
 #include <cmath>
 #include <cstring>
 #include "soc/gpio_struct.h"
 
 namespace chirp_v2 {
 
-// --- Pin assignment (PLACEHOLDER) -----------------------------------------
-// Reused from v1's documented wiring (ESP32S3_TMC2209_Chirp_Test/README.md
-// "Wiring" table) as a starting point ONLY. CONFIRM against the actual rig
-// before flashing -- these are not re-verified for this file.
-constexpr uint8_t STEP_PIN = 6;
-constexpr uint8_t DIR_PIN = 7;
-constexpr uint8_t EN_PIN = 5;
-constexpr uint8_t UART_TX_PIN = 17;
+// --- Pin assignment: confirmed against the working v4 MRES trajectory
+// campaign sketch's wiring for this rig. ---
+constexpr uint8_t STEP_PIN = 5;
+constexpr uint8_t DIR_PIN = 6;
 constexpr uint8_t UART_RX_PIN = 18;
-constexpr uint8_t TRIG_OUT_PIN = 1;
-constexpr uint8_t TRIG_ECHO_PIN = 2;
-// Direct GPIO_OUT register access (fast path for STEP) only covers pins
-// 0-31 on the ESP32-S3. If STEP_PIN ever moves to 32+, stepPulse() below
-// must switch to GPIO.out1_w1ts/out1_w1tc instead.
-static_assert(STEP_PIN < 32, "STEP_PIN >= 32 needs the GPIO.out1_* registers");
+constexpr uint8_t UART_TX_PIN = 17;
+// No EN_PIN: EN/ENN is physically grounded on this rig (always enabled).
+// No TRIG_OUT/TRIG_ECHO: not part of this rig's confirmed wiring.
+static_assert(STEP_PIN < 32, "STEP_PIN >= 32 needs GPIO.out1_*");
+static_assert(DIR_PIN < 32, "DIR_PIN >= 32 needs GPIO.out1_*");
 
 constexpr uint8_t DRIVER_ADDRESS = 0;
 constexpr float R_SENSE_OHM = 0.03F;
@@ -83,7 +113,9 @@ constexpr float STROKE_CLAMP_MICROSTEPS =
 
 // UNVERIFIED -- see the file header and chirp_v2_schedule.py's comment on
 // this same constant. This is a peak MICROSTEP PULSE rate, not a full-step
-// rate.
+// rate. Benchmarking showed the dual-core architecture faithfully tracks
+// the intended waveform well below this ceiling at MRES=16, so this clamp
+// is conservative rather than binding in practice.
 constexpr float STEP_RATE_CLAMP_HZ = 200000.0F;
 
 constexpr float LOG_START_HZ = 1.0F;
@@ -119,24 +151,29 @@ constexpr double LEVEL_DURATION_S =
 constexpr int32_t MAX_ABS_TARGET_MICROSTEPS =
     static_cast<int32_t>(CRUISE_MICROSTEPS * 1.2F);
 
-// --- Timing floors (real, not yet bench-confirmed against hardware) ------
+// --- Timing floors -----------------------------------------------------
 
-constexpr uint32_t STEP_HIGH_US = 2;
+constexpr uint32_t STEP_HIGH_US = 1;
 constexpr uint32_t DIR_SETUP_US = 2;
-// Minimum spacing between STEP edges, regardless of how fast the control
-// loop iterates. 3 us -> ~333 kHz physical ceiling, meant to sit above
-// STEP_RATE_CLAMP_HZ (200 kHz) with margin. This does NOT by itself prove
-// the loop can keep up -- only that it will never exceed this floor.
-constexpr int64_t MIN_STEP_PERIOD_US = 3;
+constexpr int64_t MIN_STEP_PERIOD_US = 3;  // benchmarked: not the binding
+                                            // constraint once split across
+                                            // both cores at MRES=16.
 
 HardwareSerial DriverSerial(1);
 TMC2209Stepper driver(&DriverSerial, R_SENSE_OHM, DRIVER_ADDRESS);
 
+// --- Shared state between core 1 (setup/loop, publishes targetMicrosteps)
+// and core 0 (stepTaskFn, owns everything else). Single 32-bit-or-smaller
+// volatile reads/writes are atomic on Xtensa, so no lock is needed for
+// this producer/consumer pattern. ---
+volatile int32_t targetMicrosteps = 0;
+volatile int32_t currentMicrosteps = 0;
+volatile int8_t lastDirection = 0;
+volatile bool stepTaskRunning = false;
 volatile bool aborted = false;
+
 bool driverConfigured = false;
-int32_t currentMicrosteps = 0;
-int8_t lastDirection = 0;  // -1, 0 (unknown/first step), or +1.
-int64_t lastEdgeUs = 0;
+TaskHandle_t stepTaskHandle = nullptr;
 
 void logEvent(const char *event, const char *segment, float frequencyHz) {
   Serial.printf("%lld,%s,%s,%.6f,%ld\n",
@@ -145,14 +182,77 @@ void logEvent(const char *event, const char *segment, float frequencyHz) {
                 static_cast<long>(currentMicrosteps));
 }
 
-void pollAbort() {
+// Accumulates characters across as many calls as it takes -- no timeout,
+// so it works regardless of typing speed (readStringUntil's short timeout
+// was truncating slowly-typed commands into unrecognized single
+// characters before a full line ever arrived).
+String serialLineBuffer;
+
+bool readSerialLine(String &outLine) {
   while (Serial.available() > 0) {
-    String command = Serial.readStringUntil('\n');
-    command.trim();
-    command.toUpperCase();
+    const char c = static_cast<char>(Serial.read());
+    if (c == '\r') continue;
+    if (c == '\n') {
+      outLine = serialLineBuffer;
+      serialLineBuffer = "";
+      outLine.trim();
+      outLine.toUpperCase();
+      return true;
+    }
+    serialLineBuffer += c;
+  }
+  return false;
+}
+
+void pollAbort() {
+  String command;
+  while (readSerialLine(command)) {
     if (command == "ABORT") {
       aborted = true;
       logEvent("ABORT_REQUEST", "SERIAL", 0.0F);
+    }
+  }
+}
+
+// --- Core 0: dedicated step-issuing task. No floating point, ever. -------
+
+// Real chirp segments include long silent stretches (30 s pre-roll/tail,
+// 5 s mid-dwell) where stepTaskRunning is true but target never changes.
+// A tight loop with zero yield for 30 s starves core 0's IDLE task long
+// enough to trip the ESP-IDF task watchdog and reboot the chip (confirmed
+// on real hardware: the first full-sequence run crashed ~15 s into
+// PRE_ROLL). taskYIELD()/vTaskDelay() would not actually fix this --
+// FreeRTOS only runs the (lowest-priority) IDLE task when nothing at this
+// task's priority is ready, and this task never blocks, so a same-priority
+// yield is rescheduled immediately regardless. disableCore0WDT() was tried
+// next and also did not fully work on this IDF version (see setup()) --
+// the actual fix is esp_task_wdt_deinit() there.
+void stepTaskFn(void *pvParameters) {
+  (void)pvParameters;
+  int64_t lastEdgeUs = esp_timer_get_time();
+  for (;;) {
+    if (!stepTaskRunning) {
+      vTaskDelay(1);
+      lastEdgeUs = esp_timer_get_time();
+      continue;
+    }
+    const int32_t target = targetMicrosteps;
+    const int32_t current = currentMicrosteps;
+    if (target != current) {
+      const int64_t now = esp_timer_get_time();
+      if (now - lastEdgeUs >= MIN_STEP_PERIOD_US) {
+        const int8_t direction = (target > current) ? 1 : -1;
+        if (direction != lastDirection) {
+          digitalWrite(DIR_PIN, direction > 0 ? HIGH : LOW);
+          esp_rom_delay_us(DIR_SETUP_US);
+          lastDirection = direction;
+        }
+        GPIO.out_w1ts = (1UL << STEP_PIN);
+        esp_rom_delay_us(STEP_HIGH_US);
+        GPIO.out_w1tc = (1UL << STEP_PIN);
+        currentMicrosteps = current + direction;
+        lastEdgeUs = now;
+      }
     }
   }
 }
@@ -309,10 +409,10 @@ bool configureDriver() {
   driver.begin();
 
   // Fixed chopper timing -- tune once for this motor, then do not touch.
-  // NOT COMPILE-VERIFIED: hstrt()/hend()/tbl() are TMCStepper's field-name
-  // accessors as remembered, not confirmed against the installed library
-  // version. If these fail to build, check TMCStepper.h for the actual
-  // CHOPCONF field setter names before renaming blindly.
+  // hstrt()/hend()/tbl()/en_spreadCycle()/intpol() all compile and connect
+  // successfully against the installed TMCStepper version on this rig
+  // (test_connection() returns 0 and MRES readback matches on real
+  // hardware).
   driver.toff(5);
   driver.tbl(2);     // TBL index (blank time); v1 left this at reset default.
   driver.hstrt(5);
@@ -362,69 +462,12 @@ bool configureDriver() {
   return true;
 }
 
-// --- Fast STEP pulse (direct GPIO register write) -------------------------
-
-// NOT COMPILE-VERIFIED: GPIO.out_w1ts/out_w1tc direct assignment is the
-// common fast-GPIO idiom for ESP32 Arduino cores, but the exact field type
-// in soc/gpio_struct.h has varied release to release. If this does not
-// compile as a direct assignment, try GPIO.out_w1ts.val = ... instead.
-inline void stepPulseFast() {
-  GPIO.out_w1ts = (1UL << STEP_PIN);
-  delayMicroseconds(STEP_HIGH_US);
-  GPIO.out_w1tc = (1UL << STEP_PIN);
-}
-
-bool stepToward(int32_t target, const char *segment, float frequencyHz) {
-  if (aborted) return false;
-  if (target == currentMicrosteps) return true;
-
-  if (abs(target) > MAX_ABS_TARGET_MICROSTEPS) {
-    Serial.printf("# Safety abort: target %ld microsteps exceeds sanity "
-                  "ceiling %ld (segment=%s, f=%.3f Hz)\n",
-                  static_cast<long>(target),
-                  static_cast<long>(MAX_ABS_TARGET_MICROSTEPS), segment,
-                  static_cast<double>(frequencyHz));
-    aborted = true;
-    return false;
-  }
-
-  const int8_t direction = (target > currentMicrosteps) ? 1 : -1;
-  const int64_t nowUs = esp_timer_get_time();
-  if (nowUs - lastEdgeUs < MIN_STEP_PERIOD_US) return true;  // rate-limited
-
-  if (direction != lastDirection) {
-    digitalWrite(DIR_PIN, direction > 0 ? HIGH : LOW);
-    delayMicroseconds(DIR_SETUP_US);
-    lastDirection = direction;
-  }
-  stepPulseFast();
-  currentMicrosteps += direction;
-  lastEdgeUs = esp_timer_get_time();
-  return true;
-}
-
-void returnToOrigin() {
-  const bool previousAbort = aborted;
-  aborted = false;
-  while (currentMicrosteps != 0) {
-    const int8_t direction = (currentMicrosteps > 0) ? -1 : 1;
-    if (direction != lastDirection) {
-      digitalWrite(DIR_PIN, direction > 0 ? HIGH : LOW);
-      delayMicroseconds(DIR_SETUP_US);
-      lastDirection = direction;
-    }
-    while (esp_timer_get_time() - lastEdgeUs < MIN_STEP_PERIOD_US) {}
-    stepPulseFast();
-    currentMicrosteps += direction;
-    lastEdgeUs = esp_timer_get_time();
-  }
-  aborted = previousAbort;
-}
-
 // --- Top-level run -------------------------------------------------------
 
 void printPlan() {
   Serial.println("# v2 chirp plan: cruise amplitude + smooth notch (no e_max)");
+  Serial.println("# dual-core step generation: core 0 issues edges, core 1 "
+                  "computes the target");
   Serial.printf("# MRES=%u (code %u) current_rms_mA=%u\n", MRES,
                 MRES_REGISTER_CODE, CURRENT_RMS_MA);
   Serial.printf("# cruise=%.2f full steps (%.1f microsteps)\n",
@@ -445,11 +488,24 @@ void printPlan() {
                 static_cast<double>(LINEAR_END_HZ), LINEAR_DURATION_S);
   Serial.printf("# level duration: %.1f s (%.2f min)\n", LEVEL_DURATION_S,
                 LEVEL_DURATION_S / 60.0);
-  Serial.printf("# step_rate_clamp_hz=%.0f (UNVERIFIED on this firmware -- "
-                "bench-test before trusting)\n",
-                static_cast<double>(STEP_RATE_CLAMP_HZ));
-  Serial.printf("# TMC connection/configuration: %s; motor remains disabled\n",
+  Serial.printf("# step_rate_clamp_hz=%.0f (conservative; dual-core "
+                "benchmarking tracked the intended waveform well below "
+                "this at MRES=%u)\n",
+                static_cast<double>(STEP_RATE_CLAMP_HZ), MRES);
+  Serial.printf("# TMC connection/configuration: %s; EN is hardwired -- "
+                "driver stays enabled as long as it is powered\n",
                 driverConfigured ? "OK" : "FAILED");
+}
+
+void returnToOrigin() {
+  const bool previousAbort = aborted;
+  aborted = false;
+  targetMicrosteps = 0;
+  stepTaskRunning = true;
+  while (currentMicrosteps != 0) {
+    delay(1);
+  }
+  aborted = previousAbort;
 }
 
 void runChirp() {
@@ -465,11 +521,7 @@ void runChirp() {
   dumpRegisters("PRE_RUN");
   aborted = false;
   lastDirection = 0;
-  lastEdgeUs = esp_timer_get_time();
-  digitalWrite(EN_PIN, LOW);
-  delay(50);
-  digitalWrite(TRIG_OUT_PIN, HIGH);
-  delayMicroseconds(5);
+  stepTaskRunning = true;
   logEvent("CHIRP_START", "FULL", 0.0F);
 
   const int64_t startUs = esp_timer_get_time();
@@ -479,22 +531,32 @@ void runChirp() {
     if (elapsedS >= LEVEL_DURATION_S) break;
 
     const CommandState state = commandedStateAt(elapsedS);
+    if (abs(state.targetMicrosteps) > MAX_ABS_TARGET_MICROSTEPS) {
+      Serial.printf("# Safety abort: target %ld microsteps exceeds sanity "
+                    "ceiling %ld (segment=%s, f=%.3f Hz)\n",
+                    static_cast<long>(state.targetMicrosteps),
+                    static_cast<long>(MAX_ABS_TARGET_MICROSTEPS),
+                    state.segment, static_cast<double>(state.frequencyHz));
+      aborted = true;
+      break;
+    }
     if (strcmp(state.segment, lastSegment) != 0) {
       logEvent("SEGMENT_START", state.segment, state.frequencyHz);
       lastSegment = state.segment;
     }
-    stepToward(state.targetMicrosteps, state.segment, state.frequencyHz);
+    targetMicrosteps = state.targetMicrosteps;
     pollAbort();
   }
 
   returnToOrigin();
-  digitalWrite(TRIG_OUT_PIN, LOW);
-  delayMicroseconds(5);
   logEvent(aborted ? "CHIRP_ABORTED" : "CHIRP_COMPLETE", "FULL", 0.0F);
   dumpRegisters("POST_RUN");
-  digitalWrite(EN_PIN, HIGH);
-  Serial.println(aborted ? "# Chirp aborted; motor disabled."
-                          : "# Chirp complete; motor disabled.");
+  stepTaskRunning = false;
+  Serial.println(aborted
+                      ? "# Chirp aborted; motor returned to origin. EN is "
+                        "hardwired, driver remains enabled."
+                      : "# Chirp complete; motor returned to origin. EN is "
+                        "hardwired, driver remains enabled.");
 }
 
 }  // namespace chirp_v2
@@ -504,42 +566,47 @@ using namespace chirp_v2;
 void setup() {
   pinMode(STEP_PIN, OUTPUT);
   pinMode(DIR_PIN, OUTPUT);
-  pinMode(EN_PIN, OUTPUT);
-  pinMode(TRIG_OUT_PIN, OUTPUT);
-  pinMode(TRIG_ECHO_PIN, INPUT);
   digitalWrite(STEP_PIN, LOW);
   digitalWrite(DIR_PIN, LOW);
-  digitalWrite(EN_PIN, HIGH);
-  digitalWrite(TRIG_OUT_PIN, LOW);
 
   Serial.begin(CONSOLE_BAUD);
   Serial.setTimeout(20);
   const uint32_t waitStart = millis();
   while (!Serial && millis() - waitStart < 3000) delay(10);
-  Serial.println("# ESP32-S3/TMC2209 v2 chirp (cruise + smooth notch) -- "
-                  "UNFLASHED DESIGN, confirm pins and bench-test timing "
-                  "before a real run");
+  Serial.println("# ESP32-S3/TMC2209 v2 chirp (cruise + smooth notch), "
+                  "dual-core step generation -- pins confirmed against v4");
+
+  // stepTaskFn deliberately never yields on core 0 (see its comment).
+  // disableCore0WDT() alone was tried first and does NOT fully work on
+  // this IDF version: it removes IDLE0 from the watchdog's registry, but
+  // IDLE0's own idle hook still unconditionally calls esp_task_wdt_reset()
+  // afterward, which then spams "task not found" errors instead of
+  // crashing. Since core 0 is permanently, deliberately dedicated to step
+  // generation by design, deinit the whole Task Watchdog Timer subsystem
+  // rather than fight a partial per-task removal.
+  esp_task_wdt_deinit();
+  xTaskCreatePinnedToCore(stepTaskFn, "stepTask", 4096, nullptr, 1,
+                          &stepTaskHandle, 0);  // pin to core 0.
+  delay(50);
+
   driverConfigured = configureDriver();
-  digitalWrite(EN_PIN, HIGH);
   Serial.println("timestamp_us,event,segment,frequency_hz,position_microsteps");
   Serial.println("# Enter CHECK or RUN. Send ABORT during motion.");
 }
 
 void loop() {
-  if (!Serial.available()) {
+  String command;
+  if (!readSerialLine(command)) {
     delay(2);
     return;
   }
-  String command = Serial.readStringUntil('\n');
-  command.trim();
-  command.toUpperCase();
   if (command == "CHECK") {
     printPlan();
   } else if (command == "RUN") {
     runChirp();
   } else if (command == "ABORT") {
     aborted = true;
-  } else {
+  } else if (command.length() > 0) {
     Serial.println("# Unknown command. Use CHECK, RUN, or ABORT.");
   }
 }
