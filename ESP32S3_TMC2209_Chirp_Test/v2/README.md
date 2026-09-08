@@ -2,14 +2,21 @@
 
 ## Status
 
-**Design preview only.** This folder currently holds the analytic schedule
-and a pre-hardware render of what the excitation looks like
-(`scripts/plot_planned_sequence.py` -> `rendered_assets/`), plus a
+**Design preview plus an unflashed firmware draft — nothing here has run on
+real hardware.** This folder holds the analytic schedule and a pre-hardware
+render of what the excitation looks like
+(`scripts/plot_planned_sequence.py` -> `rendered_assets/`), a
 machine-generated reference of the exact configuration
-(`scripts/generate_sweep_config_log.py` -> `SWEEP_CONFIG_LOG.md`). It does
-**not** yet contain ESP32/TMC2209 firmware implementing the procedure below
-— v1 (`../ESP32S3_TMC2209_Chirp_Test.ino`) still hard-notches 120-230 Hz and
-runs a fixed ±1 microstep amplitude at native 1/256 microstepping.
+(`scripts/generate_sweep_config_log.py` -> `SWEEP_CONFIG_LOG.md`), and now
+a first-draft ESP32/TMC2209 sketch
+(`scripts/esp32_v2_chirp_test/esp32_v2_chirp_test.ino`) implementing the
+procedure below. That sketch has not been compiled (no `arduino-cli` in
+this environment), not flashed, not bench-tested, and its pin assignment is
+a placeholder copied from v1's wiring table, not re-verified — see its own
+README for the specific things to check before it touches a motor. v1
+(`../ESP32S3_TMC2209_Chirp_Test.ino`) is the only *validated* firmware in
+this folder tree, and it still hard-notches 120-230 Hz and runs a fixed ±1
+microstep amplitude at native 1/256 microstepping.
 
 This is revision 2 of the v2 design. Revision 1 derived command amplitude
 from an inverted following-error budget (`e_max`) against an assumed SDOF
@@ -290,6 +297,13 @@ failure here is a real stop, not a step down to a pre-planned lower level.
   up when writing or reviewing the processing pipeline for a real recording:
   exact amplitude/notch/clamp/timing parameters, without re-reading this
   narrative README or the module source.
+- `scripts/esp32_v2_chirp_test/` — first-draft ESP32-S3/TMC2209 sketch.
+  **Unflashed, uncompiled, untested** — see its own README for what to
+  verify before it runs on real hardware. A position-tracking control loop
+  (analytic closed-form target position at any elapsed time, no
+  accumulated drift), direct-GPIO-register STEP pulses instead of
+  `digitalWrite()`, and hand-copied constants that must be kept in sync
+  with `chirp_v2_schedule.py` manually since firmware cannot import it.
 - `data/hardware_runs/` — not created yet; will hold ringdown and sweep logs
   once there is real hardware to log from.
 
