@@ -1,10 +1,11 @@
 """Process the v2 chirp recording (Ftest.csv) into Bode magnitude plots.
 
 Same deliverable as the v1 analysis (analysis/scripts/process_chirp_bode.py):
-per-axis Bode magnitude plots in raw and f^2-normalized form, each on linear
-and log y, plus an all-axis overview and a .npz of the curves. Three things
-about the v2 design make the v1 *method* inapplicable, though, and each is
-handled differently here:
+per-axis Bode magnitude plots, an all-axis overview (f^2-normalized, log y)
+and a .npz of the curves. Raw magnitude is rendered on both linear and log y;
+the f^2-normalized and transmissibility views span several decades and are
+produced on log y only. Three things about the v2 design make the v1 *method*
+inapplicable, though, and each is handled differently here:
 
 1. **Timing comes from the sync markers, not a ridge fit.** v1 had no trigger
    channel, so it recovered the sweep law by peak-picking a spectral ridge and
@@ -290,7 +291,14 @@ def _decorate(ax, ylabel, title, yscale):
     ax.legend()
 
 
-VARIANTS = ("raw", "f2norm", "transmissibility")
+# Only the raw magnitude is rendered on both y-scales. The f^2-normalised and
+# transmissibility views span several decades and are only legible on log y,
+# so their linear-y counterparts are not produced.
+VARIANTS = {
+    "raw": ("linear", "log"),
+    "f2norm": ("log",),
+    "transmissibility": ("log",),
+}
 
 
 def transform(variant, freq_grid, mag):
@@ -306,10 +314,11 @@ def transform(variant, freq_grid, mag):
 
 def make_bode_plots(freq_grid, up_mag, down_mag, floor, out_prefix, title_prefix,
                     out_dir=None):
-    for variant in VARIANTS:
+    for variant, yscales in VARIANTS.items():
         up_y, ylabel = transform(variant, freq_grid, up_mag)
         down_y, _ = transform(variant, freq_grid, down_mag)
-        for yscale, suffix in (("linear", "linY"), ("log", "logY")):
+        for yscale in yscales:
+            suffix = "linY" if yscale == "linear" else "logY"
             fig, ax = plt.subplots(figsize=(10, 6))
             ax.plot(freq_grid, up_y, label="up sweep (1->1000 Hz)", lw=1.2)
             ax.plot(freq_grid, down_y, label="down sweep (1000->1 Hz)", lw=1.2,
@@ -336,12 +345,13 @@ def make_bode_plots(freq_grid, up_mag, down_mag, floor, out_prefix, title_prefix
 
 
 def make_overview(freq_grid, up_by_ch, floor_by_ch, out_path):
-    """v1's single-panel all-axis overview: up sweep, raw, log y."""
+    """Single-panel all-axis overview: up sweep, f^2-normalised, log y."""
     fig, ax = plt.subplots(figsize=(10, 6))
     for col, mag in up_by_ch.items():
-        y, ylabel = transform("raw", freq_grid, mag)
+        y, ylabel = transform("f2norm", freq_grid, mag)
         ax.plot(freq_grid, y, label=CHANNELS[col], lw=1.1)
-    _decorate(ax, ylabel, "All-axis overview (up sweep, raw, log y-scale)", "log")
+    _decorate(ax, ylabel, "All-axis overview (up sweep, f^2-normalized, log y-scale)",
+              "log")
     fig.tight_layout()
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
@@ -349,8 +359,8 @@ def make_overview(freq_grid, up_by_ch, floor_by_ch, out_path):
 
 
 def make_general_visualization(accel, t0, clock, out_path):
-    """Time-domain + spectrogram overview: what the recording actually contains,
-    with the commanded sequence overlaid so sync can be eyeballed."""
+    """Time-domain overview: what the recording actually contains, per axis,
+    with the commanded sequence segments marked."""
     segs = [
         ("pre-roll", 0.0, SEQ_MARKER_1_S),
         ("marker 1", SEQ_MARKER_1_S, SEQ_UP_START_S),
@@ -360,8 +370,8 @@ def make_general_visualization(accel, t0, clock, out_path):
         ("down-sweep", SEQ_DOWN_START_S, SEQ_TAIL_S),
         ("tail", SEQ_TAIL_S, SEQ_END_S),
     ]
-    fig, axes = plt.subplots(5, 1, figsize=(13, 11.5), sharex=True,
-                             gridspec_kw={"height_ratios": [0.32, 1, 1, 1, 1.6]})
+    fig, axes = plt.subplots(4, 1, figsize=(13, 7.5), sharex=True,
+                             gridspec_kw={"height_ratios": [0.32, 1, 1, 1]})
 
     # Dedicated segment ruler, so labels never collide with the traces.
     ruler = axes[0]
@@ -395,107 +405,28 @@ def make_general_visualization(accel, t0, clock, out_path):
     t_dec = (np.arange(n // dec) * dec + dec / 2) / FS
     for col, ax in zip((0, 1, 2), axes[1:4]):
         block = np.asarray(accel[:n, col], dtype=np.float32).reshape(-1, dec)
+        # Same default-cycle colour each axis gets in the all-axis overview, so
+        # AI1/AI2/AI3 read consistently across the two figures.
         ax.fill_between(t_dec, block.min(axis=1), block.max(axis=1),
-                        lw=0, label=CHANNELS[col])
+                        lw=0, color=f"C{col}", label=CHANNELS[col])
         ax.set_ylabel(f"{CHANNELS[col]}\n(m/s$^2$)")
         ax.grid(True, alpha=0.25, lw=0.6)
         for side in ("top", "right"):
             ax.spines[side].set_visible(False)
         ax.legend(frameon=False, loc="upper right", fontsize=8.5)
 
-    # Spectrogram of AI1 with the design frequency law overlaid. The colour
-    # limits are taken from the data's own distribution -- a fixed dB window
-    # saturates almost the whole plot for this record.
-    ax = axes[4]
-    nper = 4096
-    x = np.asarray(accel[:, 0], dtype=np.float64)
-    spec, freqs, _ = matplotlib.mlab.specgram(x, NFFT=nper, Fs=FS, noverlap=nper // 2)
-    spec_db = 10 * np.log10(spec + 1e-20)
-    vmin, vmax = np.percentile(spec_db, [40, 99.9])
-    ax.specgram(x, NFFT=nper, Fs=FS, noverlap=nper // 2, cmap="magma",
-                vmin=vmin, vmax=vmax)
-    f_line = np.logspace(0, 3, 600)
-    ax.plot(t0 + (SEQ_UP_START_S + t_of_f_up(f_line)) * clock, f_line,
-            color="#00E5FF", lw=1.1, ls="--", label="commanded law (up)")
-    ax.plot(t0 + (SEQ_DOWN_START_S + t_of_f_down(f_line)) * clock, f_line,
-            color="#7CFF00", lw=1.1, ls="--", label="commanded law (down)")
-    # 2 kHz, not 1.1 kHz: the strongest response in this record sits near
-    # 1.7-1.8 kHz, driven by harmonics of the commanded tone, and cropping at
-    # the sweep's top frequency would hide it entirely.
-    ax.set_ylim(0, 2000)
-    ax.set_ylabel("frequency (Hz)")
-    ax.set_xlabel("recording time (s)")
-    ax.legend(frameon=False, loc="upper left", fontsize=8.5, labelcolor="white")
+    axes[3].set_xlabel("recording time (s)")
 
     for ax in axes[1:]:
         for _, s0, _ in segs:
             ax.axvline(t0 + s0 * clock, color="#555555", lw=0.6, alpha=0.45)
     ruler.set_title("v2 chirp recording (Ftest.csv) -- full record, all axes, "
                     "with commanded sequence overlaid")
-    axes[4].set_xlim(0, accel.shape[0] / FS)
+    axes[3].set_xlim(0, accel.shape[0] / FS)
     fig.tight_layout()
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
     log(f"  saved {out_path.name}")
-
-
-def make_resonance_survey(accel, t0, clock, out_path):
-    """Peak-hold and mean spectra over the whole up-sweep, out to 9 kHz.
-
-    The Bode curves answer "what came back at the frequency I commanded". They
-    cannot answer "where does this rig actually resonate", because a stepper
-    drive is harmonic-rich: an odd harmonic of the commanded tone sweeps
-    through modes far above the 1 kHz sweep ceiling and rings them hard. This
-    figure is the absolute-frequency view that makes the Bode plots
-    interpretable, and it is the one to read when replacing the f_n
-    placeholder.
-    """
-    up0 = int((t0 + SEQ_UP_START_S * clock) * FS)
-    up1 = int((t0 + SEQ_MID_DWELL_S * clock) * FS)
-    nfft, hop = 8192, 4096
-    w = np.hanning(nfft)
-    freqs = np.fft.rfftfreq(nfft, 1.0 / FS)
-
-    fig, ax = plt.subplots(figsize=(12, 6.5))
-    band = freqs <= 9000
-    peaks_by_ch = {}
-    for col, name in CHANNELS.items():
-        x = np.asarray(accel[up0:up1, col], dtype=np.float64)
-        nseg = (len(x) - nfft) // hop
-        peak = np.zeros(len(freqs))
-        mean = np.zeros(len(freqs))
-        for i in range(nseg):
-            seg = x[i * hop:i * hop + nfft]
-            seg = seg - seg.mean()
-            sp = np.abs(np.fft.rfft(seg * w)) * 2.0 / w.sum()
-            np.maximum(peak, sp, out=peak)
-            mean += sp
-        mean /= max(nseg, 1)
-        peaks_by_ch[col] = (peak, mean)
-        ax.plot(freqs[band], peak[band], lw=1.1, label=f"{name} peak-hold")
-        ax.plot(freqs[band], mean[band], lw=0.9, alpha=0.45, ls="--",
-                label=f"{name} mean")
-
-    ax.axvspan(F_LO, F_HI, color="#4C72B0", alpha=0.10, lw=0,
-               label="commanded sweep band (1-1000 Hz)")
-    ax.axvline(F_N_HZ, color="#B00020", lw=1.1, ls=":",
-               label=f"$f_n$ placeholder ({F_N_HZ:g} Hz)")
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.set_xlim(20, 9000)
-    ax.set_xlabel("absolute frequency (Hz)")
-    ax.set_ylabel("acceleration magnitude (m/s$^2$)")
-    ax.set_title("Resonance survey -- up-sweep peak-hold spectrum "
-                 "(response at ALL frequencies, not just the commanded one)")
-    ax.grid(True, which="both", alpha=0.25, lw=0.6)
-    for side in ("top", "right"):
-        ax.spines[side].set_visible(False)
-    ax.legend(frameon=False, fontsize=8, ncol=2, loc="upper left")
-    fig.tight_layout()
-    fig.savefig(out_path, dpi=150)
-    plt.close(fig)
-    log(f"  saved {out_path.name}")
-    return freqs, peaks_by_ch
 
 
 def main():
@@ -543,9 +474,6 @@ def main():
     make_overview(freq_grid, {c: results[c][0] for c in CHANNELS}, floors,
                   PLOT_DIR / "bode_all_axes_overview.png")
     make_general_visualization(accel, t0, clock, PLOT_DIR / "recording_overview.png")
-    survey_freqs, survey = make_resonance_survey(
-        accel, t0, clock, PLOT_DIR / "resonance_survey.png")
-
     valid = np.isfinite(results[0][0])
     log(f"detector validity: {valid.sum()}/{len(freq_grid)} grid points; "
         f"lowest resolvable frequency = {freq_grid[valid][0]:.2f} Hz "
@@ -559,10 +487,6 @@ def main():
         up_mag_AI2=results[1][0], down_mag_AI2=results[1][1], floor_AI2=floors[1],
         up_mag_AI3=results[2][0], down_mag_AI3=results[2][1], floor_AI3=floors[2],
         t0_recording_s=t0, clock_ratio=clock, fs=FS,
-        survey_freqs=survey_freqs,
-        survey_peak_AI1=survey[0][0], survey_mean_AI1=survey[0][1],
-        survey_peak_AI2=survey[1][0], survey_mean_AI2=survey[1][1],
-        survey_peak_AI3=survey[2][0], survey_mean_AI3=survey[2][1],
     )
     log("saved bode_data.npz")
     log("done.")
