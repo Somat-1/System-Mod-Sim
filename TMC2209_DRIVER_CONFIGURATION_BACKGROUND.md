@@ -12,16 +12,39 @@ not* write.
 
 ## 1. Summary
 
-Two independent problems were found in the v4 campaign firmware.
+Three problems were found in the v4 campaign firmware. Two of them are the
+same mistake applied to two different registers.
 
 | # | Problem | Effect | Status |
 |---|---|---|---|
-| 1 | MicroPlyer interpolation left at its power-on default (enabled) | Every commanded microstep was smeared over the interval to the next step instead of moving discretely | Fixed: `intpol(false)` forced and verified |
-| 2 | `setMres()` could not distinguish a failed UART read from a real register value | Aborted a 41-minute run; could also have silently disabled the driver | Fixed: reads validated, write/verify retried |
+| 1 | MicroPlyer interpolation left at its power-on default (**enabled**) | Every commanded microstep was smeared over the interval to the next step instead of moving discretely | Fixed: `intpol(false)` forced and verified |
+| 2 | Chopper mode left at its power-on default (**StealthChop**) | Ran the whole campaign in the lower-fidelity voltage-mode chopper, when SpreadCycle was specified | Fixed: `en_spreadCycle(true)` + `TPWMTHRS(0)`, verified against `GCONF` *and* `DRV_STATUS` |
+| 3 | `setMres()` could not distinguish a failed UART read from a real register value | Aborted a 41-minute run; could also have silently disabled the driver | Fixed: reads validated, write/verify retried |
 
-**Only the v4 campaign was affected by problem 1.** Every other sketch in this
-repository already disables interpolation explicitly. The v2 chirp test is
-clean — see [section 5](#5-which-experiments-were-affected).
+Problems 1 and 2 share one root cause: **on the TMC2209 both of these
+defaults are the wrong setting for a microstep-fidelity measurement**, so the
+firmware's "configure nothing, stay neutral" philosophy actively selected
+them.
+
+| Register bit | Resets to | What "leave it alone" gives you |
+|---|---|---|
+| `GCONF` bit 2 `en_spreadCycle` | 0 | StealthChop |
+| `CHOPCONF` bit 28 `intpol` | 1 | MicroPlyer interpolation on |
+
+**Only the v4 campaign was affected by problems 1 and 2.** Every other sketch
+in this repository already forces SpreadCycle and disables interpolation
+explicitly — including `esp32_tmc2209_stepsize_sweep.ino`, which lives inside
+`v4/` itself. The v2 chirp test is clean — see
+[section 5](#5-which-experiments-were-affected).
+
+> The requirement was not missing from the project. `intpol(false)` and
+> `en_spreadCycle(true)` were both specified and implemented in the v4
+> step-size sweep sketch (commit `4fff5ed`). The campaign firmware was written
+> later and from scratch (commit `79229a0`) and did not carry either setting
+> across. `git log -S'intpol' -- "Microstepping Test Data/v4/"` shows the gap.
+> This is worth noting because it is a more likely failure than simple
+> omission: a second sketch for the same rig, written independently, silently
+> dropping the driver configuration the first one had established.
 
 **Problem 2 is a shared pattern** and the same latent hazard exists in the
 other sketches, including the chirp tests. See
@@ -127,10 +150,27 @@ At the trajectory rates the effect is far less visible — steps arrive fast
 enough that the interpolation interval is short and the smearing is small
 relative to the motion — but it is not zero, and it is not characterised.
 
+**The chopper mode compounds this.** Every affected run was also on
+StealthChop, whose voltage-mode PWM regulates coil current through an
+automatic amplitude loop rather than the per-cycle current regulation
+SpreadCycle uses. For a measurement whose entire subject is how accurately a
+commanded microstep is realised as a physical position, that is the wrong
+chopper — which is why every other sketch on this rig forces SpreadCycle. The
+two defects are not independent in their effect: interpolation distorted
+*when* the motion happened, StealthChop distorted *how accurately* the
+commanded microstep vector was realised.
+
 **Practical consequence:** v4 data recorded before 2026-09-10 is not directly
 comparable with data recorded after. The oscillation blocks should be
 considered invalid for step-response purposes. The trajectory blocks are more
-salvageable but carry an uncharacterised low-pass effect at the step level.
+salvageable but carry an uncharacterised low-pass effect at the step level and
+a different chopper.
+
+This includes the partial run in
+`v4/data/hardware_runs/mres_trajectory_live_20260910_165920.csv`, whose
+complete and internally clean MRES=1 sequence was nonetheless recorded under
+StealthChop. It is retained as the record of how the MRES fault was found, not
+as usable measurement data.
 
 ---
 
@@ -138,13 +178,13 @@ salvageable but carry an uncharacterised low-pass effect at the step level.
 
 Every sketch in the repository was audited for the interpolation call.
 
-| Sketch | Disables `intpol`? | Affected? |
-|---|---|---|
-| `ESP32S3_TMC2209_Chirp_Test.ino` | Yes — `intpol(false)`, line 113 | **No** |
-| `v2/scripts/esp32_v2_chirp_test.ino` | Yes — `intpol(false)`, line 472 | **No** |
-| `Microstepping Test Data/v2/.../run_identification_esp32_tmc2209.ino` | Yes — lines 239 and 283 | **No** |
-| `v4/ESP32_TMC2209_StepSize_Sweep/.../esp32_tmc2209_stepsize_sweep.ino` | Yes — line 237 | **No** |
-| `v4/scripts/esp32_v4_mres_trajectory_campaign.ino` | **No** (until 2026-09-10) | **Yes** |
+| Sketch | Forces SpreadCycle? | Disables `intpol`? | Affected? |
+|---|---|---|---|
+| `ESP32S3_TMC2209_Chirp_Test.ino` | Yes — line 112 | Yes — line 113 | **No** |
+| `v2/scripts/esp32_v2_chirp_test.ino` | Yes — line 464, plus `TPWMTHRS(0)` | Yes — line 472 | **No** |
+| `Microstepping Test Data/v2/.../run_identification_esp32_tmc2209.ino` | Yes — lines 238, 282 | Yes — lines 239, 283 | **No** |
+| `v4/ESP32_TMC2209_StepSize_Sweep/.../esp32_tmc2209_stepsize_sweep.ino` | Yes — line 236 | Yes — line 237 | **No** |
+| `v4/scripts/esp32_v4_mres_trajectory_campaign.ino` | **No** (until 2026-09-10) | **No** (until 2026-09-10) | **Yes** |
 
 ### The chirp tests are clean
 
@@ -164,8 +204,23 @@ The ordering is also correct: `intpol(false)` is issued *before* the
 `CHOPCONF` read-modify-write that sets MRES, and that read-modify-write
 preserves bit 28, so nothing re-enables it afterwards.
 
-**Conclusion: the v2 chirp test measurements are not contaminated by this
-defect.** The frequency-response data from those runs stands.
+**Conclusion: the v2 chirp test measurements are not contaminated by either
+defect.** The frequency-response data from those runs stands, and it ran under
+SpreadCycle with interpolation off as intended.
+
+### Consequence for the StealthChop repeat memo
+
+`Microstepping Test Data/v4/STEALTHCHOP_STALLGUARD_REPEAT_MEMO.md` defines the
+v4 campaign as the baseline that "must not change chopper mode", with a
+StealthChop + StallGuard version to follow as a separate dataset.
+
+Before 2026-09-10 that premise did not hold: the baseline *was already*
+StealthChop, so the two datasets would have differed only in StallGuard.
+Requirement 3 of that memo asks the repeat to "explicitly configure StealthChop
+and read back the relevant driver configuration rather than inferring the mode
+from motor sound" — the risk was understood precisely, and the baseline fell
+into it from the opposite direction. With the campaign now forcing SpreadCycle
+the memo's comparison is meaningful again.
 
 ### Why v4 was the odd one out
 
@@ -186,21 +241,41 @@ readback, including the ones being set to their default value.
 
 ## 6. The fix
 
-In `configureDriver()`:
+In `configureDriver()`, both settings forced and both verified:
 
 ```cpp
-driver.intpol(false);  // Powers up enabled; see header note.
+driver.en_spreadCycle(true);
+driver.TPWMTHRS(0);      // no velocity switchover back to StealthChop
+driver.intpol(false);
+
+const uint32_t gconf = driver.GCONF();
 const uint32_t chopconf = driver.CHOPCONF();
-if (((chopconf >> 28) & 1U) != 0U) {
-  Serial.printf("# INTPOL_DISABLE_FAILED,chopconf=0x%08lX\n", ...);
-  return false;   // refuses to start the campaign
+if (!((gconf >> 2) & 1U) || ((chopconf >> 28) & 1U)) {
+  Serial.println("# CHOPPER_CONFIG_FAILED,refusing_to_run");
+  return false;
+}
+// GCONF says what was asked for; DRV_STATUS says what the chopper is doing.
+if ((driver.DRV_STATUS() >> 30) & 1U) {
+  Serial.println("# STEALTHCHOP_STILL_ACTIVE,refusing_to_run");
+  return false;
 }
 ```
 
-The verification matters as much as the write. Returning `false` here makes
+`TPWMTHRS(0)` is the "suspenders" half, copied from the chirp sketches: it
+disables the velocity-dependent StealthChop switchover so no mode change can
+occur mid-run.
+
+**The verification matters as much as the write.** Returning `false` makes
 `configureDriver()` fail, which drives the firmware into its failure-blink state
 instead of starting a campaign. A run that reaches `CAMPAIGN_START` is therefore
-*proof* that interpolation was off, rather than an assumption that it was.
+*proof* of the configuration rather than an assumption about it.
+
+Note the two-level check on the mode. `GCONF` bit 2 confirms what was
+requested; `DRV_STATUS` bit 30 confirms what the chopper is actually doing.
+Checking only the former would repeat, one level down, the same mistake of
+trusting intent over observed state. The startup line
+`CHOPPER_CONFIG,gconf=…,chopconf=…,pwmconf=…` also puts the mode in the data
+file, so no future run has to be reconstructed from firmware source.
 
 ---
 

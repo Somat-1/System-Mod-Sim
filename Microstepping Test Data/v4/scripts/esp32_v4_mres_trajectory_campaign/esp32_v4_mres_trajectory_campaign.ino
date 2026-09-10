@@ -4,19 +4,31 @@
  * STEP GPIO5, DIR GPIO6, UART ESP_RX GPIO18 / ESP_TX GPIO17,
  * RGB LED GPIO48, EN/ENN externally grounded.
  *
- * Baseline motion only: this sketch does not configure StealthChop,
- * SpreadCycle, StallGuard, or CoolStep. It configures the UART interface,
- * current, and MRES required by the experiment, and explicitly disables
- * MicroPlyer interpolation.
+ * Baseline motion only: this sketch does not configure StallGuard or CoolStep.
+ * It configures the UART interface, current, and MRES required by the
+ * experiment, and forces SpreadCycle with MicroPlyer interpolation disabled.
  *
- * Interpolation is disabled deliberately rather than left alone. CHOPCONF
- * bit 28 (intpol) powers up SET on the TMC2209, so leaving it unconfigured
- * means interpolation is ON: every commanded microstep is expanded into 256
- * sub-steps and smeared across the interval to the next step. Measured on
- * 2026-09-10, that turned a commanded one-microstep move at MRES=1 into a
- * 13-count creep followed by the remaining 243 counts over the next second,
- * instead of a single clean 256-count move. That defeats the point of the
- * oscillation block, so intpol is now forced off.
+ * The chopper mode and interpolation are set explicitly and verified by
+ * readback rather than left alone, because on the TMC2209 both defaults are
+ * wrong for this measurement:
+ *
+ *   - GCONF bit 2 (en_spreadCycle) resets to 0, so an unconfigured driver
+ *     runs StealthChop. Its voltage-mode PWM with automatic amplitude
+ *     regulation gives lower microstep positional fidelity than SpreadCycle's
+ *     current-mode chopper, which is the quantity this experiment measures.
+ *   - CHOPCONF bit 28 (intpol) resets to 1, so an unconfigured driver
+ *     interpolates: every commanded microstep is expanded into 256 sub-steps
+ *     and smeared across the interval to the next step.
+ *
+ * Both defects were live in the 2026-09-10 16:59 run. Measured there, a
+ * commanded one-microstep move at MRES=1 produced a 13-count creep followed
+ * by the remaining 243 counts over the next second, instead of a single clean
+ * 256-count move, and DRV_STATUS reported stealth=1 throughout.
+ *
+ * configureDriver() now refuses to start the campaign unless GCONF, CHOPCONF
+ * and DRV_STATUS all confirm SpreadCycle active and interpolation off, so a
+ * run that reaches CAMPAIGN_START is proof of the configuration rather than
+ * an assumption about it.
  *
  * The first campaign starts automatically after preflight. Commands over USB
  * CDC remain available afterward: RUN (repeat), STATUS, ABORT.
@@ -252,15 +264,45 @@ bool configureDriver() {
   driver.ihold(driver.irun());
   driver.iholddelay(0);
   driver.TPOWERDOWN(0);
-  driver.intpol(false);  // Powers up enabled; see header note.
+
+  // Chopper mode and interpolation are both forced, both verified. Neither
+  // may be left at its power-on default: en_spreadCycle resets to 0
+  // (StealthChop) and intpol resets to 1 (MicroPlyer on), so "configure
+  // nothing" silently selects the two settings this experiment must not use.
+  // Belt and suspenders on the mode, matching the chirp sketches: the
+  // explicit enable, plus TPWMTHRS=0 so no velocity-dependent switchover
+  // back to StealthChop can occur mid-run.
+  driver.en_spreadCycle(true);
+  driver.TPWMTHRS(0);
+  driver.intpol(false);
+
+  const uint32_t gconf = driver.GCONF();
   const uint32_t chopconf = driver.CHOPCONF();
-  if (((chopconf >> 28) & 1U) != 0U) {
-    Serial.printf("# INTPOL_DISABLE_FAILED,chopconf=0x%08lX\n",
-                  static_cast<unsigned long>(chopconf));
+  const bool spreadCycleOn = ((gconf >> 2) & 1U) != 0U;
+  const bool interpolationOff = ((chopconf >> 28) & 1U) == 0U;
+  Serial.printf("# CHOPPER_CONFIG,gconf=0x%08lX,chopconf=0x%08lX,"
+                "pwmconf=0x%08lX,en_spreadcycle=%u,intpol=%u\n",
+                static_cast<unsigned long>(gconf),
+                static_cast<unsigned long>(chopconf),
+                static_cast<unsigned long>(driver.PWMCONF()),
+                static_cast<unsigned>(spreadCycleOn),
+                static_cast<unsigned>(!interpolationOff));
+  if (!spreadCycleOn || !interpolationOff) {
+    Serial.println("# CHOPPER_CONFIG_FAILED,refusing_to_run");
     return false;
   }
-  Serial.printf("# INTPOL_DISABLED,chopconf=0x%08lX\n",
-                static_cast<unsigned long>(chopconf));
+  // GCONF says what was asked for; DRV_STATUS bit 30 says what the chopper is
+  // actually doing. Check both, because this whole class of defect came from
+  // trusting intent over readback.
+  const uint32_t drvStatus = driver.DRV_STATUS();
+  const bool stealthActive = ((drvStatus >> 30) & 1U) != 0U;
+  Serial.printf("# CHOPPER_ACTIVE,drv_status=0x%08lX,stealth_bit=%u\n",
+                static_cast<unsigned long>(drvStatus),
+                static_cast<unsigned>(stealthActive));
+  if (stealthActive) {
+    Serial.println("# STEALTHCHOP_STILL_ACTIVE,refusing_to_run");
+    return false;
+  }
   for (uint8_t attempt = 0; attempt < 10; ++attempt) {
     if (driver.test_connection() == 0 && driver.version() == 0x21) {
       Serial.println("# TMC_UART_OK,version=0x21,rx=18,tx=17");

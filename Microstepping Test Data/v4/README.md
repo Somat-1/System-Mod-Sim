@@ -7,25 +7,44 @@ The live v4 firmware is
 It was compiled with USB CDC enabled, flashed to the ESP32-S3, and started
 automatically on 2026-09-07.
 
-This is a baseline motion/IDS run. It does **not** configure StealthChop,
-SpreadCycle, StallGuard, or CoolStep. The UART interface, motor current, and
-required MRES field are configured, and MicroPlyer interpolation is explicitly
-disabled. A separate future repeat with StealthChop and StallGuard is specified
-in [STEALTHCHOP_STALLGUARD_REPEAT_MEMO.md](STEALTHCHOP_STALLGUARD_REPEAT_MEMO.md).
+This is a baseline motion/IDS run. It does **not** configure StallGuard or
+CoolStep. The UART interface, motor current, and required MRES field are
+configured, and the chopper is forced to **SpreadCycle with MicroPlyer
+interpolation disabled**. A separate future repeat with StealthChop and
+StallGuard is specified in
+[STEALTHCHOP_STALLGUARD_REPEAT_MEMO.md](STEALTHCHOP_STALLGUARD_REPEAT_MEMO.md).
 
-### Interpolation is disabled, not left alone
+### Chopper mode and interpolation are forced, not left alone
 
-`CHOPCONF` bit 28 (`intpol`) powers up **set** on the TMC2209, so leaving it
-unconfigured means interpolation is *on*. Runs before 2026-09-10 were affected:
-every commanded microstep was expanded into 256 sub-steps and spread across the
-interval to the next step, so a commanded one-microstep move never appeared as a
-discrete step. Measured with the driver's own `MSCNT` register at MRES=1, a
-single commanded full step produced a 13-count move followed by the remaining
-243 counts creeping out over the next second. With `intpol` forced off the same
-command produces one clean 256-count move.
+Both of the TMC2209's relevant power-on defaults are wrong for this
+measurement, so neither may be left unconfigured:
 
-This affected every v4 block, not only the oscillations, so data recorded before
-2026-09-10 is not comparable with data recorded after.
+| Register bit | Resets to | Meaning if left alone |
+|---|---|---|
+| `GCONF` bit 2 `en_spreadCycle` | 0 | **StealthChop** — voltage-mode PWM with automatic amplitude regulation, lower microstep positional fidelity than SpreadCycle |
+| `CHOPCONF` bit 28 `intpol` | 1 | **MicroPlyer on** — each commanded microstep expanded into 256 sub-steps and smeared across the interval to the next step |
+
+"Configure nothing to keep the run neutral" therefore selects exactly the two
+settings this experiment must not use. Both defects were live in the
+2026-09-10 16:59 run, which was verified on the hardware to be running
+StealthChop (`GCONF=0x000001C0`, `DRV_STATUS` bit 30 `stealth=1`) with
+interpolation active.
+
+Measured with the driver's own `MSCNT` register at MRES=1, a single commanded
+full step produced a 13-count move followed by the remaining 243 counts
+creeping out over the next second. With `intpol` forced off the same command
+produces one clean 256-count move.
+
+`configureDriver()` now refuses to start the campaign unless `GCONF`,
+`CHOPCONF` and `DRV_STATUS` all confirm SpreadCycle active and interpolation
+off, and logs `CHOPPER_CONFIG` / `CHOPPER_ACTIVE` lines so the mode is recorded
+in the data rather than inferred.
+
+**Data recorded before 2026-09-10 ran under StealthChop with interpolation on
+and is not comparable with data recorded after.** This affected every block,
+not only the oscillations. The partial run in
+`data/hardware_runs/mres_trajectory_live_20260910_165920.csv` still carries the
+StealthChop configuration and should be treated as superseded.
 
 ## Verified hardware configuration
 
