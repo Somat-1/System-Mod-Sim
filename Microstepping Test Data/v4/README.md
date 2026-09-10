@@ -8,10 +8,24 @@ It was compiled with USB CDC enabled, flashed to the ESP32-S3, and started
 automatically on 2026-09-07.
 
 This is a baseline motion/IDS run. It does **not** configure StealthChop,
-SpreadCycle, StallGuard, CoolStep, or interpolation. Only the UART interface,
-motor current, and required MRES field are configured. A separate future repeat
-with StealthChop and StallGuard is specified in
-[STEALTHCHOP_STALLGUARD_REPEAT_MEMO.md](STEALTHCHOP_STALLGUARD_REPEAT_MEMO.md).
+SpreadCycle, StallGuard, or CoolStep. The UART interface, motor current, and
+required MRES field are configured, and MicroPlyer interpolation is explicitly
+disabled. A separate future repeat with StealthChop and StallGuard is specified
+in [STEALTHCHOP_STALLGUARD_REPEAT_MEMO.md](STEALTHCHOP_STALLGUARD_REPEAT_MEMO.md).
+
+### Interpolation is disabled, not left alone
+
+`CHOPCONF` bit 28 (`intpol`) powers up **set** on the TMC2209, so leaving it
+unconfigured means interpolation is *on*. Runs before 2026-09-10 were affected:
+every commanded microstep was expanded into 256 sub-steps and spread across the
+interval to the next step, so a commanded one-microstep move never appeared as a
+discrete step. Measured with the driver's own `MSCNT` register at MRES=1, a
+single commanded full step produced a 13-count move followed by the remaining
+243 counts creeping out over the next second. With `intpol` forced off the same
+command produces one clean 256-count move.
+
+This affected every v4 block, not only the oscillations, so data recorded before
+2026-09-10 is not comparable with data recorded after.
 
 ## Verified hardware configuration
 

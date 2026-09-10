@@ -5,6 +5,8 @@ This folder is an Arduino sketch folder. See the v4 root
 command-rate preflight, duration, build/upload commands, and safety notes.
 
 The sketch starts once automatically after boot. It deliberately leaves
-StealthChop, SpreadCycle, StallGuard, CoolStep, and interpolation untouched.
-It configures MRES over the verified TMC2209 UART connection and drives motion
+StealthChop, SpreadCycle, StallGuard, and CoolStep untouched, but explicitly
+disables MicroPlyer interpolation, which powers up enabled and would otherwise
+smear every commanded microstep across the interval to the next one. It
+configures MRES over the verified TMC2209 UART connection and drives motion
 through STEP GPIO 5 and DIR GPIO 6 while EN/ENN is externally grounded.

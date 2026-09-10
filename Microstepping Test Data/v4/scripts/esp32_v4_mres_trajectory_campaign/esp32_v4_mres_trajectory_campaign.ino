@@ -5,8 +5,18 @@
  * RGB LED GPIO48, EN/ENN externally grounded.
  *
  * Baseline motion only: this sketch does not configure StealthChop,
- * SpreadCycle, StallGuard, CoolStep, or interpolation. It configures only
- * the UART interface, current, and MRES required by the experiment.
+ * SpreadCycle, StallGuard, or CoolStep. It configures the UART interface,
+ * current, and MRES required by the experiment, and explicitly disables
+ * MicroPlyer interpolation.
+ *
+ * Interpolation is disabled deliberately rather than left alone. CHOPCONF
+ * bit 28 (intpol) powers up SET on the TMC2209, so leaving it unconfigured
+ * means interpolation is ON: every commanded microstep is expanded into 256
+ * sub-steps and smeared across the interval to the next step. Measured on
+ * 2026-09-10, that turned a commanded one-microstep move at MRES=1 into a
+ * 13-count creep followed by the remaining 243 counts over the next second,
+ * instead of a single clean 256-count move. That defeats the point of the
+ * oscillation block, so intpol is now forced off.
  *
  * The first campaign starts automatically after preflight. Commands over USB
  * CDC remain available afterward: RUN (repeat), STATUS, ABORT.
@@ -173,21 +183,62 @@ bool commandOneFullStep(int direction) {
   return !pollAbort();
 }
 
+// TMCStepper's UART read gives up after max_retries (2) and then returns 0
+// with CRCerror set. A bare CHOPCONF read is therefore ambiguous: 0 could be
+// the register contents or a dead transaction. Two things go wrong if that is
+// not checked. A failed *readback* looks like MRES code 0 and aborts the
+// campaign, which is what ended the 2026-09-10 17:09 run one block into
+// MRES=4. Worse, a failed *initial* read makes the read-modify-write below
+// store toff=0, silently disabling the driver while the readback still
+// reports the MRES that was asked for. So validate every read: CRC clean, and
+// toff non-zero, which is always true here because configureDriver sets it.
+bool readChopconfChecked(uint32_t &value) {
+  for (uint8_t attempt = 0; attempt < 5; ++attempt) {
+    const uint32_t candidate = driver.CHOPCONF();
+    if (!driver.CRCerror && (candidate & 0x0FUL) != 0UL) {
+      value = candidate;
+      return true;
+    }
+    delay(5);
+  }
+  return false;
+}
+
 bool setMres(uint16_t mres) {
   uint8_t code = 8;
   for (uint16_t value = mres; value > 1; value >>= 1) --code;
   constexpr uint32_t MRES_MASK = 0x0F000000UL;
-  uint32_t chopconf = driver.CHOPCONF();
-  driver.CHOPCONF((chopconf & ~MRES_MASK) |
-                  (static_cast<uint32_t>(code) << 24));
-  const uint8_t readback = (driver.CHOPCONF() & MRES_MASK) >> 24;
-  if (readback != code) {
-    Serial.printf("# MRES_READBACK_FAILED,wrote=%u,read=%u\n", code, readback);
-    return false;
+  for (uint8_t attempt = 1; attempt <= 5; ++attempt) {
+    uint32_t chopconf = 0;
+    if (!readChopconfChecked(chopconf)) {
+      Serial.printf("# MRES_READ_RETRY,attempt=%u,stage=pre_write\n", attempt);
+      delay(10);
+      continue;
+    }
+    driver.CHOPCONF((chopconf & ~MRES_MASK) |
+                    (static_cast<uint32_t>(code) << 24));
+    uint32_t verify = 0;
+    if (!readChopconfChecked(verify)) {
+      Serial.printf("# MRES_READ_RETRY,attempt=%u,stage=readback\n", attempt);
+      delay(10);
+      continue;
+    }
+    const uint8_t readback = (verify & MRES_MASK) >> 24;
+    if (readback == code) {
+      currentMres = mres;
+      Serial.printf("# MRES_OK,mres=%u,code=%u,attempt=%u,chopconf=0x%08lX\n",
+                    mres, code, attempt,
+                    static_cast<unsigned long>(verify));
+      return true;
+    }
+    Serial.printf("# MRES_MISMATCH_RETRY,attempt=%u,wrote=%u,read=%u,"
+                  "chopconf=0x%08lX\n",
+                  attempt, code, readback,
+                  static_cast<unsigned long>(verify));
+    delay(10);
   }
-  currentMres = mres;
-  Serial.printf("# MRES_OK,mres=%u,code=%u\n", mres, code);
-  return true;
+  Serial.printf("# MRES_READBACK_FAILED,wrote=%u,attempts=5\n", code);
+  return false;
 }
 
 bool configureDriver() {
@@ -201,6 +252,15 @@ bool configureDriver() {
   driver.ihold(driver.irun());
   driver.iholddelay(0);
   driver.TPOWERDOWN(0);
+  driver.intpol(false);  // Powers up enabled; see header note.
+  const uint32_t chopconf = driver.CHOPCONF();
+  if (((chopconf >> 28) & 1U) != 0U) {
+    Serial.printf("# INTPOL_DISABLE_FAILED,chopconf=0x%08lX\n",
+                  static_cast<unsigned long>(chopconf));
+    return false;
+  }
+  Serial.printf("# INTPOL_DISABLED,chopconf=0x%08lX\n",
+                static_cast<unsigned long>(chopconf));
   for (uint8_t attempt = 0; attempt < 10; ++attempt) {
     if (driver.test_connection() == 0 && driver.version() == 0x21) {
       Serial.println("# TMC_UART_OK,version=0x21,rx=18,tx=17");
