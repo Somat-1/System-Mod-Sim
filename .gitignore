@@ -12,12 +12,20 @@ Rev 4/lugre_friction/Rev 4.2/rendered_assets/npz/stepping_rev42_and_frictionless
 Rev 4/lugre_friction/Rev 4.2/rendered_assets/npz/stepping_0p3um_settled.npz
 Microstepping Test Data/v3/data/raw_local/SteppingSequenceID.csv
 
-# Raw Dewesoft chirp-test hardware export (~2.9 GB), same local-only policy
-# as above. Not regenerable -- keep a backup of it outside git.
+# Raw Dewesoft chirp-test hardware exports, same local-only policy as above.
+# NOT regenerable -- keep backups of these outside git.
+#   tempTVAl.csv : v1 chirp campaign (~2.9 GB)
+#   v2/Ftest.csv : v2 chirp campaign (744 MB, 10.9 M rows, 3 accel axes @ 20 kHz)
 ESP32S3_TMC2209_Chirp_Test/tempTVAl.csv
+ESP32S3_TMC2209_Chirp_Test/v2/Ftest.csv
+
+# Parsed .npy cache of Ftest.csv (~217 MB), derived data rather than source.
+# Rebuilt in ~60 s by v2/analysis/scripts/cache_ftest.py.
+ESP32S3_TMC2209_Chirp_Test/v2/analysis/cache/
 
 # OS/tooling noise, not source.
 Thumbs.db
+desktop.ini
 __pycache__/
 *.pyc
 
