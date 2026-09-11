@@ -31,3 +31,15 @@ __pycache__/
 
 # Local scratch work and hardware runners that must never be committed.
 /temp/
+
+# v3 chirp repeat run (2026-09-10). Same local-only policy as v2/Ftest.csv:
+# the .dxd is a direct Dewesoft hardware capture and is NOT regenerable --
+# keep a backup outside git. The CSV is its export, the cache is derived.
+ESP32S3_TMC2209_Chirp_Test/v3/Ftest2.dxd
+ESP32S3_TMC2209_Chirp_Test/v3/Ftest2.csv
+ESP32S3_TMC2209_Chirp_Test/v3/analysis/cache/
+
+# v4 EL5101 IDS captures: large raw hardware exports, local-only like the
+# other captures. NOT regenerable -- keep backups outside git.
+Microstepping Test Data/v4/data/hardware_runs/TMC2209ExpRun.csv
+Microstepping Test Data/v4/data/hardware_runs/TMCStepping.csv
