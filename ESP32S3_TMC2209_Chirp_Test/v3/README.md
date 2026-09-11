@@ -103,7 +103,7 @@ python "v3/analysis/scripts/process_chirp_bode_v3.py"
 ```
 
 Output lands in `v3/analysis/plots/`: per-axis Bode magnitude plots (raw linear
-and log y, f²-normalised, transmissibility), an all-axis overview,
+and log y, f²-normalised log y), an all-axis overview,
 `recording_overview.png`, and `bode_data.npz` with the curves — the same
 deliverable set as v2.
 

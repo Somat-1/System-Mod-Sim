@@ -3,8 +3,8 @@
 Same deliverable as the v1 analysis (analysis/scripts/process_chirp_bode.py):
 per-axis Bode magnitude plots, an all-axis overview (f^2-normalized, log y)
 and a .npz of the curves. Raw magnitude is rendered on both linear and log y;
-the f^2-normalized and transmissibility views span several decades and are
-produced on log y only. Three things about the v2 design make the v1 *method*
+the f^2-normalized view spans several decades and is produced on log y only.
+Three things about the v2 design make the v1 *method*
 inapplicable, though, and each is handled differently here:
 
 1. **Timing comes from the sync markers, not a ridge fit.** v1 had no trigger
@@ -24,20 +24,12 @@ inapplicable, though, and each is handled differently here:
    tapers amplitude to 10% at f_n but never stops commanding, so the band is
    real data and is NOT masked -- it is shaded to mark reduced drive.
 
-That third point generalizes into the main analysis upgrade over v1. Because
-the commanded amplitude is known in closed form at every frequency, the
-response can be divided by it to give a genuine transfer function rather than a
-bare response curve. This matters more than it sounds: the step-rate clamp
-(200 kHz / (2*pi*f*MRES)) starts binding at 663 Hz and rolls the commanded
-amplitude off as 1/f above there (3.00 -> 1.99 full steps by 1 kHz), so a raw
-plot shows a ~34% high-frequency droop that belongs to the *excitation*, not to
-the mechanism. The `transmissibility` variant divides it out; `raw` and
-`f2norm` are kept for direct visual comparison against the v1 plots.
-
-Units: the DAQ channels are acceleration (m/s^2) and the command is a
-displacement (full steps). Dividing acceleration by (2*pi*f)^2 converts to
-displacement, so `transmissibility` is dimensionless
-(displacement out / displacement commanded).
+The step-rate clamp (200 kHz / (2*pi*f*MRES)) starts binding at 663 Hz and
+rolls the commanded amplitude off as 1/f above there (3.00 -> 1.99 full steps
+by 1 kHz), so a raw plot shows a ~34% high-frequency droop that belongs to the
+excitation, not to the mechanism. The standard outputs intentionally retain
+only raw and f2norm; commanded amplitude remains available in bode_data.npz
+for any later normalization.
 
 Reads the .npy cache written by cache_ftest.py, not the 744 MB CSV directly.
 """
@@ -220,8 +212,8 @@ def detector_window_s(freq, cycles=20.0):
 
     The second is what a flat cap gets wrong at the bottom of the band: v1's
     ceiling is shorter than a single cycle below ~1.7 Hz, so the "magnitude"
-    there is a fragment of a cycle -- which, once divided by (2*pi*f)^2 for
-    transmissibility, inflates into a spurious low-frequency peak. The smear
+    there is a fragment of a cycle -- which, after f^2 normalization,
+    inflates into a spurious low-frequency peak. The smear
     limit is derived per segment from the actual law: df/dt = f*ln(60)/120 in
     the log branch (so the limit is a constant 1.76 s), and 940/120 = 7.833
     Hz/s in the linear branch.
@@ -291,25 +283,21 @@ def _decorate(ax, ylabel, title, yscale):
     ax.legend()
 
 
-# Only the raw magnitude is rendered on both y-scales. The f^2-normalised and
-# transmissibility views span several decades and are only legible on log y,
-# so their linear-y counterparts are not produced.
+# Only the raw magnitude is rendered on both y-scales. The f^2-normalised view
+# spans several decades and is only legible on log y.
 VARIANTS = {
     "raw": ("linear", "log"),
     "f2norm": ("log",),
-    "transmissibility": ("log",),
 }
 
 
 def transform(variant, freq_grid, mag):
-    """Return (y, ylabel) for one of the three magnitude conventions."""
+    """Return (y, ylabel) for a supported magnitude convention."""
     if variant == "raw":
         return mag, "acceleration magnitude (m/s$^2$)"
     if variant == "f2norm":
         return mag / freq_grid ** 2, "acceleration / f$^2$  (m/s$^2$ per Hz$^2$)"
-    disp_mm = mag / (2 * np.pi * freq_grid) ** 2 * 1000.0
-    cmd_mm = commanded_amplitude_full_steps(freq_grid) * FULL_STEP_MM
-    return disp_mm / cmd_mm, "displacement transmissibility (out/commanded)"
+    raise ValueError(f"unsupported plot variant: {variant}")
 
 
 def make_bode_plots(freq_grid, up_mag, down_mag, floor, out_prefix, title_prefix,
@@ -324,17 +312,7 @@ def make_bode_plots(freq_grid, up_mag, down_mag, floor, out_prefix, title_prefix
             ax.plot(freq_grid, down_y, label="down sweep (1000->1 Hz)", lw=1.2,
                     alpha=0.8)
             _decorate(ax, ylabel, f"{title_prefix} -- {variant}, {yscale} y-scale", yscale)
-            if variant == "transmissibility":
-                # Measured on this record: the response dips only ~1.3x across
-                # the notch where the command dips 10x, so dividing by the
-                # commanded amplitude over-corrects and manufactures a peak.
-                # See the module docstring / README note on the presliding regime.
-                ax.annotate(
-                    "normalisation unreliable in the notch band:\n"
-                    "response does not scale with commanded amplitude here",
-                    xy=(F_N_HZ, 0.97), xycoords=("data", "axes fraction"),
-                    xytext=(0, -28), textcoords="offset points",
-                    ha="center", va="top", fontsize=7.5, color="#B00020")
+
             fig.tight_layout()
             target = out_dir if out_dir is not None else PLOT_DIR
             target.mkdir(parents=True, exist_ok=True)
