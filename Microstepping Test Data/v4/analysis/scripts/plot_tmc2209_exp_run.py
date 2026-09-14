@@ -19,7 +19,8 @@ import matplotlib.pyplot as plt
 
 from ids_common import (ANALYSIS_DIR, RUNS_DIR, C_MEASURED, C_COMMANDED,
                         C_INK, C_MUTED, apply_style, load_ids,
-                        plot_full_capture, decimate_minmax)
+                        plot_full_capture, decimate_minmax,
+                        still_mask, ramp_extent)
 
 OUT_DIR = ANALYSIS_DIR / "tmc2209_exp_run"
 CSV = RUNS_DIR / "TMC2209ExpRun.csv"
@@ -103,34 +104,52 @@ def main():
     plt.close(fig)
     print("wrote trajectories_overview.png")
 
-    # 3. Per-trajectory montage: 24 out-and-back legs.
+    # 3. Per-trajectory montage: 24 out-and-back legs, full extent.
+    #
+    # find_trajectories returns only the part of each ramp above the detection
+    # threshold, so plotting that span alone cuts both ends off mid-ramp. Walk
+    # out to where motion actually started and stopped, then show a second of
+    # the dwell either side, and report the real travel (apex minus the resting
+    # level) rather than the range inside the clipped window.
+    still = still_mask(pos, meta["dt_s"])
     if spans:
         n = len(spans)
         ncol = 6
         nrow = int(np.ceil(n / ncol))
-        fig, axes = plt.subplots(nrow, ncol, figsize=(3.0 * ncol, 2.3 * nrow),
+        fig, axes = plt.subplots(nrow, ncol, figsize=(3.2 * ncol, 2.5 * nrow),
                                  squeeze=False)
         for i, ax in enumerate(axes.ravel()):
             if i >= n:
                 ax.axis("off")
                 continue
-            s, _apex, e = spans[i]
-            pad = int(2.0 / meta["dt_s"])
-            a, b = max(0, s - pad), min(pos.size - 1, e + pad)
-            ax.plot(t[a:b] - t[s], pos_mm[a:b], color=C_MEASURED, lw=0.7)
-            ax.axhline(0.0, color=C_MUTED, lw=0.6, ls=":")
-            peak = pos_mm[s:e].max() - pos_mm[s:e].min()
-            dur = (e - s) * meta["dt_s"]
-            ax.set_title(f"#{i+1}  ·  {peak:.2f} mm  ·  {dur:.0f} s",
-                         loc="left", fontsize=9)
+            s0, apex, e0 = spans[i]
+            a, b = ramp_extent(still, s0, e0, meta["dt_s"], pad_s=1.0)
+            seg_still = still[a:b]
+            rest = (float(np.median(pos_mm[a:b][seg_still]))
+                    if seg_still.sum() > 50 else float(np.min(pos_mm[a:b])))
+            travel = pos_mm[apex] - rest
+
+            ax.plot(t[a:b] - t[a], pos_mm[a:b], color=C_MEASURED, lw=0.8)
+            ax.axhline(rest, color=C_MUTED, lw=0.7, ls=":")
+            ax.axhline(rest + TRAJECTORY_MM, color=C_COMMANDED, lw=0.9,
+                       ls="--", alpha=0.8)
+            mode = "D" if (i % 6) < 3 else "I"
+            rate = ["slow", "mod", "fast"][i % 3]
+            ax.set_title(f"#{i+1}  MRES {MRES_VALUES[i//6]}  {mode}·{rate}"
+                         f"\n{travel:.3f} mm  ·  {(b-a)*meta['dt_s']:.0f} s",
+                         loc="left", fontsize=8.5)
             ax.tick_params(labelsize=7)
+            ax.set_ylim(rest - 2.0, rest + TRAJECTORY_MM + 2.0)
             if i % ncol == 0:
                 ax.set_ylabel("Position [mm]", fontsize=8)
             if i >= n - ncol:
                 ax.set_xlabel("Time in block [s]", fontsize=8)
-        fig.suptitle("TMC2209ExpRun — every detected 25 mm out-and-back leg",
+        fig.suptitle("TMC2209ExpRun — every 25 mm out-and-back leg, full ramp "
+                     "plus 1 s of dwell either side"
+                     "\ndotted = resting level, dashed = commanded 25 mm; "
+                     "D = DIRECT, I = INDIVIDUAL",
                      x=0.005, ha="left", fontsize=12, fontweight="semibold")
-        fig.tight_layout(rect=(0, 0, 1, 0.96))
+        fig.tight_layout(rect=(0, 0, 1, 0.95))
         fig.savefig(OUT_DIR / "trajectory_montage.png", dpi=150,
                     bbox_inches="tight")
         plt.close(fig)

@@ -144,3 +144,48 @@ def plot_full_capture(t, pos_um, meta, out_path, title, subtitle=None,
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
     return out_path
+
+
+def still_mask(pos_um, dt_s, win_s=0.050, thresh_um_s=20.0):
+    """Boolean mask of "axis is stopped", from a windowed slope.
+
+    Sample-to-sample slope is useless on this data: 3 nm of encoder noise over
+    a 1 ms sample is 4.5 um/s of pure jitter, which shreds every dwell into
+    fragments. Differencing over 50 ms drops the noise contribution to about
+    0.1 um/s while the slowest commanded ramp is still 275 um/s.
+    """
+    w = max(1, int(round(win_s / dt_s)))
+    fwd = np.empty_like(pos_um)
+    fwd[:-w] = np.abs(pos_um[w:] - pos_um[:-w]) / (w * dt_s)
+    fwd[-w:] = fwd[-w - 1]
+    bwd = np.empty_like(pos_um)
+    bwd[w:] = fwd[:-w]
+    bwd[:w] = fwd[0]
+    return np.minimum(fwd, bwd) < thresh_um_s
+
+
+def ramp_extent(still, s0, e0, dt_s, pad_s=1.0, settle_s=0.20, max_reach_s=60.0):
+    """Full extent of a ramp: from where motion began to where it ended.
+
+    A detection span thresholded part-way up the ramp clips both ends, so walk
+    outward from it until the axis has been stopped for `settle_s`, then take
+    `pad_s` more so the dwell either side is visible.
+    """
+    n = still.size
+    need = max(1, int(settle_s / dt_s))
+    reach = int(max_reach_s / dt_s)
+
+    a = int(s0)
+    lo = max(0, a - reach)
+    while a > lo:
+        if still[max(0, a - need):a].all():
+            break
+        a -= 1
+    b = int(e0)
+    hi = min(n - 1, b + reach)
+    while b < hi:
+        if still[b:min(n, b + need)].all():
+            break
+        b += 1
+    pad = int(pad_s / dt_s)
+    return max(0, a - pad), min(n - 1, b + pad)
