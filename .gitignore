@@ -41,5 +41,9 @@ Microstepping Test Data/v4/data/hardware_runs/TMCStepping.csv
 # hardware exports above. NOT regenerable -- keep a backup outside git.
 Microstepping Test Data/v5/MREStesting.csv
 
+# v6 EL5101 full-campaign capture: same local-only policy as the other
+# hardware exports above. NOT regenerable -- keep a backup outside git.
+Microstepping Test Data/v6/EXPrun.csv
+
 # Local v3 smoothing prototype and its generated outputs.
 /Microstepping Test Data/v3/temp_smoothed_curve_fit/
