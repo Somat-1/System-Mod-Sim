@@ -1,0 +1,85 @@
+{
+  "mres": 16,
+  "source": "\\\\MULT-FP01.hitdom.lan\\project2\\Internships\\Tomas Valentinas\\Sytem Mod & Sim\\Microstepping Test Data\\v6\\EXPrun.csv",
+  "sample_period_ms": 1.0,
+  "sample_rate_hz": 1000.0,
+  "oscillation": {
+    "reference": {
+      "method": "measurement-aligned piecewise-constant plateaus",
+      "seed_method": "derived from marker timing (osc0=576.613s, period=2.0035s)",
+      "median_despike_window_ms": 9.0,
+      "edge_refinement": "maximum local encoder slope within 0.35 s of seed",
+      "plateau_estimator": "median, 0.2 s guard from each edge"
+    },
+    "dynamic": {
+      "method": "centered median despike plus Gaussian, light pass over the whole block (overshoot/ring-down preserved)",
+      "median_despike_window_ms": 3.0,
+      "gaussian_sigma_ms": 2.0
+    },
+    "n_cycles": 15
+  },
+  "trajectory_legs": {
+    "reference": {
+      "method": "centered median despike plus Gaussian smoother (idealized mean trend)",
+      "median_window_ms": 9.0,
+      "gaussian_sigma_ms": 20.0
+    },
+    "dynamic": {
+      "method": "centered median despike plus Gaussian, both parameters scaled per leg to a fraction of that leg's own commanded step interval (individual microsteps preserved)",
+      "median_frac_of_step_interval": 0.25,
+      "sigma_frac_of_step_interval": 0.15,
+      "median_bounds_ms": [
+        1.0,
+        9.0
+      ],
+      "sigma_bounds_ms": [
+        0.5,
+        5.0
+      ],
+      "params_by_leg_ms": {
+        "D-slow": {
+          "median_ms": 1.0,
+          "sigma_ms": 0.5
+        },
+        "D-mod": {
+          "median_ms": 1.0,
+          "sigma_ms": 0.5
+        },
+        "D-fast": {
+          "median_ms": 1.0,
+          "sigma_ms": 0.5
+        },
+        "I-slow": {
+          "median_ms": 1.0,
+          "sigma_ms": 0.5
+        },
+        "I-mod": {
+          "median_ms": 1.0,
+          "sigma_ms": 0.5
+        },
+        "I-fast": {
+          "median_ms": 1.0,
+          "sigma_ms": 0.5
+        }
+      }
+    },
+    "phase": "zero",
+    "legs": [
+      "D-slow",
+      "D-mod",
+      "D-fast",
+      "I-slow",
+      "I-mod",
+      "I-fast"
+    ]
+  },
+  "boundary_handling": "each block (oscillation, each leg) fitted independently",
+  "outputs": {
+    "oscillation_overlay": "oscillation_fit_overlay.png",
+    "oscillation_zoom": "oscillation_microstep_zoom.png",
+    "trajectory_overlay": "trajectory_fits_overlay.png",
+    "trajectory_apex_zoom": "trajectory_fits_apex_zoom.png/.svg",
+    "trajectory_midramp_zoom": "trajectory_fits_midramp_zoom.png/.svg",
+    "arrays": "fitted_blocks.npz"
+  }
+}
