@@ -27,7 +27,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from run_settling_dedicated_controller import (  # noqa: E402
+from dedicated_controller_support import (  # noqa: E402
     AXIS,
     Clock,
     CsvEventLog,
@@ -39,7 +39,7 @@ from run_settling_dedicated_controller import (  # noqa: E402
     MARKER_SETTLE_S,
     RunContext,
     SerialTransport,
-    SettlingRunner,
+    DedicatedControllerRunner,
     Transport,
     build_parser as build_base_parser,
     validate_args,
@@ -68,7 +68,8 @@ OSCILLATION_DURATION_S = (
 )
 OSCILLATION_MOVE_RATE_FULL_STEPS_S = 250.0
 
-TRAJECTORY_ENDPOINT_DWELL_S = 1.0
+TRAJECTORY_ENDPOINT_DWELL_S = 2.0
+EXPERIMENT_SEPARATION_S = 10.0
 CAMPAIGN_LEAD_IN_S = 2.0
 CAMPAIGN_TAIL_S = 2.0
 
@@ -121,9 +122,14 @@ def planned_campaign_duration_s() -> float:
         + 2.0 * TRAJECTORY_ENDPOINT_DWELL_S
         for rate in TRAJECTORY_RATES_FULL_STEPS_S
     )
+    separation_count = (
+        len(MRES_VALUES) * 2 * len(TRAJECTORY_RATES_FULL_STEPS_S)
+        + len(MRES_VALUES) - 1
+    )
     return (
         CAMPAIGN_LEAD_IN_S + marker_s + oscillation_s
-        + trajectories_s + CAMPAIGN_TAIL_S
+        + trajectories_s + separation_count * EXPERIMENT_SEPARATION_S
+        + CAMPAIGN_TAIL_S
     )
 
 
@@ -135,7 +141,7 @@ class ThroughputResult:
     supported: bool
 
 
-class CampaignRunner(SettlingRunner):
+class CampaignRunner(DedicatedControllerRunner):
     def __init__(self, *args: object, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
         self.marker_index = 0
@@ -153,6 +159,7 @@ class CampaignRunner(SettlingRunner):
 
     def run_oscillation(self, mres: int) -> None:
         label = f'OSCILLATION_MRES_{mres}_15CYCLES_30S'
+        start_position_rev = self.ideal_position_rev
         self.next_marker(label)
         with self.block(label):
             self.configure_speed(
@@ -186,7 +193,32 @@ class CampaignRunner(SettlingRunner):
             self.log.log(
                 'OSCILLATION_END', **self.context.fields(), label=label
             )
+        if self.ideal_position_rev != start_position_rev:
+            raise RuntimeError(
+                f'{label} net position changed from {start_position_rev} '
+                f'to {self.ideal_position_rev} rev'
+            )
         self.assert_origin(label)
+
+    def experiment_separation(self, next_label: str) -> None:
+        previous_block = self.context.block
+        self.context.block = f'SEPARATION_BEFORE_{next_label}'
+        try:
+            self.log.log(
+                'SEPARATION_START', **self.context.fields(),
+                label=next_label,
+                detail=f'duration_s={EXPERIMENT_SEPARATION_S:g}',
+            )
+            self.dwell(
+                EXPERIMENT_SEPARATION_S,
+                f'before_{next_label}',
+            )
+            self.log.log(
+                'SEPARATION_END', **self.context.fields(),
+                label=next_label,
+            )
+        finally:
+            self.context.block = previous_block
 
     def _run_direct_leg(self, direction: int, rate: float, label: str) -> None:
         full_steps = direction * TRAJECTORY_FULL_STEPS
@@ -391,6 +423,10 @@ class CampaignRunner(SettlingRunner):
         for run_index, mres in enumerate(MRES_VALUES, start=1):
             self.check_cancelled()
             self.assert_origin(f'before MRES {mres}')
+            if run_index > 1:
+                self.experiment_separation(
+                    f'CONFIG_{run_index:02d}_MRES_{mres}'
+                )
             self.context.run_index = run_index
             self.context.mres = mres
             self.context.current = CURRENT_NAME
@@ -412,6 +448,10 @@ class CampaignRunner(SettlingRunner):
                 for rate_name, rate in zip(
                     TRAJECTORY_RATE_NAMES, TRAJECTORY_RATES_FULL_STEPS_S
                 ):
+                    next_label = trajectory_block_name(
+                        mres, mode, rate_name, rate
+                    )
+                    self.experiment_separation(next_label)
                     if mode == 'direct':
                         self.run_direct_trajectory(mres, rate_name, rate)
                     else:
@@ -487,7 +527,12 @@ def main() -> int:
                 f'the {RECORDING_LIMIT_S / 60.0:.0f} min recording limit '
                 f'after the {PLANNED_MARGIN_S / 60.0:.0f} min safety margin.'
             )
-        runner.initialise_session(args)
+        runner.initialise_session(
+            args,
+            initial_mres=MRES_VALUES[0],
+            current_name=CURRENT_NAME,
+            current_peak_ma=CURRENT_PEAK_MA,
+        )
         if not args.skip_throughput_preflight:
             runner.run_throughput_preflight()
             runner.require_campaign_throughput()

@@ -15,3 +15,9 @@ microstep smeared across the interval to the next one). See the v4 root
 
 It configures MRES over the verified TMC2209 UART connection and drives motion
 through STEP GPIO 5 and DIR GPIO 6 while EN/ENN is externally grounded.
+
+The source for the next run includes a 2 s dwell at the outbound endpoint and
+a second 2 s dwell after each return, a 10 s stationary separation before each
+new velocity experiment and between MRES configurations, and a position check
+that requires every microstep oscillation block to finish exactly where it
+started. Recompile and flash this revised sketch before the next live run.

@@ -1,27 +1,10 @@
 #!/usr/bin/env python3
-"""v4: settling-error characterization on the EVO dedicated controller.
+"""Reusable EVO dedicated-controller infrastructure for the v4 campaign.
 
 Protocol: ../../v2/docs/Stepper Motor Controller Command list.pdf.
-Infrastructure (Transport/Clock/CsvEventLog/RunContext, block/dwell/move_*/
-run_marker/assert_origin conventions) is carried over unchanged from
-../../v3/scripts/run_identification_dedicated_controller.py -- that
-script's D-block campaign varies commanded RATE at a fixed move structure
-to study tracking; this one holds rate fixed and varies commanded
-DISTANCE, and looks at what happens AFTER each move ends (overshoot,
-ringing, creep) rather than during it.
-
-Each distance is tested as an out-and-back pair from a shared origin
-(move +D, dwell long enough to record settling, move -D, dwell again),
-preceded by a MARKER with a unique, monotonically-increasing amplitude --
-the exact same segmentation device as v3's run_marker/TEST_MARKER_
-AMPLITUDES. Two independent segmentation cues are available afterward:
-the CSV log's own `block`/`label` columns (exact), and, for pure-IDS-trace
-analysis with no CSV cross-reference, the marker's short (~1 s) reverse
-dwell contrasted against every settling block's much longer dwell.
-
-This module only builds and (optionally) executes the sequence; the
-companion plot_planned_sequence.py renders the ideal commanded-position
-preview from a --dry-run log, with no hardware involved.
+This module owns transport, logging, guarded motion primitives, markers,
+origin checks, CLI safety validation, and shutdown handling. Campaign ordering
+and experiment-specific constants live in `run_mres_trajectory_campaign.py`.
 """
 
 from __future__ import annotations
@@ -29,8 +12,6 @@ from __future__ import annotations
 import argparse
 import csv
 import math
-import signal
-import sys
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -56,71 +37,14 @@ EXPECTED_MODULE_TYPE = 0
 BAUD_RATE = 115200
 MOTOR_FULL_STEPS_PER_REV = 200
 POSITION_QUANTUM_REV = Decimal('0.000001')
-# Same controller/axis calibration note as v3 -- MR/MA take an integer
-# microstep count, not a decimal number of revolutions.
-MRES_VALUES = (4, 2, 1)
 TRIGGER_MASK = 32
 
-# --- settling-campaign-specific constants -----------------------------
-# Move speed for every settling test AND every marker: fixed, so the only
-# independent variable across the campaign is commanded distance. Burst
-# rate (constant_start=True -- SS min=max, no ramp), matching v3's
-# reference-move convention (BURST_FULL_STEPS_S=250).
-SETTLE_MOVE_FULL_STEPS_S = 250.0
-SETTLE_ACCEL_CODE = 628
-SETTLE_RAMP_TYPE = 1
-# Long enough to capture both the fast structural ringdown (~183-211 Hz,
-# zeta~0.2-0.5 -> decays within ~100 ms, see Parameter Optimization/
-# calibration_bracketing/step4c_ringdown_fit.py) and slow LuGre
-# presliding/creep relaxation (v3's C block used 60 s creep_record dwells
-# for the same reason; halved here since this campaign repeats the
-# dwell many more times).
-SETTLE_DWELL_S = 30.0
-# Doubling sweep: single-microstep-scale moves up to several revolutions.
-# 1 full step = 1.8 deg = L/200 = 10 um of stage travel (L=2 mm lead).
-TEST_DISTANCES_FULL_STEPS = (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1000)
-# How many times to repeat each distance back-to-back, for repeatability
-# statistics. 1 for now; bump this once the single-pass sequence has been
-# reviewed against real data.
-REPEATS_PER_DISTANCE = 1
-
+# Generic motion defaults and marker signature used by the active campaign.
+DEFAULT_ACCEL_CODE = 628
+DEFAULT_RAMP_TYPE = 1
 MARKER_RATE_FULL_STEPS_S = 150.0
 MARKER_REVERSE_DWELL_S = 1.0
 MARKER_SETTLE_S = 0.5
-REFERENCE_MOVES = (16, -16, 4, -4, 1, -1, -16, 16, -4, 4, -1, 1)
-BURST_FULL_STEPS_S = 250.0
-
-
-def _settle_label(distance_full_steps: int, repeat: int) -> str:
-    suffix = '' if REPEATS_PER_DISTANCE == 1 else f'_rep{repeat}'
-    return f'SETTLE_{distance_full_steps:g}{suffix}'
-
-
-def _build_marker_amplitudes() -> dict[str, int]:
-    amplitudes: dict[str, int] = {'BLOCK_0_START': 8}
-    amplitude = 12
-    for distance in TEST_DISTANCES_FULL_STEPS:
-        for repeat in range(1, REPEATS_PER_DISTANCE + 1):
-            amplitudes[_settle_label(distance, repeat)] = amplitude
-            amplitude += 4
-    amplitudes['BLOCK_0_END'] = amplitude
-    return amplitudes
-
-
-TEST_MARKER_AMPLITUDES_FULL_STEPS = _build_marker_amplitudes()
-
-
-@dataclass(frozen=True)
-class CurrentLevel:
-    name: str
-    controller_peak_ma: int
-    relative_percent: int
-
-
-CURRENT_LEVELS = (
-    CurrentLevel('I_50pct', 200, 50),
-    CurrentLevel('I_100pct', 400, 100),
-)
 
 
 class Cancelled(RuntimeError):
@@ -313,7 +237,7 @@ def speed_code(full_steps_s: float) -> int:
     return int(round(omega_rad_s * 100.0))
 
 
-class SettlingRunner:
+class DedicatedControllerRunner:
     def __init__(
         self, transport: Transport, log: CsvEventLog, clock: Clock,
         context: RunContext, *, direction: int,
@@ -379,8 +303,8 @@ class SettlingRunner:
 
     def configure_speed(
         self, rate_full_steps_s: float, *, constant_start: bool,
-        accel_code: int = SETTLE_ACCEL_CODE,
-        ramp_type: int = SETTLE_RAMP_TYPE,
+        accel_code: int = DEFAULT_ACCEL_CODE,
+        ramp_type: int = DEFAULT_RAMP_TYPE,
     ) -> int:
         maximum = speed_code(rate_full_steps_s)
         if not 10 <= maximum <= 12800:
@@ -548,16 +472,6 @@ class SettlingRunner:
             label=where, response=response,
         )
 
-    def run_reference(self, name: str) -> None:
-        with self.block(name):
-            self.configure_speed(BURST_FULL_STEPS_S, constant_start=True)
-            self.dwell(2.0, 'lead_in')
-            for index, pulses in enumerate(REFERENCE_MOVES, start=1):
-                self.move_driver_pulses(pulses, f'reference_{index}')
-                self.dwell(1.0, f'reference_{index}')
-            self.dwell(2.0, 'tail')
-        self.assert_origin(name)
-
     def run_marker(self, label: str, amplitude_full_steps: int) -> None:
         if amplitude_full_steps <= 0:
             raise ValueError('Marker amplitude must be positive')
@@ -583,84 +497,14 @@ class SettlingRunner:
             self.dwell(MARKER_SETTLE_S, f'{label}_settle')
         self.assert_origin(f'marker {label}')
 
-    def run_settling_test(self, distance_full_steps: int, repeat: int) -> None:
-        label = _settle_label(distance_full_steps, repeat)
-        self.run_marker(label, TEST_MARKER_AMPLITUDES_FULL_STEPS[label])
-        with self.block(label):
-            self.configure_speed(SETTLE_MOVE_FULL_STEPS_S, constant_start=True)
-            self.log.log(
-                'SUBCONDITION_START', **self.context.fields(), label='outbound',
-                detail=f'distance_full_steps={distance_full_steps}',
-            )
-            self.move_full_steps(
-                Decimal(distance_full_steps), 'outbound',
-                rate_full_steps_s=SETTLE_MOVE_FULL_STEPS_S,
-            )
-            self.dwell(SETTLE_DWELL_S, 'outbound_settle')
-            self.log.log(
-                'SUBCONDITION_END', **self.context.fields(), label='outbound',
-            )
-            self.log.log(
-                'SUBCONDITION_START', **self.context.fields(), label='return',
-                detail=f'distance_full_steps={-distance_full_steps}',
-            )
-            self.move_full_steps(
-                Decimal(-distance_full_steps), 'return',
-                rate_full_steps_s=SETTLE_MOVE_FULL_STEPS_S,
-            )
-            self.dwell(SETTLE_DWELL_S, 'return_settle')
-            self.log.log(
-                'SUBCONDITION_END', **self.context.fields(), label='return',
-            )
-        self.assert_origin(f'settling test {label}')
-
-    def run_settling_campaign_body(self) -> None:
-        self.run_reference('BLOCK_0_START')
-        for distance in TEST_DISTANCES_FULL_STEPS:
-            for repeat in range(1, REPEATS_PER_DISTANCE + 1):
-                self.run_settling_test(distance, repeat)
-        self.run_marker(
-            'BLOCK_0_END', TEST_MARKER_AMPLITUDES_FULL_STEPS['BLOCK_0_END']
-        )
-        self.run_reference('BLOCK_0_END')
-
-    def run_campaign(self) -> None:
-        self.log.log(
-            'CAMPAIGN_START', **self.context.fields(),
-            detail='dedicated controller: v4 settling-error sweep',
-        )
-        index = 0
-        for mres in MRES_VALUES:
-            for current in CURRENT_LEVELS:
-                self.check_cancelled()
-                if self.ideal_position_rev != 0:
-                    raise RuntimeError(
-                        'Refusing configuration change away from origin'
-                    )
-                index += 1
-                self.context.run_index = index
-                self.context.mres = mres
-                self.context.current = current.name
-                self.configure_mechanics(mres)
-                self.configure_current(current.controller_peak_ma)
-                self.command(f'ME {AXIS}')
-                self.log.log(
-                    'RUN_CONFIG', **self.context.fields(),
-                    detail=(
-                        f'SC_peak_mA={current.controller_peak_ma}; '
-                        f'relative_current_percent={current.relative_percent}'
-                    ),
-                )
-                self.run_marker(
-                    f'CONFIG_{index:02d}_{current.name}_MRES_{mres}',
-                    64 + 4 * index,
-                )
-                self.run_settling_campaign_body()
-                self.assert_origin(f'run {index}')
-                self.log.log('RUN_COMPLETE', **self.context.fields())
-        self.log.log('CAMPAIGN_COMPLETE', **self.context.fields())
-
-    def initialise_session(self, args: argparse.Namespace) -> None:
+    def initialise_session(
+        self,
+        args: argparse.Namespace,
+        *,
+        initial_mres: int,
+        current_name: str,
+        current_peak_ma: int,
+    ) -> None:
         module = self.command('DM', 'DM ')
         try:
             module_type = int(module.split()[-1])
@@ -671,10 +515,10 @@ class SettlingRunner:
                 f'Expected XY test box DM 0, received {module!r}'
             )
 
-        self.context.mres = MRES_VALUES[0]
-        self.context.current = CURRENT_LEVELS[0].name
-        self.configure_mechanics(MRES_VALUES[0])
-        self.configure_current(CURRENT_LEVELS[0].controller_peak_ma)
+        self.context.mres = initial_mres
+        self.context.current = current_name
+        self.configure_mechanics(initial_mres)
+        self.configure_current(current_peak_ma)
         self.command(f'ME {AXIS}')
 
         if not args.skip_home:
@@ -728,7 +572,7 @@ class SettlingRunner:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description='Execute the v4 settling-error sweep on the EVO dedicated controller.'
+        description='Execute a guarded v4 campaign on the EVO dedicated controller.'
     )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument(
@@ -805,12 +649,6 @@ def validate_args(args: argparse.Namespace) -> None:
             raise SystemExit(f'{option} must be in (0, 30] rev')
 
 
-def default_log_path(dry_run: bool) -> Path:
-    stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    suffix = 'dry_run' if dry_run else 'live'
-    return DEFAULT_LOG_DIR / f'settling_{suffix}_{stamp}.csv'
-
-
 def wait_for_acquisition(
     args: argparse.Namespace, log: CsvEventLog, context: RunContext,
 ) -> None:
@@ -827,59 +665,3 @@ def wait_for_acquisition(
             'Acquisition confirmation requires an interactive terminal'
         ) from exc
     log.log('ACQUISITION_CONFIRMED', **context.fields())
-
-
-def main() -> int:
-    args = build_parser().parse_args()
-    validate_args(args)
-    clock = Clock(args.dry_run)
-    log_path = args.log_file or default_log_path(args.dry_run)
-    log = CsvEventLog(log_path, clock)
-    context = RunContext()
-    transport: Transport
-    if args.dry_run:
-        transport = DryRunTransport(log, context)
-    else:
-        transport = SerialTransport(
-            args.port, args.command_timeout_s, log, context
-        )
-
-    runner = SettlingRunner(
-        transport, log, clock, context, direction=args.direction,
-        positive_limit_rev=Decimal(args.positive_limit_rev),
-        negative_limit_rev=Decimal(args.negative_limit_rev),
-        status_timeout_s=args.status_timeout_s,
-        status_poll_s=args.status_poll_s,
-    )
-
-    def request_cancel(_signum: int, _frame: object) -> None:
-        runner.cancel()
-
-    signal.signal(signal.SIGINT, request_cancel)
-    if hasattr(signal, 'SIGTERM'):
-        signal.signal(signal.SIGTERM, request_cancel)
-
-    exit_code = 0
-    reason = 'NORMAL'
-    try:
-        runner.initialise_session(args)
-        wait_for_acquisition(args, log, context)
-        runner.run_campaign()
-    except Cancelled:
-        reason = 'CANCELLED'
-        exit_code = 130
-    except Exception as exc:
-        reason = f'FAILED: {type(exc).__name__}: {exc}'
-        print(reason, file=sys.stderr)
-        log.log('ERROR', **context.fields(), detail=reason)
-        exit_code = 1
-    finally:
-        runner.safe_shutdown(reason)
-        transport.close()
-        log.close()
-        print(f'Log: {log_path}')
-    return exit_code
-
-
-if __name__ == '__main__':
-    raise SystemExit(main())

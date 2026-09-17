@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-'''Render the complete v4 MRES/trajectory measurement sequence.
+'''Render the v4 SpreadCycle + MicroPlyer MRES/trajectory campaign plan.
 
-The four one-microstep oscillation panels lead the figure. The complete
-25 mm trajectory and overall schedule sit below them. A second figure isolates
-the MRES 4 position and signed-velocity traces for the direct (blue) and
-individual-command (orange) implementations.
+Clone of plot_planned_sequence.py for the MRES 1/4/16 SpreadCycle +
+MicroPlyer variant (see SPREADCYCLE_MICROPLYER_VARIANT_MEMO.md and
+scripts/esp32_v4_mres134_spreadcycle_microplyer_campaign/). MRES 32 is
+dropped from this variant to make room for MicroPlyer (step interpolation
+on) within the 55-minute recording limit; every rate, dwell, marker, and
+separation for MRES 1/4/16 is otherwise identical to the baseline plan.
+This script models timing/position only -- it does not encode driver
+chopper mode -- and renders the complete plan: three oscillation panels,
+the full 18-trajectory plot, and the overall schedule.
 '''
 
 from __future__ import annotations
@@ -33,7 +38,6 @@ from run_mres_trajectory_campaign import (  # noqa: E402
     CAMPAIGN_LEAD_IN_S,
     CAMPAIGN_TAIL_S,
     EXPERIMENT_SEPARATION_S,
-    MRES_VALUES,
     OSCILLATION_CYCLES,
     OSCILLATION_HALF_DWELL_S,
     OSCILLATION_MOVE_RATE_FULL_STEPS_S,
@@ -46,6 +50,9 @@ from run_mres_trajectory_campaign import (  # noqa: E402
     trajectory_block_name,
 )
 
+# This variant drops MRES 32 (vs. the baseline's (1, 4, 16, 32)) to make
+# room for MicroPlyer within the 55-minute recording limit.
+MRES_VALUES = (1, 4, 16)
 
 FULL_STEP_MM = 0.010
 COLORS = {
@@ -270,7 +277,9 @@ def build_plan() -> Plan:
 
 def latest_dry_run() -> Path | None:
     log_dir = HERE.parent / 'data' / 'hardware_runs'
-    candidates = sorted(log_dir.glob('mres_trajectory_dry_run_*.csv'))
+    candidates = sorted(
+        log_dir.glob('mres134_spreadcycle_microplyer_dry_run_*.csv')
+    )
     return candidates[-1] if candidates else None
 
 
@@ -365,27 +374,6 @@ def plot_oscillation_axis(
         segment for segment in plan.segments
         if segment.kind == 'oscillation' and segment.mres == mres
     ]
-    amplitude_um = FULL_STEP_MM * 1000.0 / mres
-    duration_s = block.t1 - block.t0
-    # A generous margin on both sides shows the tail of the preceding marker
-    # jump and the start of the following one, so the ramp's own beginning
-    # and end are no longer flush against the axis spine.
-    margin_s = 0.18 * duration_s
-    window_t0 = block.t0 - margin_s
-    window_t1 = block.t1 + margin_s
-    context = [
-        segment for segment in plan.segments
-        if segment.t1 > window_t0 and segment.t0 < window_t1
-        and segment not in relevant
-    ]
-    for segment in context:
-        axis.plot(
-            [segment.t0 - block.t0, segment.t1 - block.t0],
-            [segment.p0_mm * 1000.0, segment.p1_mm * 1000.0],
-            color=COLORS[segment.kind],
-            lw=1.0,
-            alpha=0.5,
-        )
     for segment in relevant:
         axis.plot(
             [segment.t0 - block.t0, segment.t1 - block.t0],
@@ -403,9 +391,11 @@ def plot_oscillation_axis(
         zorder=5,
         label='start = end',
     )
-    axis.axvline(0.0, color='#8a8a8a', lw=0.8, ls=':', alpha=0.7)
-    axis.axvline(duration_s, color='#8a8a8a', lw=0.8, ls=':', alpha=0.7)
-    axis.set_xlim(-margin_s, duration_s + margin_s)
+    amplitude_um = FULL_STEP_MM * 1000.0 / mres
+    duration_s = block.t1 - block.t0
+    # A small left margin keeps the near-instantaneous first step-up (right
+    # at t=0) visible instead of flush against the axis spine.
+    axis.set_xlim(-0.03 * duration_s, duration_s)
     axis.set_ylim(
         start_um - 0.10 * amplitude_um,
         start_um + 1.22 * amplitude_um,
@@ -541,20 +531,21 @@ def plot_schedule(
 
 
 def plot_full_plan(plan: Plan, out_path: Path) -> None:
-    fig = plt.figure(figsize=(18, 14), constrained_layout=True)
+    fig = plt.figure(figsize=(18, 11.5), constrained_layout=True)
+    # Only 3 MRES values here (vs. 4 in the baseline), so the oscillation
+    # panels fit in a single row of 6 columns (2 columns per panel) instead
+    # of the baseline's 2x2 layout.
     grid = fig.add_gridspec(
-        4,
-        4,
-        height_ratios=(1.55, 1.55, 3.8, 0.95),
+        3,
+        6,
+        height_ratios=(1.55, 3.8, 0.95),
     )
     oscillation_axes = [
-        fig.add_subplot(
-            grid[index // 2, (index % 2) * 2:(index % 2) * 2 + 2]
-        )
+        fig.add_subplot(grid[0, index * 2:index * 2 + 2])
         for index in range(len(MRES_VALUES))
     ]
-    overview = fig.add_subplot(grid[2, :])
-    schedule = fig.add_subplot(grid[3, :], sharex=overview)
+    overview = fig.add_subplot(grid[1, :])
+    schedule = fig.add_subplot(grid[2, :], sharex=overview)
 
     for axis, mres in zip(oscillation_axes, MRES_VALUES):
         plot_oscillation_axis(axis, plan, mres)
@@ -597,12 +588,15 @@ def plot_full_plan(plan: Plan, out_path: Path) -> None:
     )
     total_min = plan.t / 60.0
     fig.suptitle(
-        'v4 complete MRES measurement plan - '
+        'v4 SpreadCycle + MicroPlyer MRES measurement plan - '
         f'{total_min:.2f} min (55 min recording limit)\n'
-        'MRES 1, 4, 16, 32; every microstep oscillation returns to its '
-        'start; 25 mm out-and-back at 27.5, 70, and 200 full steps/s\n'
-        f'Every velocity run dwells {TRAJECTORY_ENDPOINT_DWELL_S:g} s at '
-        f'+25 mm and {TRAJECTORY_ENDPOINT_DWELL_S:g} s after returning; '
+        'MRES 1, 4, 16 (32 dropped to fit MicroPlyer); every microstep '
+        'oscillation returns to its start; 25 mm out-and-back at 27.5, 70, '
+        'and 200 full steps/s\n'
+        'SpreadCycle enabled with MicroPlyer step interpolation ON for the '
+        f'entire sequence; every velocity run dwells '
+        f'{TRAJECTORY_ENDPOINT_DWELL_S:g} s at +25 mm and '
+        f'{TRAJECTORY_ENDPOINT_DWELL_S:g} s after returning; '
         f'{EXPERIMENT_SEPARATION_S:g} s gaps retain unique marker jumps',
         fontsize=12,
     )
@@ -611,124 +605,21 @@ def plot_full_plan(plan: Plan, out_path: Path) -> None:
     plt.close(fig)
 
 
-def plot_mres4_detail(plan: Plan, out_path: Path) -> None:
-    mres = 4
-    config_t0, config_t1 = plan.config_spans[mres]
-    duration_s = config_t1 - config_t0
-    segments = [
-        segment for segment in plan.segments
-        if segment.mres == mres
-        and segment.t0 >= config_t0
-        and segment.t1 <= config_t1
-    ]
-    blocks = [
-        block for block in plan.blocks
-        if block.mres == mres
-        and block.t0 >= config_t0
-        and block.t1 <= config_t1
-    ]
-
-    fig = plt.figure(figsize=(17, 10.5), constrained_layout=True)
-    grid = fig.add_gridspec(3, 1, height_ratios=(3.1, 2.0, 1.1))
-    position_ax = fig.add_subplot(grid[0, 0])
-    velocity_ax = fig.add_subplot(grid[1, 0], sharex=position_ax)
-    schedule_ax = fig.add_subplot(grid[2, 0], sharex=position_ax)
-
-    shade_separations(position_ax, blocks, origin_s=config_t0)
-    for segment in segments:
-        position_ax.plot(
-            [
-                (segment.t0 - config_t0) / 60.0,
-                (segment.t1 - config_t0) / 60.0,
-            ],
-            [segment.p0_mm, segment.p1_mm],
-            color=COLORS[segment.kind],
-            lw=2.0 if segment.kind in {'direct', 'individual'} else 1.0,
-            alpha=0.96,
-        )
-    position_ax.axhline(0.0, color='#333333', lw=0.7)
-    position_ax.set_ylim(-1.65, 27.2)
-    position_ax.set_ylabel('Ideal stage position (mm)')
-    position_ax.set_title(
-        'MRES 4 segment - direct (blue) and individual-command (orange) '
-        '25 mm trajectories'
-    )
-    position_ax.grid(True, alpha=0.23)
-    position_ax.tick_params(labelbottom=False)
-
-    shade_separations(velocity_ax, blocks, origin_s=config_t0)
-    for segment in segments:
-        if segment.kind not in {'direct', 'individual'}:
-            continue
-        duration = segment.t1 - segment.t0
-        velocity_mm_s = (
-            (segment.p1_mm - segment.p0_mm) / duration
-            if duration > 0.0
-            else 0.0
-        )
-        velocity_ax.plot(
-            [
-                (segment.t0 - config_t0) / 60.0,
-                (segment.t1 - config_t0) / 60.0,
-            ],
-            [velocity_mm_s, velocity_mm_s],
-            color=COLORS[segment.kind],
-            lw=2.2,
-        )
-    velocity_ax.axhline(0.0, color='#333333', lw=0.7)
-    velocity_ax.set_ylabel('Signed command velocity (mm/s)')
-    velocity_ax.set_title(
-        'Commanded velocity; horizontal zero sections include both '
-        '2 s endpoint dwells and 10 s inter-experiment gaps'
-    )
-    velocity_ax.grid(True, alpha=0.23)
-    velocity_ax.tick_params(labelbottom=False)
-
-    plot_schedule(
-        schedule_ax,
-        blocks,
-        origin_s=config_t0,
-        duration_s=duration_s,
-        xlabel='Time within MRES 4 segment (min)',
-    )
-    handles = [
-        Patch(facecolor=COLORS['direct'], label='direct trajectory'),
-        Patch(
-            facecolor=COLORS['individual'],
-            label='individual full-step commands',
-        ),
-        Patch(facecolor=COLORS['marker'], label='marker jump'),
-        Patch(
-            facecolor=COLORS['separation'],
-            label=f'{EXPERIMENT_SEPARATION_S:g} s separation',
-        ),
-    ]
-    position_ax.legend(
-        handles=handles,
-        loc='lower right',
-        ncols=2,
-        fontsize=8.2,
-    )
-    fig.suptitle(
-        'v4 MRES 4 detailed velocity-run view\n'
-        f'Rates: {", ".join(f"{rate:g}" for rate in TRAJECTORY_RATES_FULL_STEPS_S)} '
-        'full steps/s; direct and individual implementations have the '
-        'same ideal position and velocity targets',
-        fontsize=12.5,
-    )
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path, dpi=170)
-    plt.close(fig)
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description='Render the complete planned v4 MRES trajectory campaign.'
+        description=(
+            'Render the planned v4 SpreadCycle + MicroPlyer MRES '
+            'trajectory campaign (MRES 1/4/16).'
+        )
     )
     parser.add_argument(
         '--log-file',
         type=Path,
-        help='Dry-run CSV to validate; defaults to the newest campaign dry run.',
+        help=(
+            'Dry-run CSV to validate; defaults to the newest matching '
+            'dry run. Validation is skipped with a warning if none exists '
+            'yet -- this sketch has not been compiled/flashed/run.'
+        ),
     )
     return parser
 
@@ -737,30 +628,30 @@ def main() -> None:
     args = build_parser().parse_args()
     log_path = args.log_file or latest_dry_run()
     if log_path is None:
-        raise SystemExit(
-            'No campaign dry-run log found. Run '
-            '`python run_mres_trajectory_campaign.py --dry-run` first.'
+        print(
+            'No SpreadCycle + MicroPlyer dry-run log found; rendering the '
+            'plan model only (unvalidated against a captured run).'
         )
-    validate_dry_run(log_path)
+    else:
+        validate_dry_run(log_path)
+        print(f'Validated dry-run log: {log_path}')
+
     plan = build_plan()
     if plan.t >= 55.0 * 60.0:
         raise SystemExit(
             f'Planned sequence is {plan.t / 60.0:.2f} min, '
             'exceeding 55 min.'
         )
-    print(f'Validated dry-run log: {log_path}')
     print(
         f'Complete planned duration: {plan.t:.1f} s '
-        f'({plan.t / 60.0:.2f} min)'
+        f'({plan.t / 60.0:.2f} min); '
+        f'{55.0 - plan.t / 60.0:.2f} min under the 55 min recording limit.'
     )
 
     out_dir = HERE.parent / 'rendered_assets'
-    campaign_path = out_dir / 'planned_mres_trajectory_campaign.png'
-    mres4_path = out_dir / 'planned_mres4_velocity_detail.png'
+    campaign_path = out_dir / 'planned_mres134_spreadcycle_microplyer_campaign.png'
     plot_full_plan(plan, campaign_path)
-    plot_mres4_detail(plan, mres4_path)
     print(f'Saved: {campaign_path}')
-    print(f'Saved: {mres4_path}')
 
 
 if __name__ == '__main__':

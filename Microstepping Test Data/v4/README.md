@@ -7,12 +7,26 @@ The live v4 firmware is
 It was compiled with USB CDC enabled, flashed to the ESP32-S3, and started
 automatically on 2026-09-07.
 
+The checked-in source has since been revised for the next run: every 25 mm
+trajectory now dwells 2 s at +25 mm and 2 s after returning to the origin,
+measured experiments have explicit 10 s stationary separations, and each
+microstep oscillation block verifies that its net position is unchanged. This
+revised source still needs to be compiled and flashed before the next live run.
+
 This is a baseline motion/IDS run. It does **not** configure StallGuard or
 CoolStep. The UART interface, motor current, and required MRES field are
 configured, and the chopper is forced to **SpreadCycle with MicroPlyer
 interpolation disabled**. A separate future repeat with StealthChop and
 StallGuard is specified in
 [STEALTHCHOP_STALLGUARD_REPEAT_MEMO.md](STEALTHCHOP_STALLGUARD_REPEAT_MEMO.md).
+A SpreadCycle-for-the-whole-sequence variant (interpolation off, otherwise
+identical to this baseline) is specified in
+[SPREADCYCLE_VARIANT_MEMO.md](SPREADCYCLE_VARIANT_MEMO.md) and implemented in
+`scripts/esp32_v4_mres_trajectory_campaign_spreadcycle/`. A SpreadCycle +
+MicroPlyer (interpolation on) variant, MRES 1/4/16 only, is specified in
+[SPREADCYCLE_MICROPLYER_VARIANT_MEMO.md](SPREADCYCLE_MICROPLYER_VARIANT_MEMO.md)
+and implemented in
+`scripts/esp32_v4_mres134_spreadcycle_microplyer_campaign/`.
 
 ### Chopper mode and interpolation are forced, not left alone
 
@@ -69,13 +83,22 @@ MRES is tested in the order `1, 4, 16, 32`. For every MRES, the firmware runs:
 1. A unique configuration marker.
 2. A unique oscillation marker.
 3. Fifteen complete one-microstep forward/return cycles in 30 seconds: one
-   microstep forward, 1 s dwell, one microstep back to origin, 1 s dwell.
+   microstep forward, 1 s dwell, one microstep back to the exact block-start
+   position, 1 s dwell. Both host and ESP implementations reject a block whose
+   final net position differs from its start.
 4. A 25 mm out-and-back trajectory at slow, moderate, and fast speed using one
-   direct distance call per leg. Every speed has its own preceding marker.
+   direct distance call per leg. The stage dwells 2 s at +25 mm and 2 s after
+   returning to the origin. Every speed has its own preceding marker.
 5. The same three trajectories using 2,500 individually submitted full-step
-   calls per leg. Every speed again has its own preceding marker.
+   calls per leg, with the same two 2 s endpoint dwells. Every speed again has
+   its own preceding marker.
 
-Every 25 mm leg returns to the same origin after a 1 s endpoint dwell. The lead
+Every new velocity experiment is separated from the preceding measured block
+by a 10 s stationary dwell; the unique negative marker follows that gap and
+still immediately identifies the experiment that comes next. Adjacent MRES
+runs also have a 10 s separation before the next configuration marker.
+
+Every 25 mm out-and-back block returns to the same origin. The lead
 is 2 mm/revolution and the motor has 200 full steps/revolution, so one full step
 is 0.010 mm and 25 mm is 2,500 full steps or 12.5 revolutions.
 
@@ -135,35 +158,50 @@ also records:
 - trajectory endpoints and achieved individual-command rate.
 
 This provides both visible IDS segmentation and machine-readable event labels.
+The additional 10 s zero-position gaps make consecutive measured experiments
+visually distinct without replacing or weakening the marker signature.
 The onboard LED is white once at boot, yellow during preflight, purple during
 markers, green during oscillation, blue during direct trajectories, orange
 during individual trajectories, cyan at completion, and red only on failure.
 
 ## Duration and render
 
-The complete planned measurement trajectory is **2,477.7 s (41.30 min)**,
-including all markers and dwells. This leaves about 13.7 minutes below the
+The complete planned measurement trajectory is **2,795.7 s (46.60 min)**,
+including all markers, 2 s endpoint dwells, and 10 s separations. This leaves
+about 8.4 minutes below the
 55-minute recording limit.
 
 `scripts/plot_planned_sequence.py` validates a full campaign dry-run and renders
-the complete trajectory. The top plot shows all 24 25 mm out-and-back blocks;
-four zoom panels show all 15 oscillation cycles at each MRES.
+two views. In the complete view, the four oscillation panels come first, each
+showing coincident start/end markers; the full 24-trajectory plot and overall
+timeline are below them. The second view isolates the MRES 4 segment with blue
+direct-command and orange individual-command position and signed-velocity
+traces.
 
 - `rendered_assets/planned_mres_trajectory_campaign.png` — complete preview.
-- `rendered_assets/planned_settling_sequence_preview.png` — updated to the same
-  complete preview, replacing the old representative-only figure.
+- `rendered_assets/planned_mres4_velocity_detail.png` — MRES 4 position,
+  velocity, and schedule detail.
 
 ## Files
 
 - `scripts/esp32_v4_mres_trajectory_campaign/` — compiled and flashed live ESP
   firmware; the first run starts automatically after preflight.
+- `scripts/esp32_v4_mres_trajectory_campaign_spreadcycle/` — SpreadCycle
+  variant of the same firmware; see
+  [SPREADCYCLE_VARIANT_MEMO.md](SPREADCYCLE_VARIANT_MEMO.md).
+- `scripts/esp32_v4_mres134_spreadcycle_microplyer_campaign/` — SpreadCycle +
+  MicroPlyer variant, MRES 1/4/16 only; see
+  [SPREADCYCLE_MICROPLYER_VARIANT_MEMO.md](SPREADCYCLE_MICROPLYER_VARIANT_MEMO.md).
+- `scripts/plot_planned_sequence_spreadcycle_microplyer.py` — plan/plot
+  renderer for that variant (MRES 1/4/16 instead of 1/4/16/32).
 - `scripts/run_mres_trajectory_campaign.py` — dry-run/host-controller mirror
   used to validate block count, order, timing, and CSV schema without ESP
   motion.
+- `scripts/dedicated_controller_support.py` — shared guarded transport,
+  logging, marker, origin, and shutdown infrastructure used by the active host
+  runner.
 - `scripts/plot_planned_sequence.py` — full-sequence renderer.
 - `data/hardware_runs/mres_trajectory_dry_run_*.csv` — validation log.
-- `scripts/run_settling_dedicated_controller.py` — retained legacy settling
-  experiment; not the current v4 campaign.
 
 ## Build and upload
 

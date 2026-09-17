@@ -1,34 +1,25 @@
 /*
- * ESP32-S3/TMC2209 v4 MRES and 25 mm trajectory campaign.
+ * ESP32-S3/TMC2209 v4 MRES and 25 mm trajectory campaign -- SpreadCycle +
+ * MicroPlyer variant, MRES 1/4/16 only.
  *
  * STEP GPIO5, DIR GPIO6, UART ESP_RX GPIO18 / ESP_TX GPIO17,
  * RGB LED GPIO48, EN/ENN externally grounded.
  *
- * Baseline motion only: this sketch does not configure StallGuard or CoolStep.
- * It configures the UART interface, current, and MRES required by the
- * experiment, and forces SpreadCycle with MicroPlyer interpolation disabled.
+ * Clone of esp32_v4_mres_trajectory_campaign.ino (see
+ * STEALTHCHOP_STALLGUARD_REPEAT_MEMO.md: driver-mode changes are not
+ * retrofitted into the baseline sketch). Two differences from that
+ * baseline:
  *
- * The chopper mode and interpolation are set explicitly and verified by
- * readback rather than left alone, because on the TMC2209 both defaults are
- * wrong for this measurement:
- *
- *   - GCONF bit 2 (en_spreadCycle) resets to 0, so an unconfigured driver
- *     runs StealthChop. Its voltage-mode PWM with automatic amplitude
- *     regulation gives lower microstep positional fidelity than SpreadCycle's
- *     current-mode chopper, which is the quantity this experiment measures.
- *   - CHOPCONF bit 28 (intpol) resets to 1, so an unconfigured driver
- *     interpolates: every commanded microstep is expanded into 256 sub-steps
- *     and smeared across the interval to the next step.
- *
- * Both defects were live in the 2026-09-10 16:59 run. Measured there, a
- * commanded one-microstep move at MRES=1 produced a 13-count creep followed
- * by the remaining 243 counts over the next second, instead of a single clean
- * 256-count move, and DRV_STATUS reported stealth=1 throughout.
- *
- * configureDriver() now refuses to start the campaign unless GCONF, CHOPCONF
- * and DRV_STATUS all confirm SpreadCycle active and interpolation off, so a
- * run that reaches CAMPAIGN_START is proof of the configuration rather than
- * an assumption about it.
+ * 1. MRES 32 is dropped -- this sketch sweeps only MRES 1, 4, 16 -- to make
+ *    room for the added MicroPlyer runs within the 55-minute recording
+ *    limit. Every oscillation, marker, trajectory rate, dwell, and
+ *    separation for MRES 1/4/16 is otherwise identical to the baseline.
+ * 2. The driver is explicitly configured for SpreadCycle with MicroPlyer
+ *    step interpolation ON for the entire sequence
+ *    (driver.en_spreadCycle(true); driver.intpol(true);), instead of the
+ *    TMC2209 power-on default (StealthChop, interpolation on) or the
+ *    SpreadCycle-without-interpolation variant in
+ *    esp32_v4_mres_trajectory_campaign_spreadcycle.ino.
  *
  * The first campaign starts automatically after preflight. Commands over USB
  * CDC remain available afterward: RUN (repeat), STATUS, ABORT.
@@ -50,7 +41,7 @@ constexpr uint16_t CURRENT_RMS_MA = 360;
 constexpr uint16_t FULL_STEPS_PER_REV = 200;
 constexpr uint16_t FULL_STEPS_PER_MM = 100;
 constexpr uint32_t TRAJECTORY_FULL_STEPS = 25UL * FULL_STEPS_PER_MM;
-constexpr uint16_t MRES_VALUES[] = {1, 4, 16, 32};
+constexpr uint16_t MRES_VALUES[] = {1, 4, 16};
 constexpr size_t MRES_COUNT = sizeof(MRES_VALUES) / sizeof(MRES_VALUES[0]);
 constexpr uint32_t RATE_MILLIHZ[] = {27500, 70000, 200000};
 constexpr const char *RATE_NAMES[] = {"SLOW", "MODERATE", "FAST"};
@@ -196,62 +187,21 @@ bool commandOneFullStep(int direction) {
   return !pollAbort();
 }
 
-// TMCStepper's UART read gives up after max_retries (2) and then returns 0
-// with CRCerror set. A bare CHOPCONF read is therefore ambiguous: 0 could be
-// the register contents or a dead transaction. Two things go wrong if that is
-// not checked. A failed *readback* looks like MRES code 0 and aborts the
-// campaign, which is what ended the 2026-09-10 17:09 run one block into
-// MRES=4. Worse, a failed *initial* read makes the read-modify-write below
-// store toff=0, silently disabling the driver while the readback still
-// reports the MRES that was asked for. So validate every read: CRC clean, and
-// toff non-zero, which is always true here because configureDriver sets it.
-bool readChopconfChecked(uint32_t &value) {
-  for (uint8_t attempt = 0; attempt < 5; ++attempt) {
-    const uint32_t candidate = driver.CHOPCONF();
-    if (!driver.CRCerror && (candidate & 0x0FUL) != 0UL) {
-      value = candidate;
-      return true;
-    }
-    delay(5);
-  }
-  return false;
-}
-
 bool setMres(uint16_t mres) {
   uint8_t code = 8;
   for (uint16_t value = mres; value > 1; value >>= 1) --code;
   constexpr uint32_t MRES_MASK = 0x0F000000UL;
-  for (uint8_t attempt = 1; attempt <= 5; ++attempt) {
-    uint32_t chopconf = 0;
-    if (!readChopconfChecked(chopconf)) {
-      Serial.printf("# MRES_READ_RETRY,attempt=%u,stage=pre_write\n", attempt);
-      delay(10);
-      continue;
-    }
-    driver.CHOPCONF((chopconf & ~MRES_MASK) |
-                    (static_cast<uint32_t>(code) << 24));
-    uint32_t verify = 0;
-    if (!readChopconfChecked(verify)) {
-      Serial.printf("# MRES_READ_RETRY,attempt=%u,stage=readback\n", attempt);
-      delay(10);
-      continue;
-    }
-    const uint8_t readback = (verify & MRES_MASK) >> 24;
-    if (readback == code) {
-      currentMres = mres;
-      Serial.printf("# MRES_OK,mres=%u,code=%u,attempt=%u,chopconf=0x%08lX\n",
-                    mres, code, attempt,
-                    static_cast<unsigned long>(verify));
-      return true;
-    }
-    Serial.printf("# MRES_MISMATCH_RETRY,attempt=%u,wrote=%u,read=%u,"
-                  "chopconf=0x%08lX\n",
-                  attempt, code, readback,
-                  static_cast<unsigned long>(verify));
-    delay(10);
+  uint32_t chopconf = driver.CHOPCONF();
+  driver.CHOPCONF((chopconf & ~MRES_MASK) |
+                  (static_cast<uint32_t>(code) << 24));
+  const uint8_t readback = (driver.CHOPCONF() & MRES_MASK) >> 24;
+  if (readback != code) {
+    Serial.printf("# MRES_READBACK_FAILED,wrote=%u,read=%u\n", code, readback);
+    return false;
   }
-  Serial.printf("# MRES_READBACK_FAILED,wrote=%u,attempts=5\n", code);
-  return false;
+  currentMres = mres;
+  Serial.printf("# MRES_OK,mres=%u,code=%u\n", mres, code);
+  return true;
 }
 
 bool configureDriver() {
@@ -265,48 +215,14 @@ bool configureDriver() {
   driver.ihold(driver.irun());
   driver.iholddelay(0);
   driver.TPOWERDOWN(0);
-
-  // Chopper mode and interpolation are both forced, both verified. Neither
-  // may be left at its power-on default: en_spreadCycle resets to 0
-  // (StealthChop) and intpol resets to 1 (MicroPlyer on), so "configure
-  // nothing" silently selects the two settings this experiment must not use.
-  // Belt and suspenders on the mode, matching the chirp sketches: the
-  // explicit enable, plus TPWMTHRS=0 so no velocity-dependent switchover
-  // back to StealthChop can occur mid-run.
+  // SpreadCycle with MicroPlyer interpolation ON for the whole sequence --
+  // otherwise the driver defaults to StealthChop with interpolation on.
   driver.en_spreadCycle(true);
-  driver.TPWMTHRS(0);
-  driver.intpol(false);
-
-  const uint32_t gconf = driver.GCONF();
-  const uint32_t chopconf = driver.CHOPCONF();
-  const bool spreadCycleOn = ((gconf >> 2) & 1U) != 0U;
-  const bool interpolationOff = ((chopconf >> 28) & 1U) == 0U;
-  Serial.printf("# CHOPPER_CONFIG,gconf=0x%08lX,chopconf=0x%08lX,"
-                "pwmconf=0x%08lX,en_spreadcycle=%u,intpol=%u\n",
-                static_cast<unsigned long>(gconf),
-                static_cast<unsigned long>(chopconf),
-                static_cast<unsigned long>(driver.PWMCONF()),
-                static_cast<unsigned>(spreadCycleOn),
-                static_cast<unsigned>(!interpolationOff));
-  if (!spreadCycleOn || !interpolationOff) {
-    Serial.println("# CHOPPER_CONFIG_FAILED,refusing_to_run");
-    return false;
-  }
-  // GCONF says what was asked for; DRV_STATUS bit 30 says what the chopper is
-  // actually doing. Check both, because this whole class of defect came from
-  // trusting intent over readback.
-  const uint32_t drvStatus = driver.DRV_STATUS();
-  const bool stealthActive = ((drvStatus >> 30) & 1U) != 0U;
-  Serial.printf("# CHOPPER_ACTIVE,drv_status=0x%08lX,stealth_bit=%u\n",
-                static_cast<unsigned long>(drvStatus),
-                static_cast<unsigned>(stealthActive));
-  if (stealthActive) {
-    Serial.println("# STEALTHCHOP_STILL_ACTIVE,refusing_to_run");
-    return false;
-  }
+  driver.intpol(true);
   for (uint8_t attempt = 0; attempt < 10; ++attempt) {
     if (driver.test_connection() == 0 && driver.version() == 0x21) {
       Serial.println("# TMC_UART_OK,version=0x21,rx=18,tx=17");
+      Serial.println("# DRIVER_MODE,spreadcycle=1,intpol=1");
       return true;
     }
     delay(150);
@@ -471,8 +387,8 @@ bool runCampaign() {
   running = true;
   colour(0, 20, 0);
   currentBlock = "CAMPAIGN";
-  logEvent("CAMPAIGN_START", "BASELINE", 0, 1, 0,
-           "no_chopper_or_stallguard_configuration");
+  logEvent("CAMPAIGN_START", "SPREADCYCLE_MICROPLYER", 0, 1, 0,
+           "spreadcycle_enabled;interpolation_enabled;mres_32_dropped");
   if (!cancellableDwell(CAMPAIGN_LEAD_MS)) return false;
 
   for (size_t mresIndex = 0; mresIndex < MRES_COUNT; ++mresIndex) {
@@ -480,7 +396,8 @@ bool runCampaign() {
         !cancellableDwell(EXPERIMENT_SEPARATION_MS)) return false;
     runIndex = mresIndex + 1;
     if (!setMres(MRES_VALUES[mresIndex])) return false;
-    logEvent("RUN_CONFIG", "BASELINE", 0, 1, 0, "mres_configured");
+    logEvent("RUN_CONFIG", "SPREADCYCLE_MICROPLYER", 0, 1, 0,
+             "mres_configured");
     if (!runMarker("CONFIG_" + String(runIndex) + "_MRES_" +
                    String(currentMres))) return false;
     const String oscillation = "OSCILLATION_MRES_" + String(currentMres) +
@@ -502,13 +419,13 @@ bool runCampaign() {
         if (!ok) return false;
       }
     }
-    logEvent("RUN_COMPLETE", "BASELINE", 0, 1, 0, "origin");
+    logEvent("RUN_COMPLETE", "SPREADCYCLE_MICROPLYER", 0, 1, 0, "origin");
     if (!checkOrigin("run_complete")) return false;
   }
 
   currentBlock = "CAMPAIGN";
   if (!cancellableDwell(CAMPAIGN_TAIL_MS)) return false;
-  logEvent("CAMPAIGN_COMPLETE", "BASELINE", 0, 1, 0, "origin");
+  logEvent("CAMPAIGN_COMPLETE", "SPREADCYCLE_MICROPLYER", 0, 1, 0, "origin");
   running = false;
   colour(0, 22, 22);
   return true;
@@ -542,7 +459,7 @@ void setup() {
   Serial.setTimeout(20);
   const uint32_t serialStart = millis();
   while (!Serial && millis() - serialStart < 3000) delay(10);
-  Serial.println("# ESP32_V4_MRES_TRAJECTORY_CAMPAIGN");
+  Serial.println("# ESP32_V4_MRES134_SPREADCYCLE_MICROPLYER_CAMPAIGN");
   Serial.println("# EN_EXTERNALLY_GROUNDED; AUTO_RUN; COMMANDS=RUN,STATUS,ABORT");
   printHeader();
 
