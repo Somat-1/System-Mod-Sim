@@ -1,0 +1,29 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Encoder monitor (ESP32-S3)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/Stepper Isolated/v1_2026-10-02/encoder_monitor.py",
+      "args": ["--port", "/dev/cu.usbmodem3101"],
+      "python": "${workspaceFolder}/Stepper Isolated/.venv/bin/python",
+      "env": { "DYLD_LIBRARY_PATH": "/opt/homebrew/opt/expat/lib" },
+      "cwd": "${workspaceFolder}/Stepper Isolated/v1_2026-10-02",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Encoder monitor (simulated)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/Stepper Isolated/v1_2026-10-02/encoder_monitor.py",
+      "args": ["--simulate", "--cpr", "4000"],
+      "python": "${workspaceFolder}/Stepper Isolated/.venv/bin/python",
+      "env": { "DYLD_LIBRARY_PATH": "/opt/homebrew/opt/expat/lib" },
+      "cwd": "${workspaceFolder}/Stepper Isolated/v1_2026-10-02",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}
