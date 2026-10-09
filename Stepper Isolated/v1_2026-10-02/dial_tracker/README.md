@@ -14,7 +14,7 @@ not two, so this measures the one thing that matters, the **angle**, from every
 needle pixel at once. That is what buys the precision: roughly 1 070 pixels go
 into each estimate, and over the 13 frames before the stage moves the measured
 bearing repeats to **0.0049° — 0.0027 µm**, about 700× finer than the dial's own
-2 µm graduation. The instrument, not the tracking, is the limit (see §7).
+2 µm graduation. The instrument, not the tracking, is the limit (see §8).
 
 ```
 dial_tracker/
@@ -22,13 +22,16 @@ dial_tracker/
 ├── dial_core.py                       ← the measurement: background, centre, angle, unwrap
 ├── calibrate_dial.py                  ← interactive window: point at the dial, save a JSON
 ├── track_dial.py                      ← batch run: JSON + video → CSV + QC plot
+├── make_explainer_video.py            ← three-panel video: the tracking next to what it measures
 ├── calibration_video_project_5.json   ← the calibration for the clip above
 └── output/
     ├── Video_Project_5_dial.csv       ← 1 827 rows, the extracted reading
     └── Video_Project_5_dial.png       ← QC plot (reading, cross-check, quality)
 ```
 
-`background.npz` is a cache built on first run (~1 min) and is not in git.
+`background.npz` is a cache built on first run (~1 min) and is not in git, and
+neither are the rendered videos — they go to `../recordings/`, beside the source
+clip.
 
 ---
 
@@ -195,7 +198,47 @@ at-rest baseline; set `--start 0` to include them.
 
 ---
 
-## 6. CSV columns
+## 6. The explainer video
+
+```bash
+python make_explainer_video.py --calib calibration_video_project_5.json
+python make_explainer_video.py --calib cal.json --scale 0.667   # 720p, smaller file
+python make_explainer_video.py --calib cal.json --step 30 --out quick.mp4
+```
+
+Renders `../recordings/dial_explainer.mp4` — 1920×1080, 61.5 s, ~65 MB, about
+six minutes to make.
+
+**Left: what the tracker sees.** The fitted pivots, the annuli the needles are
+measured in, the dial zero, and — in green — *the actual pixels this frame's
+bearing was fitted from*. The fitted bearing is drawn hairline where it crosses
+the measuring ring so the pixels underneath stay visible, and bold outside it:
+the pixels are the evidence, the line is only the conclusion. Rejected frames
+get a red border and say why rather than quietly vanishing. Frame 14 is worth
+pausing on — the needle is genuinely *not there*, only a few scattered green
+pixels survive, and the fitted bearing points into empty space. That is what a
+rejected frame looks like, and why it is rejected.
+
+**Right top: the shaft outline.** Radius = ideal circle + 15 × radial deviation,
+drawn as the shaft turns. A perfectly round, perfectly centred shaft would stay
+on the dashed circle. The ideal circle's drawing radius is a reference only —
+the real shaft radius is not known from this measurement and does not need to
+be, because what is plotted is the deviation, graduated in true µm.
+
+**Right bottom: commanded vs measured shaft angle**, from the encoder
+recording, with deviation magnified ×15 about the ideal line — the same
+reconstruction and the same gain as
+[`../analysis/plot_encoder_full_rotation_xy.py`](../analysis).
+
+Shaft angle comes from the dial's own fitted period (60.13 s per revolution),
+and the encoder panel is aligned to it **by fraction of a revolution, not by a
+hardware trigger**. The two instruments recorded the same single revolution but
+were not sampled off a common clock, so treat the two panels as advancing
+together, not as synchronised to the frame.
+
+---
+
+## 7. CSV columns
 
 | Column | Meaning |
 |---|---|
@@ -216,7 +259,7 @@ disturbance that was skipped.
 
 ---
 
-## 7. Limits
+## 8. Limits
 
 - **The camera must not move.** It does not here, and that was checked rather
   than assumed, but a handheld clip needs per-frame registration first.
