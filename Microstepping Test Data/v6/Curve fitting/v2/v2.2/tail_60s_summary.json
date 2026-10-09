@@ -1,0 +1,82 @@
+{
+  "source": "\\\\MULT-FP01.hitdom.lan\\project2\\Internships\\Tomas Valentinas\\Sytem Mod & Sim\\Microstepping Test Data\\v6\\EXPrun.csv",
+  "segment": {
+    "tail_start_s": 1148.667,
+    "segment_start_s": 1148.717,
+    "segment_end_s": 1208.7160000000001,
+    "n_samples": 60000,
+    "skip_after_tail_boundary_s": 0.05,
+    "skip_rationale": "excludes the ~1.15 um unexplained opening transient; peak-to-peak stops changing past 50 ms (1271 -> 275 -> 219 -> 107 nm) and the last >100 nm step-to-step jump is at 26 ms",
+    "duration_s": 60.0,
+    "sample_rate_hz": 1000.0,
+    "raw_std_nm": 16.488283028251814,
+    "raw_peak_to_peak_nm": 106.99999999999932
+  },
+  "detrend": {
+    "order": 3,
+    "expression_nm_vs_s": "p(t) = -8.88226 -0.685266\u00b7t +0.0630326\u00b7t^2 -0.000831767\u00b7t^3",
+    "coefficients_ascending": [
+      -8.882258291275981,
+      -0.6852659948254527,
+      0.06303258299858756,
+      -0.0008317671659882303
+    ],
+    "selection_rule": "first order whose successor improves residual std by < 1%",
+    "residual_std_by_order_nm": [
+      16.488283028251814,
+      14.947791991447014,
+      14.607132351625594,
+      14.207052503734666,
+      14.182543537355144,
+      14.180275904872621,
+      13.821455337995168,
+      12.617266627251816,
+      12.605409783604152
+    ],
+    "std_reduction_pct": 13.835464375571306
+  },
+  "residual": {
+    "std_nm": 14.207052503734666,
+    "peak_to_peak_nm": 102.4227451077092,
+    "mean_nm": -4.312217546006044e-13,
+    "skew": 0.3677812409751343,
+    "excess_kurtosis": 0.2733435404305373,
+    "within_1sigma_pct": 69.79833333333333,
+    "n_bins": 116
+  },
+  "welch_psd": {
+    "window": "hann",
+    "nperseg": 16384,
+    "segment_length_s": 16.384,
+    "overlap_fraction": 0.5,
+    "n_segments_averaged": 6,
+    "frequency_resolution_hz": 0.06103515625,
+    "nyquist_hz": 500.0,
+    "detrend_per_segment": "constant",
+    "integrated_rms_nm": 13.183224094785071,
+    "parseval_ratio": 0.9279351991779817,
+    "peak_frequency_above_10hz_hz": 357.84912109375,
+    "peak_psd_above_10hz_nm2_per_hz": 1.218657157562046,
+    "wander_peak_frequency_hz": 0.1220703125,
+    "wander_peak_psd_nm2_per_hz": 644.2249199667264,
+    "first_bin_rms_nm": 5.516947664052236,
+    "band_rms_nm": {
+      "0-1_Hz": 11.917460635605213,
+      "1-10_Hz": 2.737464837983593,
+      "10-100_Hz": 0.9254766157880804,
+      "100-300_Hz": 1.3419044030176175,
+      "300-400_Hz": 4.337470194846128,
+      "400-500_Hz": 2.2833675255853407
+    },
+    "white_floor_10_250hz": {
+      "median_psd_nm2_per_hz": 0.007287163526997788,
+      "asd_nm_per_sqrt_hz": 0.08536488462475532
+    },
+    "half_rms_below_hz": 0.07685212155279365
+  },
+  "outputs": {
+    "detrend_overlay": "rendered_assets/detrend_overlay.png",
+    "distribution": "rendered_assets/residual_distribution.png",
+    "psd": "rendered_assets/welch_psd.png"
+  }
+}

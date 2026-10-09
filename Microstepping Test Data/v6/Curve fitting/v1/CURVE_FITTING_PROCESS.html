@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>v6 Curve Fitting — Procedure</title>
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --muted: #5b6470;
+    --bg: #fbfaf8;
+    --panel: #ffffff;
+    --border: #e2e0da;
+    --accent: #007f86;
+    --accent-ink: #00565c;
+    --ref: #9a9a9a;
+    --code-bg: #f4f2ee;
+    --eq-bg: #0f2c2e;
+    --eq-ink: #d3f3ef;
+    --eq-accent: #6fe0d3;
+    --seed: #bd6b18;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    line-height: 1.55;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 24px 80px; }
+  header.page {
+    background: linear-gradient(135deg, #0b3a3d 0%, #0f5459 55%, #00767d 100%);
+    color: #eafcfb;
+    padding: 48px 24px 40px;
+    margin-bottom: 8px;
+  }
+  header.page .wrap { padding: 0; }
+  header.page h1 { margin: 0 0 6px; font-size: 1.9rem; letter-spacing: -0.01em; }
+  header.page p.tag { margin: 0; color: #bfe9e7; font-size: 1.02rem; max-width: 66ch; }
+  header.page .meta { margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap; }
+  header.page .meta span {
+    background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.22);
+    padding: 4px 10px; border-radius: 999px; font-size: .82rem; color: #eafcfb;
+  }
+  nav.toc {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px 22px; margin: 28px 0 36px;
+  }
+  nav.toc h2 { margin: 0 0 10px; font-size: .78rem; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--muted); font-weight: 700; }
+  nav.toc ol { margin: 0; padding-left: 1.2em; columns: 2; column-gap: 28px; }
+  nav.toc li { margin-bottom: 6px; break-inside: avoid; }
+  nav.toc a { color: var(--accent-ink); text-decoration: none; font-size: .93rem; }
+  nav.toc a:hover { text-decoration: underline; }
+
+  section { margin: 40px 0; }
+  h2 {
+    font-size: 1.3rem; border-bottom: 2px solid var(--border); padding-bottom: 8px;
+    margin: 0 0 16px; scroll-margin-top: 16px;
+  }
+  h2 .num { color: var(--accent); font-variant-numeric: tabular-nums; margin-right: 8px; }
+  h3 { font-size: 1.05rem; margin: 26px 0 10px; scroll-margin-top: 16px; }
+  h3 .sub { color: var(--accent-ink); font-variant-numeric: tabular-nums; margin-right: 6px; }
+  p { margin: 0 0 14px; }
+  code {
+    font-family: "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+    background: var(--code-bg); padding: .12em .4em; border-radius: 4px; font-size: .88em;
+  }
+
+  /* equation blocks: distinct from plain code, this IS the math */
+  pre.eq {
+    background: var(--eq-bg); color: var(--eq-ink); border-radius: 8px;
+    padding: 16px 20px; overflow-x: auto; font-size: .92rem; line-height: 1.7;
+    font-family: "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+    margin: 10px 0 18px;
+  }
+  pre.eq .c { color: #7fa8a4; font-style: italic; }   /* inline comments */
+  pre.eq b { color: var(--eq-accent); font-weight: 600; }
+
+  pre.code {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 16px; overflow-x: auto; font-size: .86rem;
+    font-family: "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+  }
+
+  table { border-collapse: collapse; width: 100%; margin: 12px 0 20px; font-size: .92rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  tr:nth-child(even) td { background: #fdfcfa; }
+
+  .callout {
+    border-left: 4px solid var(--accent); background: #eef9f9;
+    border-radius: 0 8px 8px 0; padding: 14px 18px; margin: 18px 0;
+  }
+  .callout.warn { border-left-color: var(--seed); background: #fbf3e9; }
+  .callout p:last-child { margin-bottom: 0; }
+
+  .fitlegend { display: flex; gap: 22px; flex-wrap: wrap; margin: 6px 0 18px; font-size: .88rem; }
+  .fitlegend span { display: inline-flex; align-items: center; gap: 7px; }
+  .swatch { width: 22px; height: 3px; border-radius: 2px; display: inline-block; }
+  .swatch.dyn { background: var(--accent); height: 4px; }
+  .swatch.ref { background: repeating-linear-gradient(90deg, var(--ref) 0 6px, transparent 6px 10px); }
+  .swatch.raw { background: #999; height: 2px; }
+
+  figure { margin: 18px 0; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px; }
+  figure img { width: 100%; height: auto; border-radius: 6px; display: block; }
+  figcaption { font-size: .86rem; color: var(--muted); margin-top: 10px; }
+  .fig-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 760px) {
+    .fig-row { grid-template-columns: 1fr; }
+    nav.toc ol { columns: 1; }
+  }
+
+  .op-card {
+    border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px;
+    background: var(--panel); margin: 14px 0 20px;
+  }
+  .op-card h4 {
+    margin: 0 0 8px; font-size: .98rem; display: flex; align-items: center; gap: 8px;
+  }
+  .op-card .glyph {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 7px; background: var(--accent);
+    color: #fff; font-size: .95rem; font-weight: 700; flex: none;
+  }
+
+  footer {
+    margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: .86rem;
+  }
+  footer a { color: var(--accent-ink); }
+</style>
+</head>
+<body>
+
+<header class="page">
+  <div class="wrap">
+    <h1>v6 Curve Fitting — Procedure</h1>
+    <p class="tag">The actual mathematics behind <code>fit_v6_curves.py</code>: the filter operators,
+      the edge-detection scoring function, the plateau estimator, and the formulas that derive every
+      seed time and every adaptive parameter from the signal itself.</p>
+    <div class="meta">
+      <span>dt = 1 ms (1 kHz)</span>
+      <span>No event log — every timestamp is recovered from y[n]</span>
+      <span>scripts/fit_v6_curves.py</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+<nav class="toc">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#notation">Signal model and notation</a></li>
+    <li><a href="#operators">Core filtering operators</a></li>
+    <li><a href="#seeding">Seeding: recovering transition times</a></li>
+    <li><a href="#reference">The reference fit</a></li>
+    <li><a href="#dynamic">The dynamic fit</a></li>
+    <li><a href="#zoom">Zoom-window sizing</a></li>
+    <li><a href="#setup">Setup and execution</a></li>
+    <li><a href="#limits">Known limits</a></li>
+  </ol>
+</nav>
+
+<section id="notation">
+  <h2><span class="num">1</span>Signal model and notation</h2>
+  <p>The raw capture is a sequence of position samples:</p>
+  <pre class="eq">y[n],  n = 0 .. N-1,   sampled at  <b>dt</b> = 1/1000 s   <span class="c">// 1 kHz</span>
+t[n] = n · dt</pre>
+  <p>Everything below is either a <strong>filter</strong> applied to (a slice of) <code>y</code>, an
+    <strong>index</strong> derived from <code>y</code> by thresholding or scoring, or a
+    <strong>parameter</strong> computed from the commanded MRES/rate rather than from <code>y</code> at
+    all. Nothing is fit in the least-squares sense — every "fit" here is a deterministic filter or
+    estimator applied to the measured signal, composed in a fixed order per block.</p>
+</section>
+
+<section id="operators">
+  <h2><span class="num">2</span>Core filtering operators</h2>
+  <p>Two operators, and one composition of them, are reused throughout everything that follows.</p>
+
+  <div class="op-card">
+    <h4><span class="glyph">M</span>2.1 Median despike, M<sub>w</sub></h4>
+    <p>Window duration <code>w</code> (ms) → odd sample count:</p>
+    <pre class="eq">k  = round(w · 1e-3 / dt)
+k' = k + (1 - k mod 2)          <span class="c">// smallest odd integer >= k</span>
+r  = (k' - 1) / 2
+
+<b>M_w[y](n) = median( y[n-r], y[n-r+1], ..., y[n+r] )</b></pre>
+    <p>edge-replicated ("nearest") outside <code>[0, N-1]</code>. Suppresses single-sample glitches
+      without attenuating a real transition that spans several samples.</p>
+  </div>
+
+  <div class="op-card">
+    <h4><span class="glyph">G</span>2.2 Centered Gaussian smoother, G<sub>σ</sub></h4>
+    <pre class="eq">σ_n = σ · 1e-3 / dt
+R   = max(1, ceil(4 · σ_n))
+g[k] = exp(-k² / (2σ_n²)) / Σ<sub>j=-R..R</sub> exp(-j² / (2σ_n²)),   k = -R .. R
+
+<b>G_σ[y](n) = Σ<sub>k=-R..R</sub>  y[n-k] · g[k]</b></pre>
+    <p><code>g</code> is symmetric → <strong>zero-phase</strong>: no time lag is introduced, unlike a
+      causal (one-sided) smoother.</p>
+  </div>
+
+  <div class="op-card">
+    <h4><span class="glyph">S</span>2.3 Combined smoothing pass, S<sub>w,σ</sub></h4>
+    <pre class="eq"><b>S_{w,σ}[y] = G_σ( M_w[y] )</b>          <span class="c">// despike, then smooth</span></pre>
+    <p>Every fit in this pipeline that isn't a piecewise-constant plateau is one evaluation of
+      <code>S<sub>w,σ</sub></code> for some <code>(w, σ)</code> — the entire design space is
+      <em>which</em> <code>(w, σ)</code> to use, and that choice is exactly where "reference" and
+      "dynamic" (§4, §5) diverge.</p>
+  </div>
+</section>
+
+<section id="seeding">
+  <h2><span class="num">3</span>Seeding: recovering transition times with no event log</h2>
+  <p>v3's equivalent pipeline seeds each expected step transition from a logged <code>MOVE_ACK</code>
+    timestamp. <code>EXPrun.csv</code> has no such log, so 30 seed times <code>τ₀ .. τ₂₉</code>
+    (15 forward-edges, 15 return-edges) are recovered from <code>y</code> itself before any fitting
+    happens.</p>
+
+  <h3><span class="sub">3.1</span>Jump-event detector</h3>
+  <pre class="eq">d[n] = | y[n+1] - y[n] |
+E = { n : d[n] > <b>θ</b> },   <b>θ</b> = 0.8 µm/sample</pre>
+  <p>Consecutive members of <code>E</code> join the same <strong>event</strong> iff
+    <code>t[n<sub>i+1</sub>] - t[n<sub>i</sub>] &lt; 0.15 s</code>. Each event <code>j</code> has a start
+    time <code>t_j</code> and duration <code>Δ_j</code> (last − first, within the group). A marker (fast,
+    large out-and-back move) produces one long event (<code>Δ_j</code> from ~80 ms to ~1.5 s, scaling
+    with its own amplitude); a single oscillation microstep produces one short event
+    (<code>Δ_j &lt; 80 ms</code>).</p>
+
+  <h3><span class="sub">3.2</span>Case A — direct detection <span style="font-weight:400;color:var(--muted);font-size:.85em;">(MRES 1, 4 here)</span></h3>
+  <p>Let <code>M = { j : Δ_j ≤ 80 ms }</code>. If a contiguous run of <code>M</code>, sorted by time,
+    has consecutive gaps <code>t<sub>j+1</sub> - t_j ∈ [0.8, 1.3] s</code> (the firmware's 1 s
+    forward/return dwell) and length ≥ 28, take its first 30 members' start times directly:</p>
+  <pre class="eq"><b>τ_i = t[run[i]],   i = 0 .. 29</b></pre>
+
+  <h3><span class="sub">3.3</span>Case B — derived from marker timing <span style="font-weight:400;color:var(--muted);font-size:.85em;">(MRES 16, 32 here)</span></h3>
+  <p>At finer MRES the commanded step rarely clears <code>θ</code>, so §3.2 fails. Instead:</p>
+  <pre class="eq">next_onset  = t_j   <span class="c">// marker event immediately preceding this group's
+                    // first leg (25 s window ending at that leg's
+                    // own ramp-threshold crossing)</span>
+
+(t_j, Δ_j)  = OSCILLATION marker's return-move event
+              <span class="c">// searched further back, strictly before next_onset - 5s</span>
+
+<b>osc0   = t_j + Δ_j + 0.5 s</b>              <span class="c">// move finishes, then settle</span>
+<b>period = ( next_onset - osc0 ) / 15</b></pre>
+  <pre class="eq"><b>τ_2k   = osc0 + k · period,          k = 0 .. 14</b>   <span class="c">// forward</span>
+<b>τ_2k+1 = osc0 + (k + 0.5) · period,  k = 0 .. 14</b>   <span class="c">// return</span></pre>
+  <div class="callout">
+    <p><code>t_j + Δ_j</code> — the move <strong>finishing</strong>, not starting — matters: using
+      <code>t_j</code> alone put <code>osc0</code> mid-ramp on the marker's own return move in one
+      checked case (MRES 16). The derived period agrees with the directly-detected periods from §3.2 to
+      within 0.3% only once <code>Δ_j</code> is included.</p>
+  </div>
+</section>
+
+<section id="reference">
+  <h2><span class="num">4</span>The reference fit: piecewise-constant plateaus</h2>
+  <p>Applied to the oscillation block, given seeds <code>τ₀..τ₂₉</code> from §3 and search half-width
+    <code>h = 0.35 s</code>.</p>
+
+  <h3><span class="sub">4.1</span>Edge refinement</h3>
+  <pre class="eq">ŷ = M_9ms[y]                          <span class="c">// despike first</span>
+s = round(0.006 / dt)                 <span class="c">// 6 ms half-span, in samples</span>
+
+for each seed τ_i, search n ∈ [ idx(τ_i - h), idx(τ_i + h) ]:
+  <b>score(n) = | ŷ[n+s] - ŷ[n-s] |</b>
+  <b>edge_i   = argmax_n  score(n)</b></pre>
+  <p><code>score</code> is a discrete central-difference slope estimate over a fixed 12 ms baseline —
+    maximizing it finds the steepest local change (the real transition) even if the seed is off by up to
+    <code>h</code>. (<code>edge_i</code> is bumped to <code>edge_{i-1}+1</code> if it would not otherwise
+    strictly increase.)</p>
+
+  <h3><span class="sub">4.2</span>Plateau estimate</h3>
+  <pre class="eq">W = edge_i+1 - edge_i                         <span class="c">// interval width, samples</span>
+g = min( round(0.2/dt), ⌊W/4⌋ )               <span class="c">// guard, samples</span>
+
+<b>fitted[n] = median( ŷ[edge_i+g] .. ŷ[edge_i+1 - g] )</b>   for all n in the interval</pre>
+  <p>Trimming <code>g</code> samples off <em>both</em> sides before taking the median excludes the
+    transition's own overshoot/ring-down from the plateau estimate <strong>by construction</strong> — a
+    piecewise-constant, idealized-command curve. The overshoot exclusion is deliberate, not incidental.</p>
+
+  <p>Trajectory legs get the continuous analogue, no edges at all:</p>
+  <pre class="eq"><b>reference = S_{9ms, 20ms}[y]</b>   <span class="c">// one heavy pass over the whole ramp</span></pre>
+</section>
+
+<section id="dynamic">
+  <h2><span class="num">5</span>The dynamic fit: transient-preserving</h2>
+  <p>No edges, no plateaus — a single evaluation of <code>S<sub>w,σ</sub></code> (§2.3) over the
+    <em>whole</em> block, with <code>(w, σ)</code> chosen light relative to whatever structure needs to
+    survive.</p>
+
+  <h3><span class="sub">5.1</span>Oscillation blocks — fixed</h3>
+  <p>Every transition is isolated in time by a 1 s dwell on each side, so one fixed pair suffices:</p>
+  <pre class="eq"><b>dynamic = S_{3ms, 2ms}[y]</b></pre>
+
+  <div class="fitlegend">
+    <span><span class="swatch raw"></span>Measured</span>
+    <span><span class="swatch ref"></span>Reference — §4</span>
+    <span><span class="swatch dyn"></span>Dynamic — §5</span>
+  </div>
+  <figure>
+    <img src="MRES_1/oscillation_microstep_zoom.png" alt="MRES 1 oscillation zoom showing overshoot captured by the dynamic fit" loading="lazy" />
+    <figcaption>MRES 1, first six cycles: <code>dynamic</code> (§5.1) tracks the real overshoot/undershoot
+      at each transition that <code>reference</code>'s guard trim (§4.2) is built to exclude.</figcaption>
+  </figure>
+
+  <h3><span class="sub">5.2</span>Trajectory legs — adaptive per leg</h3>
+  <p><code>(w, σ)</code> scale to that specific leg's own commanded step interval, because the interval
+    is not constant across this dataset:</p>
+  <pre class="eq">Δx = FULL_STEP_UM / mres              <span class="c">// commanded step size, µm</span>
+v  = rate_fsps · FULL_STEP_UM         <span class="c">// commanded velocity, µm/s (indep. of MRES)</span>
+τ_step = 1000 · Δx / v                 <span class="c">// step interval, ms</span>
+
+<b>w = clip( 0.25 · τ_step, 1.0, 9.0 )</b>    <span class="c">// despike width, ms</span>
+<b>σ = clip( 0.15 · τ_step, 0.5, 5.0 )</b>    <span class="c">// Gaussian sigma, ms</span>
+
+<b>dynamic = S_{w, σ}[y]</b></pre>
+  <p><code>τ_step</code> spans three orders of magnitude across this dataset — 36 ms (MRES 1,
+    27.5 full-steps/s) down to 0.156 ms (MRES 32, 200 full-steps/s), the latter already below the 1 ms
+    sample period — which is why <code>(w, σ)</code> is recomputed per leg. At the floor
+    (<code>w=1.0, σ=0.5</code>) the filter does essentially nothing beyond despiking, and correctly
+    renders a smooth line rather than a fabricated staircase: there is no recoverable step structure once
+    <code>τ_step &lt; dt</code>.</p>
+
+  <div class="fig-row">
+    <figure>
+      <img src="MRES_1/trajectory_fits_midramp_zoom.png" alt="MRES 1 mid-ramp zoom showing individual steps preserved" loading="lazy" />
+      <figcaption>MRES 1 (τ_step = 36 ms): w=9.0, σ=5.0 ms. The staircase survives.</figcaption>
+    </figure>
+    <figure>
+      <img src="MRES_32/trajectory_fits_midramp_zoom.png" alt="MRES 32 mid-ramp zoom showing an honest smooth line" loading="lazy" />
+      <figcaption>MRES 32 (τ_step down to 0.156 ms): w, σ floor out. Honestly smooth — nothing to
+        preserve.</figcaption>
+    </figure>
+  </div>
+
+  <p>Every leg's resolved <code>(w, σ)</code> is written to <code>fit_summary.json</code> under
+    <code>trajectory_legs.dynamic.params_by_leg_ms</code>.</p>
+</section>
+
+<section id="zoom">
+  <h2><span class="num">6</span>Zoom-window sizing <span style="font-weight:400;color:var(--muted);font-size:.7em;">(visualization, not a fit)</span></h2>
+  <p>The two trajectory zoom plots (apex, mid-ramp) are windowed to a target number of commanded steps
+    rather than a fixed duration, using the same <code>Δx, v</code> as §5.2:</p>
+  <pre class="eq"><b>half_window = max( κ · Δx / v,  n_min · dt )</b>,   κ = 10,  n_min = 40</pre>
+  <div class="callout warn">
+    <p>The <code>n_min · dt</code> floor exists so a fast-rate + fine-MRES leg (steps under 1 ms apart)
+      still gets a window with a visible number of raw samples in it. A fixed-duration window (tried
+      first) is why an earlier version of this plot was indistinguishable at fine MRES: the same 1 s
+      window that shows ~4 steps at MRES 1 packs in ~128 at MRES 32.</p>
+  </div>
+</section>
+
+<section id="setup">
+  <h2><span class="num">7</span>Setup and execution</h2>
+  <pre class="code">Curve fitting/
+├── CURVE_FITTING_PROCESS.md   this document (source)
+├── README.md                  design rationale and debugging history
+├── scripts/fit_v6_curves.py   implements §2-§6; run this
+└── MRES_1/, MRES_4/, MRES_16/, MRES_32/</pre>
+  <pre class="code">cd "Microstepping Test Data/v6/Curve fitting/scripts"
+python fit_v6_curves.py</pre>
+  <p><code>main()</code> loads <code>../../../EXPrun.csv</code> once, locates all 24 trajectory legs and
+    the whole-run "still" mask, then runs §3–§6 independently for each of the 4 MRES groups. Outputs per
+    group: <code>oscillation_fit_overlay.png</code>, <code>oscillation_microstep_zoom.png</code>,
+    <code>trajectory_fits_overlay.png</code>, <code>trajectory_fits_apex_zoom.png</code>/<code>.svg</code>,
+    <code>trajectory_fits_midramp_zoom.png</code>/<code>.svg</code>, <code>fitted_blocks.npz</code>
+    (every block's <code>measured</code>/<code>reference</code>/<code>dynamic</code> arrays —
+    <strong>fit a simulation model against <code>dynamic</code></strong>), and
+    <code>fit_summary.json</code>.</p>
+</section>
+
+<section id="limits">
+  <h2><span class="num">8</span>Known limits</h2>
+  <ul>
+    <li><strong>Sub-sample-period steps aren't recoverable</strong> (§5.2): at MRES 32 fast,
+      <code>τ_step &lt; dt</code>, so there is no staircase in the raw signal for any filter to
+      preserve.</li>
+    <li><strong>Case B (§3.3) depends on marker timing being well-formed</strong> — cross-checked against
+      Case A to 0.3% agreement, but only 4 MRES groups' worth of validation exists in this dataset.</li>
+    <li><strong>Both fits assume the extraction window itself is correct</strong>
+      (<code>ramp_extent</code> for legs, the seed-time span for the oscillation) — that boundary
+      detection lives in <code>ids_common.py</code> / <code>plot_v6_exp_run.py</code>, documented in
+      <code>../../analysis/README.md</code>, not in this script.</li>
+  </ul>
+</section>
+
+<footer>
+  <p>Source: <code>CURVE_FITTING_PROCESS.md</code> in this folder. Design rationale and the bugs found
+    while building this pipeline are documented separately in <a href="README.md">README.md</a>. The
+    implementation is <a href="scripts/fit_v6_curves.py">scripts/fit_v6_curves.py</a>.</p>
+</footer>
+
+</div>
+</body>
+</html>

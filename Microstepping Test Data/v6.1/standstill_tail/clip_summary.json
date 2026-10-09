@@ -1,0 +1,30 @@
+{
+  "source": "\\\\MULT-FP01.hitdom.lan\\project2\\Internships\\Tomas Valentinas\\Sytem Mod & Sim\\Microstepping Test Data\\v6\\EXPrun.csv",
+  "sample_rate_hz": 1000.0,
+  "uniformly_sampled_no_gaps": true,
+  "capture_duration_s": 1302.317,
+  "detected_standstill_start_s": 1148.667,
+  "guard_s": 1.0,
+  "guard_rationale": "drops the ~1.15 um settling transient in the first ~4 ms of the detected tail, which would otherwise smear broadband energy across the spectrum",
+  "clip_start_s": 1149.667,
+  "clip_end_s": 1302.317,
+  "dc_offset_subtracted_um": -194.3214428336532,
+  "spectral_properties": {
+    "nyquist_hz": 500.0,
+    "frequency_resolution_hz": 0.00655093350802489,
+    "counter_quantisation_nm": 1.0
+  },
+  "clip_stats_dc_removed": {
+    "n_samples": 152651,
+    "duration_s": 152.6500000000001,
+    "std_nm": 37.37643635607693,
+    "ptp_nm": 231.99999999999932,
+    "min_nm": -69.5571663467831,
+    "max_nm": 162.4428336532162,
+    "mean_abs_diff_nm": 6.806885031117036,
+    "median_abs_diff_nm": 5.000000000023874,
+    "residual_linear_slope_nm_per_s": 0.4919698295741989,
+    "residual_linear_total_nm": 75.09919448450151,
+    "std_after_linear_detrend_nm": 30.44664196568545
+  }
+}

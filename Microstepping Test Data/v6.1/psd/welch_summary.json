@@ -1,0 +1,112 @@
+{
+  "source_clip": "\\\\MULT-FP01.hitdom.lan\\project2\\Internships\\Tomas Valentinas\\Sytem Mod & Sim\\Microstepping Test Data\\v6.1\\standstill_tail\\standstill_tail.npz",
+  "input": {
+    "series": "pos_nm_ac (DC already removed by clip_standstill_tail.py)",
+    "n_samples": 152651,
+    "duration_s": 152.651,
+    "sample_rate_hz": 1000.0,
+    "time_domain_std_nm": 37.37643635607693
+  },
+  "welch": {
+    "window": "hann",
+    "nperseg": 16384,
+    "segment_length_s": 16.384,
+    "overlap_fraction": 0.5,
+    "noverlap": 8192,
+    "n_segments_averaged": 17,
+    "frequency_resolution_hz": 0.06103515625,
+    "nyquist_hz": 500.0,
+    "detrend_per_segment": "constant",
+    "scaling": "density",
+    "nperseg_rationale": "matched to v6/Curve fitting/v2/v2.2 so the two spectra are directly comparable; the full tail buys 17 averages against its 6",
+    "nperseg_trade": [
+      {
+        "nperseg": 4096,
+        "segment_length_s": 4.096,
+        "frequency_resolution_hz": 0.244140625,
+        "n_segments_averaged": 73
+      },
+      {
+        "nperseg": 8192,
+        "segment_length_s": 8.192,
+        "frequency_resolution_hz": 0.1220703125,
+        "n_segments_averaged": 36
+      },
+      {
+        "nperseg": 16384,
+        "segment_length_s": 16.384,
+        "frequency_resolution_hz": 0.06103515625,
+        "n_segments_averaged": 17
+      },
+      {
+        "nperseg": 32768,
+        "segment_length_s": 32.768,
+        "frequency_resolution_hz": 0.030517578125,
+        "n_segments_averaged": 8
+      }
+    ]
+  },
+  "results": {
+    "integrated_rms_nm": 26.171604712694027,
+    "parseval_ratio": 0.7002166943729738,
+    "parseval_note": "below 1 because detrend='constant' removes each 16.384 s segment's own mean, which discards the wander between segments -- i.e. content below ~1/nperseg. The missing variance is that wander, not an estimator error",
+    "cumulative_rms_quantiles": {
+      "0.50": {
+        "frequency_hz": 0.06103515625,
+        "bin_index": 1,
+        "resolved": false,
+        "power_fraction_in_first_two_bins": 0.507757583404019
+      },
+      "0.90": {
+        "frequency_hz": 0.244140625,
+        "bin_index": 4,
+        "resolved": true,
+        "power_fraction_in_first_two_bins": 0.507757583404019
+      },
+      "0.95": {
+        "frequency_hz": 0.54931640625,
+        "bin_index": 9,
+        "resolved": true,
+        "power_fraction_in_first_two_bins": 0.507757583404019
+      },
+      "0.99": {
+        "frequency_hz": 356.14013671875,
+        "bin_index": 5835,
+        "resolved": true,
+        "power_fraction_in_first_two_bins": 0.507757583404019
+      }
+    },
+    "peak_above_10hz": {
+      "frequency_hz": 357.84912109375,
+      "psd_nm2_per_hz": 0.8387704465174209,
+      "times_above_floor": 124.76827577862741
+    },
+    "wander_peak": {
+      "frequency_hz": 0.06103515625,
+      "psd_nm2_per_hz": 4236.828374324587
+    },
+    "white_floor": {
+      "band_hz": [
+        10.0,
+        250.0
+      ],
+      "median_psd_nm2_per_hz": 0.00672262593422086,
+      "asd_nm_per_sqrt_hz": 0.08199162112204429
+    },
+    "mode_band_rms_nm": 3.6112193083712407,
+    "band_rms_nm": {
+      "0-1_Hz": 25.43988193541718,
+      "1-10_Hz": 3.6374284752627646,
+      "10-100_Hz": 0.8743933503487924,
+      "100-300_Hz": 1.2904106438428382,
+      "300-400_Hz": 4.142611597066159,
+      "400-500_Hz": 2.2199068068603025
+    }
+  },
+  "caveat_aliasing": "the spectrum rises into Nyquist, the signature of folding: a feature at f is indistinguishable from 1000-f at this 1 kHz rate. See ../README.md",
+  "outputs": {
+    "plot": "psd/welch_psd_tail.png",
+    "plot_vector": "psd/welch_psd_tail.svg",
+    "spectrum": "psd/welch_psd_tail.npz"
+  }
+}

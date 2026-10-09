@@ -1,0 +1,145 @@
+{
+  "source": "\\\\MULT-FP01.hitdom.lan\\project2\\Internships\\Tomas Valentinas\\Sytem Mod & Sim\\Microstepping Test Data\\v6\\EXPrun.csv",
+  "question": "is the ~360 Hz peak found in the idle tail a mechanical mode, and is it dominant?",
+  "sample_rate_hz": 1000.0,
+  "nyquist_hz": 500.0,
+  "welch": {
+    "window": "hann",
+    "nperseg": 512,
+    "overlap_fraction": 0.5,
+    "frequency_resolution_hz": 1.953125,
+    "detrend_polynomial_order": 3
+  },
+  "mode_band_hz": [
+    330.0,
+    370.0
+  ],
+  "floor_band_hz": [
+    200.0,
+    300.0
+  ],
+  "idle_tail_control": {
+    "peak_hz": 359.375,
+    "band_vs_floor_ratio": 58.97285265536865
+  },
+  "by_mres": {
+    "MRES_1": {
+      "oscillation_seed_method": "detected (oscillation transitions cleared the jump threshold)",
+      "dwell": {
+        "n_windows": 29,
+        "peak_hz": 349.609375,
+        "peak_psd_nm2_per_hz": 4.372828598470009,
+        "band_vs_floor_ratio": 7.21413471101237
+      },
+      "mid_ramp_band_vs_floor_ratio": {
+        "slow": 332.7527189636055,
+        "mod": 115.45265344500882,
+        "fast": 7.472129549547709
+      },
+      "ringdown": {
+        "spectral_peak_in_band_hz": 343.75,
+        "spectral_peak_in_band_nm": 81.65441551014487,
+        "secondary_peak_80_330hz_hz": 181.25,
+        "secondary_peak_80_330hz_nm": 42.28490974289139,
+        "fd_hz": 337.55355436876283,
+        "fn_hz": 337.58748440677664,
+        "zeta": 0.01417761208879874,
+        "q": 35.26686982746787,
+        "tau_ms": 33.252990230269674,
+        "r2": 0.051639878432603425,
+        "damping_reliable": false,
+        "amp_nm": 561.9424718036593
+      }
+    },
+    "MRES_4": {
+      "oscillation_seed_method": "detected (oscillation transitions cleared the jump threshold)",
+      "dwell": {
+        "n_windows": 29,
+        "peak_hz": 353.515625,
+        "peak_psd_nm2_per_hz": 13.207618167920517,
+        "band_vs_floor_ratio": 204.68884718330105
+      },
+      "mid_ramp_band_vs_floor_ratio": {
+        "slow": 4475.971771283116,
+        "mod": 177.26712305072215,
+        "fast": 9.929797317794753
+      },
+      "ringdown": {
+        "spectral_peak_in_band_hz": 350.0,
+        "spectral_peak_in_band_nm": 31.249470673601806,
+        "secondary_peak_80_330hz_hz": 325.0,
+        "secondary_peak_80_330hz_nm": 9.498393380971628,
+        "fd_hz": 347.7133490751517,
+        "fn_hz": 347.7966149649306,
+        "zeta": 0.02188063345820258,
+        "q": 22.851257983692456,
+        "tau_ms": 20.913893393352957,
+        "r2": 0.8746693901015177,
+        "damping_reliable": true,
+        "amp_nm": 476.1409041646405
+      }
+    },
+    "MRES_16": {
+      "oscillation_seed_method": "derived from marker timing (osc0=576.613s, period=2.0035s)",
+      "dwell": {
+        "n_windows": 29,
+        "peak_hz": 359.375,
+        "peak_psd_nm2_per_hz": 1.6200648490258556,
+        "band_vs_floor_ratio": 31.81037050290605
+      },
+      "mid_ramp_band_vs_floor_ratio": {
+        "slow": 9.161093391212837,
+        "mod": 7.220875587858914,
+        "fast": 6.945962081521932
+      },
+      "ringdown": {
+        "spectral_peak_in_band_hz": 350.0,
+        "spectral_peak_in_band_nm": 2.6820673044319387,
+        "secondary_peak_80_330hz_hz": 143.75,
+        "secondary_peak_80_330hz_nm": 1.6671865710498008,
+        "fd_hz": 353.29569303019343,
+        "fn_hz": 353.44799786007115,
+        "zeta": 0.029353661527558736,
+        "q": 17.033650113140883,
+        "tau_ms": 15.340245981404399,
+        "r2": 0.6522587585167527,
+        "damping_reliable": true,
+        "amp_nm": 73.46479239222761
+      }
+    },
+    "MRES_32": {
+      "oscillation_seed_method": "derived from marker timing (osc0=864.495s, period=2.0038s)",
+      "dwell": {
+        "n_windows": 30,
+        "peak_hz": 351.5625,
+        "peak_psd_nm2_per_hz": 104.6489083808828,
+        "band_vs_floor_ratio": 431.2586267489475
+      },
+      "mid_ramp_band_vs_floor_ratio": {
+        "slow": 6.770772048682041,
+        "mod": 4.063973407589291,
+        "fast": 9.609615932073668
+      },
+      "ringdown": {
+        "spectral_peak_in_band_hz": 343.75,
+        "spectral_peak_in_band_nm": 18.3968430480851,
+        "secondary_peak_80_330hz_hz": 318.75,
+        "secondary_peak_80_330hz_nm": 4.224735451169875,
+        "fd_hz": 345.4678763226861,
+        "fn_hz": 345.4692260555865,
+        "zeta": 0.002795334645391135,
+        "q": 178.86946052215436,
+        "tau_ms": 164.80749463745846,
+        "r2": 0.5478138813442526,
+        "damping_reliable": false,
+        "amp_nm": 39.61020955546061
+      }
+    }
+  },
+  "aliasing_caveat": "Nyquist is 500 Hz. A measured 359 Hz is indistinguishable from 641 Hz or 1359 Hz at this sample rate; the ring-down establishes that it is a real free-decay frequency of the mechanics, NOT which absolute frequency that is.",
+  "outputs": {
+    "states": "rendered_assets/psd_by_motion_state.png",
+    "ramp_grid": "rendered_assets/psd_ramp_grid.png",
+    "ringdown": "rendered_assets/ringdown_fit.png"
+  }
+}

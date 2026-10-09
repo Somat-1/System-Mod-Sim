@@ -1,0 +1,155 @@
+{
+  "rig": {
+    "full_step_um": 10.0,
+    "electrical_cycle_um": 40.0,
+    "lead_pitch_um": 2000.0,
+    "travel_total_um": 44000.0,
+    "guard_um": 2000.0,
+    "sweep_span_um": 36000.0
+  },
+  "motion": {
+    "measure_rate": "MODERATE",
+    "measure_velocity_um_s": 700.0,
+    "traverse_rate": "FAST",
+    "backoff_um": 500.0,
+    "note": "one rate for every measured move; the traverse rate is used only for unmeasured repositioning"
+  },
+  "timing": {
+    "dwell_measure_s": 1.5,
+    "settle_discard_s": 0.2,
+    "averaging_window_s": 1.3,
+    "samples_per_measurement_at_1khz": 1300,
+    "datum_dwell_s": 3.0,
+    "warmup_min": 20.0,
+    "warmup_legs": 23
+  },
+  "targets": {
+    "n_sweep_targets": 19,
+    "sweep_targets_um": [
+      -18000.0,
+      -15440.0,
+      -13610.0,
+      -12380.0,
+      -10280.0,
+      -7480.0,
+      -6690.0,
+      -3550.0,
+      -1580.0,
+      -40.0,
+      1720.0,
+      3690.0,
+      5660.0,
+      7920.0,
+      10010.0,
+      12070.0,
+      14690.0,
+      16410.0,
+      18000.0
+    ],
+    "all_on_full_step": true,
+    "min_spacing_um": 790.0,
+    "max_spacing_um": 3140.0,
+    "lead_phase_coverage": {
+      "note": "targets modulo the 2 mm lead pitch; a uniform grid would collapse these to a single value",
+      "min_gap_um": 0.0,
+      "max_gap_um": 620.0,
+      "spread_um": 1960.0
+    },
+    "comb": {
+      "centres_um": [
+        -12000.0,
+        0.0,
+        12000.0
+      ],
+      "target_step_um": 2.5,
+      "span_um": 120.0,
+      "mres_required_for_target_step": 4,
+      "per_mres": {
+        "1": {
+          "step_um": 10.0,
+          "step_fraction_of_full_step": 1.0,
+          "points_per_comb": 13,
+          "points_per_electrical_cycle": 4.0,
+          "limited_by_mres": true
+        },
+        "4": {
+          "step_um": 2.5,
+          "step_fraction_of_full_step": 0.25,
+          "points_per_comb": 49,
+          "points_per_electrical_cycle": 16.0,
+          "limited_by_mres": false
+        },
+        "16": {
+          "step_um": 2.5,
+          "step_fraction_of_full_step": 0.25,
+          "points_per_comb": 49,
+          "points_per_electrical_cycle": 16.0,
+          "limited_by_mres": false
+        },
+        "32": {
+          "step_um": 2.5,
+          "step_fraction_of_full_step": 0.25,
+          "points_per_comb": 49,
+          "points_per_electrical_cycle": 16.0,
+          "limited_by_mres": false
+        }
+      }
+    },
+    "settling_repeats": 20
+  },
+  "budget": {
+    "mres_values": [
+      1,
+      4,
+      16,
+      32
+    ],
+    "n_segments": 1791,
+    "n_measurements": 820,
+    "per_block_s": {
+      "1": 538.2250000000015,
+      "4": 691.2249999999894,
+      "16": 691.2249999999908,
+      "32": 691.2249999999908
+    },
+    "per_block_min": {
+      "1": 8.970416666666692,
+      "4": 11.52041666666649,
+      "16": 11.520416666666513,
+      "32": 11.520416666666513
+    },
+    "total_s": 3769.0428571428297,
+    "total_min": 62.817380952380496,
+    "phase_time_s": {
+      "warmup": 1157.142857142857,
+      "datum": 24.857142857142858,
+      "unidirectional": 419.35999999999984,
+      "bidirectional": 715.2857142857138,
+      "cyclic": 828.2057142857055,
+      "settling": 428.57142857142793,
+      "witness": 195.62
+    }
+  },
+  "blocks": [
+    {
+      "mres": 1,
+      "t_start_s": 1157.142857142857,
+      "t_end_s": 1695.3678571428586
+    },
+    {
+      "mres": 4,
+      "t_start_s": 1695.3678571428586,
+      "t_end_s": 2386.592857142848
+    },
+    {
+      "mres": 16,
+      "t_start_s": 2386.592857142848,
+      "t_end_s": 3077.817857142839
+    },
+    {
+      "mres": 32,
+      "t_start_s": 3077.817857142839,
+      "t_end_s": 3769.0428571428297
+    }
+  ]
+}

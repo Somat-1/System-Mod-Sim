@@ -1,0 +1,204 @@
+{
+  "schema": "v6-curve-fit-dynamic-sensitivity-v1",
+  "perturb_frac": 0.1,
+  "noise_floor": 0.01,
+  "dt_s": 0.001,
+  "segments": [
+    {
+      "segment": "osc_MRES1",
+      "mres": 1,
+      "kind": "oscillation",
+      "label": null,
+      "note": "oscillation dynamic fit, fixed 3.0/2.0 ms filter",
+      "n_samples": 30173,
+      "duration_s": 30.172000000000004,
+      "base_cost_um": 0.3050435869766024,
+      "cells": {
+        "median_ms": {
+          "base_value_ms": 3.0,
+          "cost_plus10_um": 0.3050435869766024,
+          "cost_minus10_um": 0.3050435869766024,
+          "sensitivity": 0.0,
+          "verdict": "insensitive"
+        },
+        "sigma_ms": {
+          "base_value_ms": 2.0,
+          "cost_plus10_um": 0.315179195117276,
+          "cost_minus10_um": 0.292104738038286,
+          "sensitivity": 0.037821573808007714,
+          "verdict": "sensitive"
+        }
+      },
+      "jobs": {
+        "base": {
+          "median_ms": 3.0,
+          "sigma_ms": 2.0,
+          "cost_um": 0.3050435869766024
+        },
+        "plus|median_ms": {
+          "median_ms": 3.3000000000000003,
+          "cost_um": 0.3050435869766024
+        },
+        "minus|median_ms": {
+          "median_ms": 2.7,
+          "cost_um": 0.3050435869766024
+        },
+        "plus|sigma_ms": {
+          "sigma_ms": 2.2,
+          "cost_um": 0.315179195117276
+        },
+        "minus|sigma_ms": {
+          "sigma_ms": 1.8,
+          "cost_um": 0.292104738038286
+        }
+      }
+    },
+    {
+      "segment": "osc_MRES32",
+      "mres": 32,
+      "kind": "oscillation",
+      "label": null,
+      "note": "oscillation dynamic fit, same fixed filter, ~30x finer commanded step",
+      "n_samples": 30056,
+      "duration_s": 30.05499999999995,
+      "base_cost_um": 0.05314208726092226,
+      "cells": {
+        "median_ms": {
+          "base_value_ms": 3.0,
+          "cost_plus10_um": 0.05314208726092226,
+          "cost_minus10_um": 0.05314208726092226,
+          "sensitivity": 0.0,
+          "verdict": "insensitive"
+        },
+        "sigma_ms": {
+          "base_value_ms": 2.0,
+          "cost_plus10_um": 0.0530201569431129,
+          "cost_minus10_um": 0.05326836131488417,
+          "sensitivity": 0.002335290017426396,
+          "verdict": "insensitive"
+        }
+      },
+      "jobs": {
+        "base": {
+          "median_ms": 3.0,
+          "sigma_ms": 2.0,
+          "cost_um": 0.05314208726092226
+        },
+        "plus|median_ms": {
+          "median_ms": 3.3000000000000003,
+          "cost_um": 0.05314208726092226
+        },
+        "minus|median_ms": {
+          "median_ms": 2.7,
+          "cost_um": 0.05314208726092226
+        },
+        "plus|sigma_ms": {
+          "sigma_ms": 2.2,
+          "cost_um": 0.0530201569431129
+        },
+        "minus|sigma_ms": {
+          "sigma_ms": 1.8,
+          "cost_um": 0.05326836131488417
+        }
+      }
+    },
+    {
+      "segment": "leg_MRES1_Dmod",
+      "mres": 1,
+      "kind": "leg",
+      "label": "D-mod",
+      "note": "ramp dynamic fit, unclipped mid-range filter (3.57/2.14 ms)",
+      "n_samples": 31592,
+      "duration_s": 31.591000000000008,
+      "base_cost_um": 1.9631303547074166,
+      "cells": {
+        "median_ms": {
+          "base_value_ms": 3.5714285714285716,
+          "cost_plus10_um": 1.9631303547074166,
+          "cost_minus10_um": 1.8387968722186339,
+          "sensitivity": 0.031667148895803535,
+          "verdict": "sensitive"
+        },
+        "sigma_ms": {
+          "base_value_ms": 2.142857142857143,
+          "cost_plus10_um": 2.027261406379906,
+          "cost_minus10_um": 1.8903690597089673,
+          "sensitivity": 0.034865832098893136,
+          "verdict": "sensitive"
+        }
+      },
+      "jobs": {
+        "base": {
+          "median_ms": 3.5714285714285716,
+          "sigma_ms": 2.142857142857143,
+          "cost_um": 1.9631303547074166
+        },
+        "plus|median_ms": {
+          "median_ms": 3.9285714285714293,
+          "cost_um": 1.9631303547074166
+        },
+        "minus|median_ms": {
+          "median_ms": 3.2142857142857144,
+          "cost_um": 1.8387968722186339
+        },
+        "plus|sigma_ms": {
+          "sigma_ms": 2.357142857142857,
+          "cost_um": 2.027261406379906
+        },
+        "minus|sigma_ms": {
+          "sigma_ms": 1.9285714285714286,
+          "cost_um": 1.8903690597089673
+        }
+      }
+    },
+    {
+      "segment": "leg_MRES32_Dfast",
+      "mres": 32,
+      "kind": "leg",
+      "label": "D-fast",
+      "note": "ramp dynamic fit, floored at the hard lower bound (1.0/0.5 ms)",
+      "n_samples": 13207,
+      "duration_s": 13.205999999999904,
+      "base_cost_um": 0.06182754071018334,
+      "cells": {
+        "median_ms": {
+          "base_value_ms": 1.0,
+          "cost_plus10_um": 0.06182754071018334,
+          "cost_minus10_um": 0.06182754071018334,
+          "sensitivity": 0.0,
+          "verdict": "insensitive"
+        },
+        "sigma_ms": {
+          "base_value_ms": 0.5,
+          "cost_plus10_um": 0.08102760489092524,
+          "cost_minus10_um": 0.041882456274488146,
+          "sensitivity": 0.31656724630153105,
+          "verdict": "sensitive"
+        }
+      },
+      "jobs": {
+        "base": {
+          "median_ms": 1.0,
+          "sigma_ms": 0.5,
+          "cost_um": 0.06182754071018334
+        },
+        "plus|median_ms": {
+          "median_ms": 1.1,
+          "cost_um": 0.06182754071018334
+        },
+        "minus|median_ms": {
+          "median_ms": 0.9,
+          "cost_um": 0.06182754071018334
+        },
+        "plus|sigma_ms": {
+          "sigma_ms": 0.55,
+          "cost_um": 0.08102760489092524
+        },
+        "minus|sigma_ms": {
+          "sigma_ms": 0.45,
+          "cost_um": 0.041882456274488146
+        }
+      }
+    }
+  ]
+}

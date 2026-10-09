@@ -1,0 +1,59 @@
+{
+  "source": "\\\\MULT-FP01.hitdom.lan\\project2\\Internships\\Tomas Valentinas\\Sytem Mod & Sim\\Microstepping Test Data\\v6\\EXPrun.csv",
+  "tail_start_s": 1148.667,
+  "tail_end_s": 1302.317,
+  "last_commanded_leg_end_s": 1147.064,
+  "sample_rate_hz": 1000.0,
+  "metrics": {
+    "whole_tail": {
+      "n_samples": 153651,
+      "duration_s": 153.6500000000001,
+      "mean_um": -194.32163857052672,
+      "std_um": 0.0374689785020606,
+      "ptp_um": 1.271000000000015,
+      "min_um": -195.263,
+      "max_um": -193.992
+    },
+    "step_to_step_variation": {
+      "mean_abs_diff_um": 0.006848024731532803,
+      "median_abs_diff_um": 0.005000000000023874,
+      "max_abs_diff_um": 1.1479999999999961
+    },
+    "local_1s_windows": {
+      "window_s": 1.0,
+      "n_windows": 153,
+      "mean_std_um": 0.008754420586355425,
+      "min_std_um": 0.004127033729861211,
+      "max_std_um": 0.0395495618666485
+    },
+    "linear_drift": {
+      "slope_um_per_s": 0.0004900219916903115,
+      "total_drift_um_over_tail": 0.0752918790232164
+    },
+    "large_outliers_gt_300nm": [
+      {
+        "t_s": 1148.667,
+        "diff_um": 1.1479999999999961
+      },
+      {
+        "t_s": 1148.6680000000001,
+        "diff_um": 0.32800000000000296
+      },
+      {
+        "t_s": 1148.669,
+        "diff_um": 0.8029999999999973
+      },
+      {
+        "t_s": 1148.671,
+        "diff_um": 0.5020000000000095
+      }
+    ],
+    "steady_state_excl_first_1s": {
+      "excludes_first_s": 1.0,
+      "n_samples": 152651,
+      "std_um": 0.03737643635607693,
+      "ptp_um": 0.23199999999999932,
+      "mean_abs_diff_um": 0.006806885031117036
+    }
+  }
+}
