@@ -20,6 +20,7 @@ import os
 import sys
 import threading
 import time
+import traceback
 from pathlib import Path
 
 
@@ -328,6 +329,7 @@ def run_gui(args):
     MAX_RATE = 5000
     MAX_WINDOW_S = 60
     PLOT_POINTS = 4000  # decimate plotted traces to roughly this many points
+    REDRAW_MS = 100     # 10 FPS is ample for a live instrument display
 
     class App:
         def __init__(self, root):
@@ -345,6 +347,8 @@ def run_gui(args):
             self.z_hist = []
             self.rate_est = 0.0
             self.frozen = False
+            self.data_version = 0
+            self.drawn_version = -1
 
             self._build_controls()
             self._build_plot()
@@ -409,7 +413,9 @@ def run_gui(args):
             self.refresh_ports()
 
         def _build_plot(self):
-            self.fig = Figure(figsize=(11, 7), dpi=100, constrained_layout=True)
+            # Recomputing constrained layout on every live draw is expensive.
+            # Lay the fixed three-axis arrangement out once instead.
+            self.fig = Figure(figsize=(11, 7), dpi=100)
             self.ax_pos, self.ax_vel, self.ax_dig = self.fig.subplots(
                 3, 1, sharex=True, gridspec_kw={"height_ratios": [3, 2, 2]})
             self.l_pos, = self.ax_pos.plot([], [], lw=1.2, color="#2a6fdb")
@@ -422,6 +428,7 @@ def run_gui(args):
             self.ax_dig.set_xlabel("time [s]")
             for ax in (self.ax_pos, self.ax_vel, self.ax_dig):
                 ax.grid(alpha=0.3)
+            self.fig.tight_layout()
             canvas = FigureCanvasTkAgg(self.fig, master=self.root)
             NavigationToolbar2Tk(canvas, self.root).update()
             canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -555,10 +562,16 @@ def run_gui(args):
         def tick(self):
             try:
                 self._ingest()
-                if not self.frozen:
+                if not self.frozen and self.data_version != self.drawn_version:
                     self._redraw()
+                    self.drawn_version = self.data_version
+            except Exception as exc:
+                # Tk otherwise prints callback failures only to the launching
+                # terminal, which looks like an unexplained GUI freeze/crash.
+                traceback.print_exc()
+                self.info_var.set(f"#ERR,monitor: {type(exc).__name__}: {exc}")
             finally:
-                self.root.after(50, self.tick)
+                self.root.after(REDRAW_MS, self.tick)
 
         def _ingest(self):
             rows, info = self.col.drain()
@@ -575,6 +588,7 @@ def run_gui(args):
             self.last_seq = int(seqs[-1])
             prev_zc = self.ring.latest(1)[0, 8] if self.ring.n else None
             self.ring.extend(rows)
+            self.data_version += 1
             for r in rows:
                 if prev_zc is not None and r[8] != prev_zc:
                     self.z_hist.append(r[9])
@@ -590,7 +604,20 @@ def run_gui(args):
                 win = float(self.win_var.get())
             except ValueError:
                 win = 5.0
-            data = self.ring.latest()
+            # Copy only enough recent rows to cover the requested time window.
+            # The old implementation copied the entire 300k-row ring at every
+            # redraw and then discarded almost all of it. After a few minutes
+            # that caused ~1 GB RSS, 100% CPU, reader backlog, and GUI failure.
+            try:
+                configured_rate = max(1.0, float(self.rate_var.get()))
+            except ValueError:
+                configured_rate = 1000.0
+            display_rate = min(MAX_RATE, max(configured_rate, self.rate_est, 10.0))
+            rows_needed = min(
+                self.ring.n,
+                max(2, int(math.ceil(win * display_rate * 1.25)) + 2),
+            )
+            data = self.ring.latest(rows_needed)
             t = data[:, 2] * 1e-6
             data = data[t >= t[-1] - win]
             t = data[:, 2] * 1e-6
