@@ -21,9 +21,11 @@ this rig those are **ESP32 pins**, four metres of USB away from Python. Somethin
 on the board has to turn a position request into a pulse train.
 
 None of the existing sketches can do it. They are campaign firmware: they run a
-fixed, pre-programmed trajectory from boot and accept only `RUN`, `STATUS` and
-`ABORT`. There is no "go to position *n*" among them. So this folder adds the
-missing half.
+fixed trajectory and accept only the commands that campaign needed. The closest
+is v5, which does take *relative* jog commands (`J+ <n>`, `J- <n>`, `NUDGE±`)
+for finding the stage's range by hand — but there is no "go to position *n*"
+anywhere, no shuttle, and v5 starts moving on its own a few seconds after boot.
+So this folder adds the missing half.
 
 Flash the sketch once; after that the Python script is the only thing you touch.
 
@@ -57,14 +59,56 @@ v4 used 0.03 (a different board's value) and under-delivered current by about 3�
 
 ---
 
-## 3. Quickstart
+## 3. Setting it up on the rig PC
+
+Only two files matter, and `jog_stepper.py` imports nothing from this
+repository, so copying the `ESP32S3_TMC2209_Jog/` folder is enough — no clone
+needed if the machine can reach the share.
+
+### a. Flash the firmware (once)
+
+Needs **Arduino-ESP32 3.x** and the **TMCStepper** library. The board settings
+are the rig's established ones, from
+[`../Microstepping Test Data/v5`](../Microstepping%20Test%20Data/v5):
+
+| Setting | Value |
+|---|---|
+| Board | ESP32S3 Dev Module |
+| USB CDC On Boot | **Enabled** |
+| USB Mode | Hardware CDC and JTAG |
+
+`USB CDC On Boot` is the one that catches people: without it the sketch runs but
+`Serial` never appears on USB, so the port opens and nothing ever answers `PING`.
+
+With `arduino-cli`, which encodes both settings in the FQBN:
+
+```bash
+arduino-cli core install esp32:esp32
+arduino-cli lib install TMCStepper
+
+arduino-cli compile \
+  --fqbn 'esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=cdc' \
+  firmware/esp32s3_tmc2209_jog
+
+arduino-cli upload \
+  --fqbn 'esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=cdc' \
+  --port COM11 \
+  firmware/esp32s3_tmc2209_jog
+```
+
+Uploading resets the board. Unlike the campaign sketches, this one does not
+move afterwards — it waits.
+
+### b. Run the host script
+
+Python 3.8 or newer (written against 3.12).
 
 ```bash
 pip install pyserial
 
 python jog_stepper.py                      # find the board, then prompt
 python jog_stepper.py --port COM11         # skip the search
-python jog_stepper.py --simulate           # no hardware
+python jog_stepper.py --simulate           # no hardware, no pyserial needed
 python jog_stepper.py --a -200 --b 200 --go --max-legs 10
 ```
 
