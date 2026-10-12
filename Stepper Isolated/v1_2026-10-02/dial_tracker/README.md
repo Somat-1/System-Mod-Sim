@@ -206,7 +206,7 @@ python make_explainer_video.py --calib cal.json --scale 0.667   # 720p, smaller 
 python make_explainer_video.py --calib cal.json --step 30 --out quick.mp4
 ```
 
-Renders `../recordings/dial_explainer.mp4` — 1920×1080, 61.5 s, ~65 MB, about
+Renders `../recordings/dial_explainer.mp4` — 1920×1080, 61.5 s, ~67 MB, about
 six minutes to make.
 
 **Left: what the tracker sees.** The fitted pivots, the annuli the needles are
@@ -219,22 +219,49 @@ pausing on — the needle is genuinely *not there*, only a few scattered green
 pixels survive, and the fitted bearing points into empty space. That is what a
 rejected frame looks like, and why it is rejected.
 
-**Right top: the shaft outline.** Radius = ideal circle + 15 × radial deviation,
-drawn as the shaft turns. A perfectly round, perfectly centred shaft would stay
-on the dashed circle. The ideal circle's drawing radius is a reference only —
-the real shaft radius is not known from this measurement and does not need to
-be, because what is plotted is the deviation, graduated in true µm.
+**Right top: the shaft outline.** Radius = ideal circle + 15 × radial
+displacement, drawn as the shaft turns. A perfect shaft would not move the
+stylus at all and would stay on the dashed circle. The ideal circle's drawing
+radius is a reference only — the real shaft radius is not known from this
+measurement and does not need to be, because what is plotted is displacement,
+graduated in true µm.
 
-**Right bottom: commanded vs measured shaft angle**, from the encoder
-recording, with deviation magnified ×15 about the ideal line — the same
-reconstruction and the same gain as
+**Everything is referenced to the reading on the first tracked frame.** The
+indicator is wound in before a run so the stylus has room to travel both ways,
+which makes the absolute reading (208.18 µm here) a record of how far it was
+preloaded, not a measurement. Zeroing on the first tracked frame is what makes
+the number mean something — and it is why the polar trace starts *on* the ideal
+circle, at the marked `start / zero` point, instead of offset from it. The
+displacement runs −101.5 … +217.0 µm and closes to within 4.6 µm after a full
+revolution.
+
+**Right bottom: the linear sweep** — indicator displacement against shaft
+rotation angle, the same measurement the polar chart shows, unrolled. No
+magnification here: the y-axis is micrometres directly, so this is the sweep at
+true scale. The max high spot, the max low spot and the zero crossing are
+marked as the trace reaches them rather than drawn in advance.
+
+Both right-hand panels come from the dial alone. Shaft angle is the dial's own
+fitted period, 60.13 s per revolution.
+
+**The shaft encoder is deliberately not in this video.** It and the dial were
+not sampled off a common clock, so putting them on one time axis would imply a
+synchronisation that does not exist. The encoder has its own plot in
 [`../analysis/plot_encoder_full_rotation_xy.py`](../analysis).
 
-Shaft angle comes from the dial's own fitted period (60.13 s per revolution),
-and the encoder panel is aligned to it **by fraction of a revolution, not by a
-hardware trigger**. The two instruments recorded the same single revolution but
-were not sampled off a common clock, so treat the two panels as advancing
-together, not as synchronised to the frame.
+What the two panels say together:
+
+| | |
+|---|---|
+| Eccentricity | **159.5 µm** at 110° |
+| TIR | **318.5 µm** |
+| Out-of-roundness (2/rev and above) | ~2 µm |
+
+A shaft mounted off-centre by *e* reads as a single sinusoid of amplitude *e*,
+so the once-per-revolution term **is** the eccentricity and its phase is the
+direction of the high spot. That is why the polar trace is a displaced circle
+rather than a lumpy outline, and why the sweep is a clean sine rather than
+something knobbly. Both numbers are independent of where the sweep was zeroed.
 
 ---
 
