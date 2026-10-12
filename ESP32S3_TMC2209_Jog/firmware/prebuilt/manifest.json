@@ -1,0 +1,20 @@
+{
+  "_comment": "Fingerprint of the committed flash image. jog_stepper.py compares sketch_sha256 against the .ino on disk and warns if they differ, so an edited sketch cannot be silently skipped in favour of a stale image.",
+  "image": "esp32s3_tmc2209_jog_merged.bin",
+  "image_sha256": "4c7889c511e621e8c5e28a60a6eb5100eb50647e8b3f4afdda83ca303c554e3e",
+  "image_bytes": 384528,
+  "flash_offset": "0x0",
+  "chip": "esp32s3",
+  "sketch": "esp32s3_tmc2209_jog.ino",
+  "sketch_sha256": "b3a0e5a671e922b21c117ab8952e61cd26c3f5e210a22d9b4000fc8384da3ee2",
+  "fqbn": "esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=cdc",
+  "core": "esp32:esp32@3.3.12",
+  "libraries": [
+    "TMCStepper"
+  ],
+  "arduino_cli": "1.5.2-rc.1",
+  "built": "2026-10-12",
+  "program_bytes": 318842,
+  "program_pct_of_flash": 24,
+  "globals_bytes": 22672
+}

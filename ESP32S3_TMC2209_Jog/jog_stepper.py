@@ -32,10 +32,14 @@ Safety, because this moves a real stage with no homing and no end stops:
 from __future__ import annotations
 
 import argparse
+import os
+import shutil
+import subprocess
 import sys
 import threading
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 
 FULL_STEPS_PER_MM = 100
 DEFAULT_RATE_STEPS_S = 70          # 0.7 mm/s, the rigs "MODERATE"
@@ -239,6 +243,204 @@ def find_board(preferred: str | None, verbose=False) -> Link | None:
     print("\nNothing answered. Either the board is on another port, or it is not")
     print("running esp32s3_tmc2209_jog.ino (see firmware/ in this folder).")
     return None
+
+
+# --------------------------------------------------------------------------
+# flashing
+# --------------------------------------------------------------------------
+# Two ways to get the firmware onto the board, because they suit very different
+# machines.
+#
+#   prebuilt  a committed flash image written with esptool. esptool is pure
+#             Python and pip-installs in seconds, so this needs no compiler
+#             and no toolchain - the right choice for a locked-down rig PC.
+#   source    arduino-cli compiles the sketch and uploads it. Always current
+#             with the .ino, but the first run pulls the ESP32 core and its
+#             toolchains - measured at over 5 GB, so not something to start on
+#             a metered or slow connection.
+#
+# Prebuilt is tried first and source is the fallback, so the common case is
+# fast and the uncommon case still works.
+
+HERE = Path(__file__).resolve().parent
+SKETCH_DIR = HERE / "firmware" / "esp32s3_tmc2209_jog"
+PREBUILT_BIN = HERE / "firmware" / "prebuilt" / "esp32s3_tmc2209_jog_merged.bin"
+TOOLS_DIR = HERE / "tools"
+
+# Both settings matter and both are in the FQBN: without CDCOnBoot=cdc the
+# sketch runs but Serial never appears on USB, which looks exactly like a board
+# that will not answer PING.
+FQBN = "esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=cdc"
+CORE = "esp32:esp32"
+LIBS = ("TMCStepper",)
+FLASH_OFFSET = "0x0"
+CHIP = "esp32s3"
+
+ACLI_URL = {
+    "win32": "https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Windows_64bit.zip",
+    "linux": "https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Linux_64bit.tar.gz",
+    "darwin": "https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_macOS_64bit.tar.gz",
+}
+
+
+def run(cmd, **kw):
+    print("    $ " + " ".join(str(c) for c in cmd))
+    kw.setdefault("check", False)
+    return subprocess.run([str(c) for c in cmd], **kw)
+
+
+def prebuilt_is_current() -> bool | None:
+    """Does the committed image still match the sketch on disk?
+
+    A prebuilt binary that silently lags an edited .ino is the obvious trap
+    here: you fix the firmware, flash, and get the old build with no hint that
+    anything was skipped. The manifest records the sketch's hash at build time,
+    so the mismatch can be reported instead. None = cannot tell.
+    """
+    import hashlib
+    import json
+    manifest = PREBUILT_BIN.parent / "manifest.json"
+    ino = SKETCH_DIR / "esp32s3_tmc2209_jog.ino"
+    if not manifest.exists() or not ino.exists():
+        return None
+    try:
+        recorded = json.loads(manifest.read_text(encoding="utf-8")).get("sketch_sha256")
+    except (OSError, ValueError):
+        return None
+    if not recorded:
+        return None
+    return hashlib.sha256(ino.read_bytes()).hexdigest() == recorded
+
+
+def flash_prebuilt(port: str) -> bool:
+    """Write the committed flash image with esptool. No compiler involved."""
+    import importlib
+    if not PREBUILT_BIN.exists():
+        print(f"  no prebuilt image at {PREBUILT_BIN.relative_to(HERE)}")
+        return False
+    current = prebuilt_is_current()
+    if current is False:
+        print("  NOTE: the sketch has been edited since this image was built.")
+        print("  The prebuilt image is what will be flashed, which will NOT")
+        print("  include your changes. Use --flash-mode source to compile them.")
+    elif current is None:
+        print("  (cannot confirm the image matches the sketch - no manifest)")
+    try:
+        importlib.import_module("esptool")
+    except ImportError:
+        print("  esptool is not installed. It is pure Python and small:")
+        print(f"    {sys.executable} -m pip install esptool")
+        return False
+    size_mb = PREBUILT_BIN.stat().st_size / 1e6
+    print(f"  flashing {PREBUILT_BIN.name} ({size_mb:.2f} MB) to {port} ...")
+    # esptool 5 renamed the commands and option values to hyphens and warns
+    # loudly about the old spellings; esptool 4 only knows the old ones. Try
+    # the modern spelling first so current installs are quiet, and fall back
+    # rather than requiring a particular version.
+    variants = (
+        ("write-flash", "default-reset", "hard-reset"),
+        ("write_flash", "default_reset", "hard_reset"),
+    )
+    for verb, before, after in variants:
+        cmd = [sys.executable, "-m", "esptool", "--chip", CHIP, "--port", port,
+               "--baud", "921600", "--before", before, "--after", after,
+               verb, FLASH_OFFSET, str(PREBUILT_BIN)]
+        res = run(cmd, capture_output=True, text=True)
+        out = (res.stdout or "") + (res.stderr or "")
+        if res.returncode == 0:
+            print("  flashed.")
+            return True
+        # Only a spelling the installed esptool does not know is worth retrying;
+        # anything else is a real failure and retrying would just hide it.
+        if not any(s in out for s in
+                   ("invalid choice", "unrecognized arguments", "No such command")):
+            print(out.strip()[-1500:])
+            return False
+    print("  esptool rejected both command spellings; is it a supported version?")
+    return False
+
+
+def find_arduino_cli(allow_download=False):
+    """arduino-cli from PATH, from tools/, or downloaded on request."""
+    exe = "arduino-cli.exe" if sys.platform == "win32" else "arduino-cli"
+    found = shutil.which("arduino-cli") or (
+        str(TOOLS_DIR / exe) if (TOOLS_DIR / exe).exists() else None)
+    if found:
+        return found
+    if not allow_download:
+        print("  arduino-cli was not found on PATH or in tools/.")
+        print("  re-run with --allow-download to fetch it (~18 MB) into tools/,")
+        print("  or install it yourself: https://arduino.github.io/arduino-cli/")
+        return None
+    url = ACLI_URL.get(sys.platform)
+    if not url:
+        print(f"  no arduino-cli download known for platform {sys.platform}")
+        return None
+    import io
+    import tarfile
+    import urllib.request
+    import zipfile
+    print(f"  downloading arduino-cli from {url}")
+    TOOLS_DIR.mkdir(parents=True, exist_ok=True)
+    with urllib.request.urlopen(url, timeout=180) as r:
+        blob = r.read()
+    if url.endswith(".zip"):
+        with zipfile.ZipFile(io.BytesIO(blob)) as z:
+            z.extractall(TOOLS_DIR)
+    else:
+        with tarfile.open(fileobj=io.BytesIO(blob), mode="r:gz") as t:
+            t.extractall(TOOLS_DIR)
+    target = TOOLS_DIR / exe
+    if not target.exists():
+        print("  download did not produce arduino-cli")
+        return None
+    if sys.platform != "win32":
+        target.chmod(0o755)
+    print(f"  arduino-cli in {target}")
+    return str(target)
+
+
+def flash_from_source(port: str, allow_download=False) -> bool:
+    """Compile the sketch with arduino-cli and upload it."""
+    cli = find_arduino_cli(allow_download)
+    if cli is None:
+        return False
+    if not SKETCH_DIR.exists():
+        print(f"  sketch folder missing: {SKETCH_DIR}")
+        return False
+    print("  checking the ESP32 core and libraries "
+          "(the first run downloads >5 GB) ...")
+    env = dict(os.environ)
+    if run([cli, "core", "list"], capture_output=True, text=True,
+           env=env).stdout.find("esp32:esp32") < 0:
+        run([cli, "core", "update-index"], env=env)
+        if run([cli, "core", "install", CORE], env=env).returncode != 0:
+            print("  could not install the ESP32 core")
+            return False
+    for lib in LIBS:
+        run([cli, "lib", "install", lib], env=env, capture_output=True, text=True)
+    print("  compiling ...")
+    if run([cli, "compile", "--fqbn", FQBN, SKETCH_DIR], env=env).returncode != 0:
+        print("  compile failed")
+        return False
+    print(f"  uploading to {port} ...")
+    if run([cli, "upload", "--fqbn", FQBN, "--port", port, SKETCH_DIR],
+           env=env).returncode != 0:
+        print("  upload failed")
+        return False
+    print("  flashed.")
+    return True
+
+
+def do_flash(port: str, mode="auto", allow_download=False) -> bool:
+    print(f"\nFlashing the jog firmware to {port}")
+    if mode in ("auto", "prebuilt"):
+        if flash_prebuilt(port):
+            return True
+        if mode == "prebuilt":
+            return False
+        print("  falling back to compiling from source")
+    return flash_from_source(port, allow_download)
 
 
 # --------------------------------------------------------------------------
@@ -818,9 +1020,21 @@ def main():
     ap.add_argument("--limit", type=int, default=DEFAULT_LIMIT,
                     help=f"soft limit +/- about zero [full steps] (default {DEFAULT_LIMIT})")
     ap.add_argument("--go", action="store_true", help="start jogging immediately")
+    ap.add_argument("--no-prompt", action="store_true",
+                    help="exit after --go instead of opening the prompt")
     ap.add_argument("--max-legs", type=int,
                     help="stop after this many legs instead of on a keypress")
     ap.add_argument("--list", action="store_true", help="list serial ports and exit")
+    ap.add_argument("--flash", action="store_true",
+                    help="flash the firmware before connecting")
+    ap.add_argument("--flash-only", action="store_true",
+                    help="flash and exit, without opening the prompt")
+    ap.add_argument("--flash-mode", choices=("auto", "prebuilt", "source"),
+                    default="auto",
+                    help="auto tries the prebuilt image then compiles; "
+                         "source always compiles")
+    ap.add_argument("--allow-download", action="store_true",
+                    help="permit fetching arduino-cli (~18 MB) into tools/")
     ap.add_argument("--verbose", action="store_true", help="echo the serial traffic")
     args = ap.parse_args()
 
@@ -841,6 +1055,35 @@ def main():
         for p in ports:
             print(describe(p))
         return 0
+
+    if (args.flash or args.flash_only) and not args.simulate:
+        port = args.port
+        if not port:
+            # Flashing needs a specific port; pick the one that looks right
+            # rather than writing firmware to a guess.
+            cands = [p.device for p in list_ports()
+                     if getattr(p, "vid", None) in USB_VIDS]
+            if "COM11" in [p.device for p in list_ports()]:
+                port = "COM11"
+            elif len(cands) == 1:
+                port = cands[0]
+            else:
+                print("Which port is the board on? Pass --port; "
+                      "--list shows what is attached.")
+                for p in list_ports():
+                    print("  " + describe(p))
+                return 2
+            print(f"No --port given; flashing {port}")
+        if not do_flash(port, args.flash_mode, args.allow_download):
+            print("\nFlashing did not succeed - see the log above.")
+            return 1
+        if args.flash_only:
+            return 0
+        # The board reboots into the new firmware; let USB re-enumerate.
+        print("  waiting for the board to come back ...")
+        time.sleep(3.0)
+        if not args.port:
+            args.port = port
 
     if args.simulate:
         print("SIMULATION - no hardware. The stage is a model; nothing will move.")
@@ -875,6 +1118,10 @@ def main():
             console.set_pos("b", args.b)
         if args.go:
             console.run_jog(max_legs=args.max_legs)
+            # A scripted invocation has nobody to answer the prompt, so falling
+            # into it would just block on input() forever.
+            if args.no_prompt or not sys.stdin.isatty():
+                return 0
         console.loop()
     finally:
         try:

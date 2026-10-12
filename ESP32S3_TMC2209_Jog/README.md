@@ -67,6 +67,32 @@ needed if the machine can reach the share.
 
 ### a. Flash the firmware (once)
 
+The script can do this itself:
+
+```bash
+python jog_stepper.py --port COM11 --flash
+```
+
+which flashes and then drops straight into the prompt. `--flash-only` stops
+after flashing. There are two routes and it picks the first that works:
+
+| Route | Needs | Cost |
+|---|---|---|
+| **prebuilt** | `pip install esptool` — pure Python | seconds; a 375 KB image in `firmware/prebuilt/` |
+| **source** | `arduino-cli` + ESP32 core + TMCStepper | **6.6 GB** on first run (measured, not estimated) |
+
+On a locked-down rig PC, prebuilt is the one you want: no compiler, no
+toolchain, nothing to put on PATH. Source compiles the current `.ino`, so use
+it after editing the firmware — `--flash-mode source` forces it, and
+`--allow-download` lets the script fetch `arduino-cli` (~18 MB) into `tools/`
+rather than requiring it installed.
+
+Flashing always needs a definite port: with no `--port` the script will take
+`COM11` or a single obvious ESP32, but otherwise it asks rather than writing
+firmware to a guess.
+
+### Flashing by hand
+
 Needs **Arduino-ESP32 3.x** and the **TMCStepper** library. The board settings
 are the rig's established ones, from
 [`../Microstepping Test Data/v5`](../Microstepping%20Test%20Data/v5):
@@ -253,10 +279,19 @@ simulator enforces the same validation as the firmware — same soft limit, same
 power-of-two MRES, same current range, same pulse-rate ceiling — so that it
 cannot accept something the real board would reject.
 
-**Not tested.** The firmware has never been compiled, let alone run: there is no
-Arduino toolchain on this machine and no board on the bench. It needs
-**TMCStepper** installed and the **ESP32** board package. Expect to fix something
-on the first build.
+**Compiles cleanly.** Built with arduino-cli 1.5.2 against `esp32:esp32@3.3.12`
+and TMCStepper, at the FQBN above: 318,842 bytes of program (24% of flash) and
+22,672 bytes of globals, no errors and no warnings. The resulting image is
+committed as `firmware/prebuilt/`, with a `manifest.json` recording the core
+version, the FQBN and the **hash of the sketch it was built from** — the script
+compares that hash against the `.ino` on disk and says so if you have edited the
+sketch since, so a stale image cannot be flashed silently in place of your
+changes.
+
+**Not tested.** Nothing has been *run on hardware* — there is no board on the
+bench here, so the pulse timing, the direction sense, the soft limits and the
+TMC2209 UART readback are all unexercised. Flashing itself is only verified as
+far as esptool invoking correctly and failing cleanly on an absent port.
 
 **Worth checking on the first run**, before trusting it with a long move:
 
