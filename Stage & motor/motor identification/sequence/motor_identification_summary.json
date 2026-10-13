@@ -1,0 +1,50 @@
+{
+  "total_seconds": 2225.98,
+  "total_minutes": 37.1,
+  "actions": 83,
+  "full_steps_per_revolution": 200,
+  "electrical_period_full_steps": 4,
+  "native_mres": 16,
+  "sample_hz": 2000,
+  "driver_mode_invariants": {
+    "spreadcycle": true,
+    "microplyer_intpol": false,
+    "stealthchop": false,
+    "coolstep": false,
+    "standstill_current_reduction": false
+  },
+  "blocks": {
+    "warmup": {
+      "actions": 13,
+      "minutes": 4.1
+    },
+    "alignment": {
+      "actions": 2,
+      "minutes": 0.26
+    },
+    "static_map": {
+      "actions": 2,
+      "minutes": 16.0
+    },
+    "current_sweep": {
+      "actions": 9,
+      "minutes": 3.27
+    },
+    "dynamics": {
+      "actions": 20,
+      "minutes": 2.43
+    },
+    "velocity": {
+      "actions": 22,
+      "minutes": 4.9
+    },
+    "reversal": {
+      "actions": 12,
+      "minutes": 5.0
+    },
+    "close": {
+      "actions": 3,
+      "minutes": 1.14
+    }
+  }
+}
