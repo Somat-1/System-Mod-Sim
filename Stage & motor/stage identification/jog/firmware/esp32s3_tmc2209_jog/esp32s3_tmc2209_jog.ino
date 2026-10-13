@@ -56,12 +56,18 @@
 
 #include <Arduino.h>
 #include <TMCStepper.h>
+#include "driver/pulse_cnt.h"
 
 constexpr uint8_t STEP_PIN = 5;
 constexpr uint8_t DIR_PIN = 6;
 constexpr uint8_t UART_RX_PIN = 18;
 constexpr uint8_t UART_TX_PIN = 17;
 constexpr uint8_t LED_PIN = 48;
+// Encoder. Moved off GPIO5/6, which the TMC2209 uses for STEP/DIR; see
+// ../../../../CONNECTIONS.md for why the encoder is the side that moved.
+constexpr gpio_num_t ENC_A = GPIO_NUM_4;
+constexpr gpio_num_t ENC_B = GPIO_NUM_7;
+constexpr gpio_num_t ENC_Z = GPIO_NUM_15;
 constexpr uint8_t DRIVER_ADDRESS = 0;
 constexpr float R_SENSE_OHM = 0.11F;   // Actual resistor fitted on this board.
 constexpr uint32_t DRIVER_BAUD = 115200;
@@ -88,7 +94,7 @@ constexpr int64_t U256_PER_FULLSTEP = 256;
 HardwareSerial TmcSerial(1);
 TMC2209Stepper driver(&TmcSerial, R_SENSE_OHM, DRIVER_ADDRESS);
 
-enum Mode : uint8_t { IDLE, MOVING, JOGGING };
+enum Mode : uint8_t { IDLE, MOVING, JOGGING, CALIB };
 
 Mode mode = IDLE;
 int64_t posU256 = 0;
@@ -107,6 +113,73 @@ int64_t stepU256 = U256_PER_FULLSTEP / DEFAULT_MRES;
 uint64_t nextPulseUs = 0;
 bool dirPositive = true;
 uint32_t lastTelemetryMs = 0;
+
+pcnt_unit_handle_t pcnt = nullptr;
+volatile int32_t indexCount = 0;
+
+// --- microstep calibration -------------------------------------------------
+// One microstep forward, a long dwell, one microstep back, another dwell,
+// repeated. The dwell is the measurement: it is the only time the stage is
+// actually at rest. A +1/-1 pair returns to the same commanded position, so
+// whatever the encoder reports at the end of the pair is the stage's error and
+// not the command's.
+uint32_t calibEndMs = 0;
+uint32_t calibDwellMs = 2000;
+uint32_t calibNextMs = 0;
+uint32_t calibCycles = 0;
+bool calibOutbound = true;     // the next microstep is the +1 of the pair
+
+// --------------------------------------------------------------- encoder
+
+void IRAM_ATTR onIndex() { indexCount++; }
+
+bool setupEncoder() {
+  pcnt_unit_config_t unit_cfg = {};
+  unit_cfg.high_limit = 30000;
+  unit_cfg.low_limit = -30000;
+  unit_cfg.flags.accum_count = 1;
+  if (pcnt_new_unit(&unit_cfg, &pcnt) != ESP_OK) return false;
+  pcnt_glitch_filter_config_t filt = {};
+  filt.max_glitch_ns = 1000;
+  pcnt_unit_set_glitch_filter(pcnt, &filt);
+
+  // Two channels wired opposite ways round is what makes the count x4 and
+  // direction aware: each takes one line as its edge source and the other as
+  // the level deciding up or down.
+  pcnt_chan_config_t a_cfg = {};
+  a_cfg.edge_gpio_num = ENC_A;
+  a_cfg.level_gpio_num = ENC_B;
+  pcnt_channel_handle_t cha = nullptr;
+  if (pcnt_new_channel(pcnt, &a_cfg, &cha) != ESP_OK) return false;
+  pcnt_chan_config_t b_cfg = {};
+  b_cfg.edge_gpio_num = ENC_B;
+  b_cfg.level_gpio_num = ENC_A;
+  pcnt_channel_handle_t chb = nullptr;
+  if (pcnt_new_channel(pcnt, &b_cfg, &chb) != ESP_OK) return false;
+
+  pcnt_channel_set_edge_action(cha, PCNT_CHANNEL_EDGE_ACTION_DECREASE,
+                               PCNT_CHANNEL_EDGE_ACTION_INCREASE);
+  pcnt_channel_set_level_action(cha, PCNT_CHANNEL_LEVEL_ACTION_KEEP,
+                                PCNT_CHANNEL_LEVEL_ACTION_INVERSE);
+  pcnt_channel_set_edge_action(chb, PCNT_CHANNEL_EDGE_ACTION_INCREASE,
+                               PCNT_CHANNEL_EDGE_ACTION_DECREASE);
+  pcnt_channel_set_level_action(chb, PCNT_CHANNEL_LEVEL_ACTION_KEEP,
+                                PCNT_CHANNEL_LEVEL_ACTION_INVERSE);
+  gpio_pullup_en(ENC_A);
+  gpio_pullup_en(ENC_B);
+  pcnt_unit_enable(pcnt);
+  pcnt_unit_clear_count(pcnt);
+  pcnt_unit_start(pcnt);
+  pinMode(ENC_Z, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(ENC_Z), onIndex, RISING);
+  return true;
+}
+
+int32_t encoderCount() {
+  int c = 0;
+  if (pcnt) pcnt_unit_get_count(pcnt, &c);
+  return (int32_t)c;
+}
 
 // ---------------------------------------------------------------- driver
 
@@ -225,7 +298,39 @@ void stopMotion(const char *why) {
                 (long)(posU256 / U256_PER_FULLSTEP), why);
 }
 
+void emitOneMicrostep(bool positive) {
+  if (positive != dirPositive) {
+    digitalWrite(DIR_PIN, positive ? HIGH : LOW);
+    dirPositive = positive;
+    delayMicroseconds(DIR_SETUP_US);
+  }
+  digitalWrite(STEP_PIN, HIGH);
+  delayMicroseconds(STEP_HIGH_US);
+  digitalWrite(STEP_PIN, LOW);
+  posU256 += positive ? stepU256 : -stepU256;
+}
+
+void serviceCalibration() {
+  const uint32_t now = millis();
+  if (now >= calibEndMs) {
+    Serial.printf("# CALIB_DONE,cycles=%lu,pos=%ld,enc=%ld\n",
+                  (unsigned long)calibCycles,
+                  (long)(posU256 / U256_PER_FULLSTEP), (long)encoderCount());
+    mode = IDLE;
+    return;
+  }
+  if (now < calibNextMs) return;
+  emitOneMicrostep(calibOutbound);
+  calibNextMs = now + calibDwellMs;
+  if (!calibOutbound) calibCycles++;
+  Serial.printf("# CALIB,%c,cycle=%lu,pos_u256=%lld,enc=%ld,t_ms=%lu\n",
+                calibOutbound ? '+' : '-', (unsigned long)calibCycles,
+                (long long)posU256, (long)encoderCount(), (unsigned long)now);
+  calibOutbound = !calibOutbound;
+}
+
 void serviceMotion() {
+  if (mode == CALIB) { serviceCalibration(); return; }
   if (mode == IDLE || periodUs == 0) return;
   const int64_t target = (mode == JOGGING) ? (towardB ? jogBU256 : jogAU256)
                                            : targetU256;
@@ -274,14 +379,16 @@ void serviceMotion() {
 void sendStatus() {
   Serial.printf("# STATUS,pos=%ld,target=%ld,a=%ld,b=%ld,mode=%s,"
                 "rate_millihz=%lu,mres=%u,current_ma=%u,limit=%ld,"
-                "steps_per_mm=%u\n",
+                "steps_per_mm=%u,enc=%ld,index=%ld\n",
                 (long)(posU256 / U256_PER_FULLSTEP),
                 (long)(targetU256 / U256_PER_FULLSTEP),
                 (long)(jogAU256 / U256_PER_FULLSTEP),
                 (long)(jogBU256 / U256_PER_FULLSTEP),
-                mode == IDLE ? "IDLE" : (mode == MOVING ? "MOVING" : "JOGGING"),
+                mode == IDLE ? "IDLE" : (mode == MOVING ? "MOVING" :
+                    (mode == JOGGING ? "JOGGING" : "CALIB")),
                 (unsigned long)rateMilliHz, mres, currentMa,
-                (long)limitFullSteps, FULL_STEPS_PER_MM);
+                (long)limitFullSteps, FULL_STEPS_PER_MM,
+                (long)encoderCount(), (long)indexCount);
 }
 
 void handleCommand(String line) {
@@ -307,6 +414,30 @@ void handleCommand(String line) {
     return;
   }
   if (verb == "STOP") { stopMotion("command"); return; }
+  if (verb == "ENC?") {
+    Serial.printf("# ENC,enc=%ld,index=%ld\n", (long)encoderCount(),
+                  (long)indexCount);
+    return;
+  }
+  if (verb == "CALIB") {
+    // CALIB <duration_s> [dwell_ms] - the microstep calibration oscillation.
+    if (!driverReady) { Serial.println("# ERR,reason=driver_not_ready"); return; }
+    long secs = 30, dwell = 2000;
+    sscanf(rest.c_str(), "%ld %ld", &secs, &dwell);
+    if (secs <= 0 || secs > 3600 || dwell < 50 || dwell > 60000) {
+      Serial.println("# ERR,reason=bad_calib_args");
+      return;
+    }
+    calibDwellMs = (uint32_t)dwell;
+    calibEndMs = millis() + (uint32_t)secs * 1000UL;
+    calibNextMs = millis();
+    calibCycles = 0;
+    calibOutbound = true;
+    mode = CALIB;
+    Serial.printf("# CALIB_START,seconds=%ld,dwell_ms=%ld,mres=%u,"
+                  "microstep_um=%.4f\n", secs, dwell, mres, 10.0 / mres);
+    return;
+  }
 
   if (verb == "ZERO") {
     if (mode != IDLE) { Serial.println("# ERR,reason=busy"); return; }
@@ -435,10 +566,12 @@ void setup() {
   Serial.printf("# PINS,step=%u,dir=%u,uart_rx=%u,uart_tx=%u,en=grounded\n",
                 STEP_PIN, DIR_PIN, UART_RX_PIN, UART_TX_PIN);
   setRate(rateMilliHz);
+  const bool encOk = setupEncoder();
+  if (!encOk) Serial.println("# ERR,reason=pcnt_init_failed");
   driverReady = configureDriver();
-  Serial.printf("# READY,ready=%u,mres=%u,current_ma=%u,rate_millihz=%lu,"
-                "limit=%ld,steps_per_mm=%u\n",
-                driverReady, mres, currentMa, (unsigned long)rateMilliHz,
+  Serial.printf("# READY,ready=%u,encoder=%u,mres=%u,current_ma=%u,"
+                "rate_millihz=%lu,limit=%ld,steps_per_mm=%u\n",
+                driverReady, encOk, mres, currentMa, (unsigned long)rateMilliHz,
                 (long)limitFullSteps, FULL_STEPS_PER_MM);
   Serial.println("# IDLE,nothing moves until commanded");
 }
@@ -449,8 +582,9 @@ void loop() {
   const uint32_t now = millis();
   if (mode != IDLE && now - lastTelemetryMs >= TELEMETRY_INTERVAL_MS) {
     lastTelemetryMs = now;
-    Serial.printf("# POS,pos=%ld,mode=%s\n",
-                  (long)(posU256 / U256_PER_FULLSTEP),
-                  mode == MOVING ? "MOVING" : "JOGGING");
+    Serial.printf("# POS,pos=%ld,enc=%ld,mode=%s\n",
+                  (long)(posU256 / U256_PER_FULLSTEP), (long)encoderCount(),
+                  mode == MOVING ? "MOVING" :
+                      (mode == CALIB ? "CALIB" : "JOGGING"));
   }
 }

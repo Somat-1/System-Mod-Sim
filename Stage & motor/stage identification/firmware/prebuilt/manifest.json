@@ -1,0 +1,31 @@
+{
+  "_comment": "Fingerprint of the committed flash image. jog_stepper.py compares sketch_sha256 against the .ino on disk and warns if they differ, so an edited sketch cannot be silently skipped in favour of a stale image.",
+  "image": "stage_identification_merged.bin",
+  "image_sha256": "3673320a2ff5999c629c1415df468a1f70545458fe03805c7121464329e9ec0f",
+  "image_bytes": 408816,
+  "flash_offset": "0x0",
+  "chip": "esp32s3",
+  "sketch": "stage_identification.ino",
+  "sketch_sha256": "f3534748bfc3dd3cd992c01f7f9b43e26ddfbd14ea715440ed97d5f455bd4db9",
+  "fqbn": "esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=cdc",
+  "core": "esp32:esp32@3.3.12",
+  "libraries": [
+    "TMCStepper@0.7.3"
+  ],
+  "arduino_cli": "1.5.2-rc.1",
+  "built": "2026-10-13",
+  "program_bytes": 343134,
+  "program_pct_of_flash": 26,
+  "globals_bytes": 41632,
+  "encoder_pins": {
+    "A": 4,
+    "B": 7,
+    "Z": 15
+  },
+  "driver_pins": {
+    "STEP": 5,
+    "DIR": 6,
+    "UART_TX": 17,
+    "UART_RX": 18
+  }
+}

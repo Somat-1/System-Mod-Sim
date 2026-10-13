@@ -466,6 +466,12 @@ class FakeFirmware:
         self.mres = 16
         self.current = 360
         self.limit = DEFAULT_LIMIT
+        self.enc = 0
+        self.calib_end = 0.0
+        self.calib_dwell = 2.0
+        self.calib_next = 0.0
+        self.calib_cycles = 0
+        self.calib_out = True
         self.out: list[str] = []
         self.last = time.monotonic()
         self.last_tel = 0.0
@@ -474,7 +480,7 @@ class FakeFirmware:
         self.emit("# PINS,step=5,dir=6,uart_rx=18,uart_tx=17,en=grounded")
         self.emit(f"# READY,ready=1,mres={self.mres},current_ma={self.current},"
                   f"rate_millihz={self.rate},limit={self.limit},"
-                  f"steps_per_mm={FULL_STEPS_PER_MM}")
+                  f"steps_per_mm={FULL_STEPS_PER_MM},enc={self.enc},index=0")
         self.emit("# IDLE,nothing moves until commanded")
 
     def emit(self, line):
@@ -491,7 +497,7 @@ class FakeFirmware:
                 f"a={self.a},b={self.b},mode={self.mode},"
                 f"rate_millihz={self.rate},mres={self.mres},"
                 f"current_ma={self.current},limit={self.limit},"
-                f"steps_per_mm={FULL_STEPS_PER_MM}")
+                f"steps_per_mm={FULL_STEPS_PER_MM},enc={self.enc},index=0")
 
     def within(self, v):
         return self.limit <= 0 or -self.limit <= v <= self.limit
@@ -585,12 +591,54 @@ class FakeFirmware:
                 self.mode = "JOGGING"
                 self.emit(f"# START,a={self.a},b={self.b},"
                           f"first={'B' if self.toward_b else 'A'}")
+        elif verb == "ENC?":
+            self.emit(f"# ENC,enc={self.enc},index=0")
+        elif verb == "CALIB":
+            parts = rest.split()
+            secs = int(parts[0]) if parts else 30
+            dwell = int(parts[1]) if len(parts) > 1 else 2000
+            if not (0 < secs <= 3600 and 50 <= dwell <= 60000):
+                self.emit("# ERR,reason=bad_calib_args")
+                return
+            self.mode = "CALIB"
+            self.calib_end = time.monotonic() + secs
+            self.calib_dwell = dwell / 1000.0
+            self.calib_next = time.monotonic()
+            self.calib_cycles = 0
+            self.calib_out = True
+            self.emit(f"# CALIB_START,seconds={secs},dwell_ms={dwell},"
+                      f"mres={self.mres},microstep_um={10.0/self.mres:.4f}")
         else:
             self.emit(f"# ERR,reason=unknown_command,verb={verb}")
+
+    def tick_calib(self, now):
+        if now >= self.calib_end:
+            self.emit(f"# CALIB_DONE,cycles={self.calib_cycles},"
+                      f"pos={round(self.pos)},enc={self.enc}")
+            self.mode = "IDLE"
+            return
+        if now < self.calib_next:
+            return
+        micro = 1.0 / self.mres                      # in full steps
+        self.pos += micro if self.calib_out else -micro
+        # A plausible stand-in for the real thing: the encoder follows the
+        # command with a little lost motion on reversal. It is invented, and
+        # exists only so the host's display can be exercised.
+        self.enc += round(micro * 200 * (0.94 if not self.calib_out else 1.0))
+        self.calib_next = now + self.calib_dwell
+        if not self.calib_out:
+            self.calib_cycles += 1
+        self.emit(f"# CALIB,{'+' if self.calib_out else '-'},"
+                  f"cycle={self.calib_cycles},pos_u256={round(self.pos*256)},"
+                  f"enc={self.enc},t_ms={int(now*1000)}")
+        self.calib_out = not self.calib_out
 
     def tick(self):
         now = time.monotonic()
         dt, self.last = now - self.last, now
+        if self.mode == "CALIB":
+            self.tick_calib(now)
+            return
         if self.mode != "IDLE":
             tgt = (self.b if self.toward_b else self.a) if self.mode == "JOGGING" \
                 else self.target
@@ -711,6 +759,10 @@ Commands
   a <number>          set position A            b <number>   set position B
   go                  shuttle between A and B until a key is pressed
   go <n>              ... or for exactly n legs, then stop
+  calib [s] [dwell]   microstep calibration: +1 / -1 microstep with long
+                      dwells, default 30 s and 2000 ms. Set the step size
+                      first with 'mres' - at mres 16 one microstep is
+                      0.625 um.
   moveto <number>     one move to an absolute position
   speed <steps/s>     full-step rate      (now: {rate} steps/s, {mmps:.2f} mm/s)
   mres <1..256>       microstep resolution
@@ -830,6 +882,67 @@ class Console:
             self.refresh()
         print(f"\n  stopped at {self.pos()} steps ({mm(self.pos())}), {legs} legs\n")
 
+    def run_calibration(self, seconds=30, dwell_ms=2000):
+        """One microstep forward, hold, one back, hold - for `seconds`.
+
+        This is the smallest commanded motion the rig can make, held still long
+        enough to be measured. A +1/-1 pair returns to the same commanded
+        position, so the encoder reading at the end of each pair is the stage's
+        error rather than the command's: lost motion, stiction and the
+        dead-band around a direction reversal all show up here and nowhere
+        else.
+
+        The microstep size is whatever `mres` is set to - that is the point of
+        being able to change it. At mres 16 one microstep is 0.625 um; at
+        mres 1 it is 10 um.
+        """
+        mres = int(self.state.get("mres", 16) or 16)
+        micro_um = 10.0 / mres
+        print(f"\n  Microstep calibration")
+        print(f"    microstep   1/{mres} full step = {micro_um:.4f} um")
+        print(f"    pattern     +1, hold {dwell_ms} ms, -1, hold {dwell_ms} ms")
+        print(f"    duration    {seconds} s  "
+              f"(~{int(seconds * 1000 / (2 * dwell_ms))} full cycles)")
+        if self.ask(f"CALIB {seconds} {dwell_ms}", "# CALIB_START") is None:
+            return
+        print("    press any key to stop early\n")
+
+        rows, cycles, enc0 = [], 0, None
+        t0 = time.monotonic()
+        try:
+            with KeyWatcher() as keys:
+                while True:
+                    done = False
+                    for line in self.link.drain():
+                        kv = parse_kv(line)
+                        tag = kv.get("_tag", "")
+                        if tag == "CALIB":
+                            enc = int(kv.get("enc", 0))
+                            if enc0 is None:
+                                enc0 = enc
+                            cycles = int(kv.get("cycle", 0))
+                            rows.append((kv.get("", ""), enc - enc0))
+                            sys.stdout.write(
+                                f"\r    cycle {cycles:4d}   encoder "
+                                f"{enc - enc0:+7d} counts   "
+                                f"{time.monotonic()-t0:6.1f} s    ")
+                            sys.stdout.flush()
+                        elif tag in ("CALIB_DONE", "STOP"):
+                            done = True
+                        elif tag == "ERR":
+                            print(f"\n  board reported: {kv.get('reason', line)}")
+                            done = True
+                    if done or keys.pressed():
+                        break
+                    time.sleep(0.05)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            self.link.send("STOP")
+            time.sleep(0.2)
+            self.refresh()
+        print(f"\n  stopped after {cycles} cycles\n")
+
     def _bar(self, pos, width=30):
         lo, hi = min(self.a, self.b), max(self.a, self.b)
         if hi == lo:
@@ -900,6 +1013,16 @@ class Console:
             if verb == "status":
                 self.refresh()
                 self.banner()
+                continue
+            if verb == "calib":
+                secs = self._int(args[0]) if len(args) >= 1 else 30
+                dwell = self._int(args[1]) if len(args) >= 2 else 2000
+                if secs is None or dwell is None:
+                    continue
+                if not sys.stdin.isatty():
+                    print("  'calib' needs a terminal to stop on; it runs for "
+                          "the full duration otherwise")
+                self.run_calibration(secs, dwell)
                 continue
             if verb == "go":
                 legs = self._int(args[0]) if len(args) == 1 else None
@@ -1020,6 +1143,12 @@ def main():
     ap.add_argument("--limit", type=int, default=DEFAULT_LIMIT,
                     help=f"soft limit +/- about zero [full steps] (default {DEFAULT_LIMIT})")
     ap.add_argument("--go", action="store_true", help="start jogging immediately")
+    ap.add_argument("--calib", nargs="?", const=30, type=int, metavar="SECONDS",
+                    help="run the microstep calibration oscillation and exit")
+    ap.add_argument("--calib-dwell", type=int, default=2000, metavar="MS",
+                    help="dwell at each microstep during --calib (default 2000)")
+    ap.add_argument("--mres", type=int,
+                    help="set microstep resolution before anything else")
     ap.add_argument("--no-prompt", action="store_true",
                     help="exit after --go instead of opening the prompt")
     ap.add_argument("--max-legs", type=int,
@@ -1111,7 +1240,16 @@ def main():
             console.ask(f"LIMIT {args.limit}", "# LIMIT_OK")
         if args.speed != DEFAULT_RATE_STEPS_S:
             console.ask(f"RATE {args.speed * 1000}", "# RATE_OK")
+        if args.mres:
+            if not (1 <= args.mres <= 256 and args.mres & (args.mres - 1) == 0):
+                print("  mres must be a power of two from 1 to 256")
+                return 2
+            console.ask(f"MRES {args.mres}", "# MRES_OK")
         console.refresh()
+        if args.calib:
+            console.run_calibration(args.calib, args.calib_dwell)
+            if args.no_prompt or not sys.stdin.isatty():
+                return 0
         if args.a is not None:
             console.set_pos("a", args.a)
         if args.b is not None:

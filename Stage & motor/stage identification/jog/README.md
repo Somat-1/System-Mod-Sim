@@ -1,7 +1,13 @@
 # ESP32S3_TMC2209_Jog — drive the stage to two positions and shuttle between them
 
 Interactive positioning for the ESP32-S3 / TMC2209 rig: type two numbers, and
-the stage moves back and forth between them until you stop it.
+the stage moves back and forth between them until you stop it. Plus a microstep
+calibration oscillation (§4a).
+
+**Wiring note:** the firmware here now also reads the quadrature encoder, which
+has moved off GPIO5/6 to avoid the TMC2209's STEP/DIR. Read
+[`../../CONNECTIONS.md`](../../CONNECTIONS.md) before flashing — the board must
+be rewired or neither function works.
 
 ```
 ESP32S3_TMC2209_Jog/
@@ -43,7 +49,7 @@ or pyserial is needed.
 ## 2. Wiring
 
 Unchanged from the rig's established wiring, taken from
-[`esp32_v6_mres_trajectory_campaign`](../Microstepping%20Test%20Data/v6/scripts/esp32_v6_mres_trajectory_campaign)
+[`esp32_v6_mres_trajectory_campaign`](../../../Microstepping%20Test%20Data/v6/scripts/esp32_v6_mres_trajectory_campaign)
 so the same board runs both without rewiring.
 
 | TMC2209 | ESP32-S3 | Note |
@@ -78,7 +84,7 @@ after flashing. There are two routes and it picks the first that works:
 
 | Route | Needs | Cost |
 |---|---|---|
-| **prebuilt** | `pip install esptool` — pure Python | seconds; a 375 KB image in `firmware/prebuilt/` |
+| **prebuilt** | `pip install esptool` — pure Python | seconds; a 402 KB image in `firmware/prebuilt/` |
 | **source** | `arduino-cli` + ESP32 core + TMCStepper | **6.6 GB** on first run (measured, not estimated) |
 
 On a locked-down rig PC, prebuilt is the one you want: no compiler, no
@@ -95,7 +101,7 @@ firmware to a guess.
 
 Needs **Arduino-ESP32 3.x** and the **TMCStepper** library. The board settings
 are the rig's established ones, from
-[`../Microstepping Test Data/v5`](../Microstepping%20Test%20Data/v5):
+[`../Microstepping Test Data/v5`](../../../Microstepping%20Test%20Data/v5):
 
 | Setting | Value |
 |---|---|
@@ -169,6 +175,7 @@ touched. `--list` shows the ports without probing any of them.
 | `a <n>` / `b <n>` | set one of them |
 | `go` | shuttle between A and B until a key is pressed |
 | `go <n>` | ... or for exactly *n* legs |
+| `calib [s] [dwell_ms]` | microstep calibration: +1 / −1 microstep with long dwells (default 30 s, 2000 ms) |
 | `moveto <n>` | a single move to an absolute position |
 | `speed <steps/s>` | full-step rate; 70 = 0.7 mm/s |
 | `mres <1..256>` | microstep resolution, powers of two, when idle |
@@ -182,6 +189,26 @@ While jogging you get a live position readout, a travel bar and a leg count.
 **Any key stops it**, as does Ctrl-C.
 
 ---
+
+## 4a. Microstep calibration
+
+```
+jog> mres 16          0.625 µm per microstep
+jog> calib 30 2000    +1, hold 2 s, −1, hold 2 s — for 30 s
+```
+
+The smallest commanded motion the rig can make, held still long enough to be
+measured. A +1/−1 pair returns to the same commanded position, so whatever the
+encoder reports at the end of a pair is the stage's error and not the command's:
+lost motion, stiction and the dead-band around a direction reversal show up here
+and nowhere else. `mres` sets the step size being probed — 1/16 gives 0.625 µm,
+1/1 gives 10 µm.
+
+Also available non-interactively:
+
+```bash
+python jog_stepper.py --port COM11 --mres 32 --calib 30 --calib-dwell 2000 --no-prompt
+```
 
 ## 5. Units
 
@@ -280,8 +307,9 @@ power-of-two MRES, same current range, same pulse-rate ceiling — so that it
 cannot accept something the real board would reject.
 
 **Compiles cleanly.** Built with arduino-cli 1.5.2 against `esp32:esp32@3.3.12`
-and TMCStepper, at the FQBN above: 318,842 bytes of program (24% of flash) and
-22,672 bytes of globals, no errors and no warnings. The resulting image is
+and TMCStepper 0.7.3, at the FQBN above: 345,538 bytes of program (26% of flash)
+and 23,296 bytes of globals, no errors and no warnings. That figure includes the
+encoder (PCNT) and the microstep calibration mode. The resulting image is
 committed as `firmware/prebuilt/`, with a `manifest.json` recording the core
 version, the FQBN and the **hash of the sketch it was built from** — the script
 compares that hash against the `.ino` on disk and says so if you have edited the
