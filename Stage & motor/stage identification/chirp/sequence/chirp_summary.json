@@ -1,0 +1,46 @@
+{
+  "sweep_rate_hz_per_s": 7.8125,
+  "cruise_full_steps": 3.0,
+  "cruise_microsteps": 48.0,
+  "mres": 16,
+  "current_rms_ma": 400,
+  "resonance_gap_hz": [
+    150.0,
+    250.0
+  ],
+  "safety": "150-250 Hz caused uncontrolled motion on 2026-09-15; FULL omits the band entirely rather than attenuating it",
+  "profiles": {
+    "full": {
+      "title": "FULL \u2014 1 Hz to 1 kHz, gap 150\u2013250 Hz",
+      "purpose": "cover the whole band except the one that is unsafe to drive",
+      "duration_s": 268.14,
+      "duration_min": 4.47,
+      "segments": 11,
+      "bands_hz": [
+        [
+          1.0,
+          150.0
+        ],
+        [
+          250.0,
+          1000.0
+        ]
+      ],
+      "sweep_seconds": 230.14
+    },
+    "high": {
+      "title": "HIGH \u2014 250 Hz to 1 kHz, continuous",
+      "purpose": "resolve whether the 250 Hz feature is the stage or the gap edge",
+      "duration_s": 236.0,
+      "duration_min": 3.93,
+      "segments": 9,
+      "bands_hz": [
+        [
+          250.0,
+          1000.0
+        ]
+      ],
+      "sweep_seconds": 192.0
+    }
+  }
+}

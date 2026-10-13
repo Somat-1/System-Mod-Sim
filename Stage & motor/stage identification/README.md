@@ -15,8 +15,18 @@ stage identification/
 │   ├── sequence_plan.csv             every move, in order
 │   └── sequence_summary.json
 ├── firmware/stage_identification/    executes a plan uploaded by the host
+├── chirp/                            mechanical frequency sweeps, 1 Hz - 1 kHz
 └── jog/                              run-in oscillation + microstep calibration
 ```
+
+Two kinds of test live here. The **positioning** sequence below asks where the
+stage comes to rest; [`chirp/`](chirp/) asks how it responds to excitation
+against frequency. They share the rig and the wiring and nothing else.
+
+> **[`chirp/`](chirp/) carries a safety constraint**: 150-250 Hz produced
+> uncontrolled motor motion on this rig on 2026-09-15, and attenuating the band
+> was not enough to stop it. The sweep omits the band entirely. Read
+> [`chirp/README.md`](chirp/README.md) before running anything there.
 
 ---
 

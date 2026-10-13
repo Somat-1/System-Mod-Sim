@@ -1,0 +1,27 @@
+{
+  "_comment": "Fingerprint of the committed flash image; the sketch hash is compared against the .ino so a stale image cannot be flashed silently in place of an edited sketch.",
+  "image": "stage_chirp_sweep_merged.bin",
+  "image_sha256": "d00dc2008b26e7442548e49d544d5e1a328e48ab3565b08909bf2252bc3cc05b",
+  "image_bytes": 388608,
+  "flash_offset": "0x0",
+  "chip": "esp32s3",
+  "sketch": "stage_chirp_sweep.ino",
+  "sketch_sha256": "e07317ac69d430d8612de02bb70cc4e87f473dc5f530cdc48196101660fc31ca",
+  "fqbn": "esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=cdc",
+  "core": "esp32:esp32@3.3.12",
+  "libraries": [
+    "TMCStepper@0.7.3"
+  ],
+  "arduino_cli": "1.5.2-rc.1",
+  "built": "2026-10-13",
+  "program_bytes": 322930,
+  "program_pct_of_flash": 24,
+  "globals_bytes": 22624,
+  "r_sense_ohm": 0.11,
+  "r_sense_warning": "the v3 chirp used 0.10 for a board marked R100; verify the board actually fitted before running",
+  "resonance_gap_hz": [
+    150,
+    250
+  ],
+  "safety": "150-250 Hz caused uncontrolled motor motion on 2026-09-15; the FULL profile omits the band entirely rather than attenuating it"
+}
