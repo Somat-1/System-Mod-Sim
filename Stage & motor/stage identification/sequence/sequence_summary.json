@@ -1,6 +1,6 @@
 {
-  "total_seconds": 2559.5,
-  "total_minutes": 42.66,
+  "total_seconds": 2559.9,
+  "total_minutes": 42.67,
   "moves": 230,
   "working_range_mm": [
     -10.0,
@@ -10,6 +10,7 @@
   "full_steps_per_mm": 100,
   "electrical_period_full_steps": 4,
   "full_steps_per_rev": 200,
+  "acceleration_full_steps_s2": 4000,
   "phases": {
     "gain": {
       "title": "1 \u00b7 Gain calibration",
@@ -23,21 +24,21 @@
       "purpose": "static error map vs electrical phase, and hysteresis",
       "method": "quasi-static staircase through 2 electrical periods forward then back, 0.75 s per microstep, at 3 locations",
       "moves": 10,
-      "minutes": 10.05
+      "minutes": 9.98
     },
     "settling": {
       "title": "3 \u00b7 Point-to-point settling matrix",
       "purpose": "the main metric: where it actually stops",
-      "method": "trapezoidal moves in randomised order over distance x speed x direction, 2-5 s dwell after each stop",
+      "method": "acceleration-limited moves in randomised order over distance x speed x direction, 2-5 s dwell after each stop",
       "moves": 91,
-      "minutes": 19.24
+      "minutes": 19.28
     },
     "repeatability": {
       "title": "4 \u00b7 Bidirectional repeatability",
       "purpose": "standardised accuracy and repeatability numbers",
       "method": "ISO 230-2 style: 5 targets along travel, approached from both sides, 5 repeats",
       "moves": 101,
-      "minutes": 8.37
+      "minutes": 8.4
     }
   },
   "drift": {

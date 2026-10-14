@@ -13,10 +13,15 @@ Two profiles, because of something that happened on this rig:
         needs no gap of its own, and it starts with a dwell at 250 Hz instead
         of arriving there by a jump.
 
-Both carry over the parameters validated on hardware in
-ESP32S3_TMC2209_Chirp_Test/v3: a single shared sweep rate of 7.8125 Hz/s, a
-cruise amplitude of 3 full steps, MRES 16, and 750 Hz sync marker bursts at
-each end so the recording can be aligned.
+Both keep v3's shared sweep rate of 7.8125 Hz/s and its 750 Hz sync marker
+bursts. Amplitude (2026-10-13): a constant +-1.875 full steps (30 microsteps at
+MRES 16) at 500 mA across the whole band (first tried at +-1.5 / 400 mA, which
+gave a small signal). It is under the 2-full-step lag at which a
+stepper slips (v3's +-3 full steps was not), and under the step-rate ceiling at
+1 kHz with 6% margin, so it is never clamped. A constant-acceleration law
+(+-1 full step rolling off as 1/f^2 above 100 Hz) was tried first and dropped:
+at 250-1000 Hz it commanded 0.01-0.16 full steps, inside the motor's friction
+dead band, and the accelerometer showed nothing.
 
 SAFETY
 ------
@@ -38,17 +43,27 @@ import json
 from dataclasses import dataclass, field
 
 # --- carried over from the hardware-validated v3 chirp ---------------------
-MRES = 16
-CRUISE_FULL_STEPS = 3.0
-CRUISE_MICROSTEPS = CRUISE_FULL_STEPS * MRES          # 48
-CURRENT_RMS_MA = 400
+MRES = 8
+CRUISE_FULL_STEPS = 2.5                               # above the 2-fs slip limit
+CRUISE_MICROSTEPS = CRUISE_FULL_STEPS * MRES          # 20
+F_CORNER_HZ = float("inf")                            # no roll-off: constant
+MAX_STEP_RATE = 200_000.0                             # firmware ceiling, microsteps/s
+CURRENT_RMS_MA = 1000                                 # run 8; firmware default 500
 SWEEP_RATE_HZ_PER_S = 7.8125                          # (1000-250)/96
 
 # The band that caused the incidents. FULL jumps across it; HIGH starts above it.
 RESONANCE_GAP = (150.0, 250.0)
 
+
+
+def amplitude(f_hz: float) -> float:
+    """Commanded amplitude in microsteps at MRES; must match the firmware."""
+    if f_hz <= F_CORNER_HZ:
+        return CRUISE_MICROSTEPS
+    return CRUISE_MICROSTEPS * (F_CORNER_HZ / f_hz) ** 2
+
+
 SYNC_FREQ_HZ = 750.0
-SYNC_AMPLITUDE_FULL_STEPS = 2.0
 SYNC_BURST_S = 0.1
 SYNC_GAP_S = 0.1
 SYNC_BURSTS = 3
@@ -96,8 +111,15 @@ def _sweep_time(f0: float, f1: float) -> float:
 
 def _marker(label: str) -> Segment:
     return Segment("marker", label, SYNC_MARKER_S, SYNC_FREQ_HZ, SYNC_FREQ_HZ,
-                   SYNC_AMPLITUDE_FULL_STEPS * MRES,
+                   amplitude(SYNC_FREQ_HZ),
                    note=f"{SYNC_BURSTS} bursts at {SYNC_FREQ_HZ:g} Hz for alignment")
+
+
+def _top_marker() -> list:
+    """The 1 kHz turn-around: silence, the sync marker, silence."""
+    return [Segment("silent", "top gap", 1.0, note="up sweep done; 1 kHz reached"),
+            _marker("top marker (1 kHz turn-around)"),
+            Segment("silent", "top gap", 1.0, note="down sweep follows")]
 
 
 def full_profile() -> Profile:
@@ -119,7 +141,7 @@ def full_profile() -> Profile:
         Segment("dwell", "gap jump", 0.0, lo, hi, 0.0,
                 note=f"instantaneous {lo:g}->{hi:g} Hz; nothing commanded in between"),
         Segment("sweep", "up: high leg", _sweep_time(hi, 1000.0), hi, 1000.0, CRUISE_MICROSTEPS),
-        Segment("dwell", "mid dwell", MID_DWELL_S, 1000.0, 1000.0, 0.0),
+        *_top_marker(),
         Segment("sweep", "down: high leg", _sweep_time(1000.0, hi), 1000.0, hi, CRUISE_MICROSTEPS),
         Segment("dwell", "gap jump", 0.0, hi, lo, 0.0,
                 note=f"instantaneous {hi:g}->{lo:g} Hz"),
@@ -153,6 +175,7 @@ def high_profile() -> Profile:
                 note="steady excitation before the sweep, so the start is not a jump"),
         Segment("sweep", "up", _sweep_time(start, 1000.0), start, 1000.0, CRUISE_MICROSTEPS),
         Segment("dwell", "mid dwell", MID_DWELL_S, 1000.0, 1000.0, CRUISE_MICROSTEPS),
+        *_top_marker(),
         Segment("sweep", "down", _sweep_time(1000.0, start), 1000.0, start, CRUISE_MICROSTEPS),
         Segment("dwell", f"settle at {start:g} Hz", SETTLE_S, start, start,
                 CRUISE_MICROSTEPS),
@@ -169,8 +192,12 @@ def profiles():
 def summarise(ps):
     out = {
         "sweep_rate_hz_per_s": SWEEP_RATE_HZ_PER_S,
-        "cruise_full_steps": CRUISE_FULL_STEPS,
-        "cruise_microsteps": CRUISE_MICROSTEPS,
+        "amplitude_law": "constant A0 at every frequency",
+        "a0_full_steps": CRUISE_FULL_STEPS,
+        "a0_microsteps": CRUISE_MICROSTEPS,
+        "peak_step_rate_at_1khz": round(2 * 3.141592653589793 * 1000 * CRUISE_MICROSTEPS),
+        "amplitude_microsteps_at_hz": {str(f): round(amplitude(f), 3)
+                                       for f in (1, 10, 50, 100, 150, 250, 500, 750, 1000)},
         "mres": MRES,
         "current_rms_ma": CURRENT_RMS_MA,
         "resonance_gap_hz": list(RESONANCE_GAP),
@@ -214,7 +241,10 @@ def main():
                              t_start=round(t0, 4), t_end=round(t1, 4),
                              duration_s=round(s.duration_s, 4),
                              f_start=s.f_start, f_end=s.f_end,
-                             amplitude_microsteps=s.amplitude_microsteps,
+                             amplitude_microsteps=round(amplitude(s.f_start), 3)
+                             if s.amplitude_microsteps else 0.0,
+                             amplitude_end=round(amplitude(s.f_end), 3)
+                             if s.amplitude_microsteps else 0.0,
                              note=s.note))
     with open(out / "chirp_plan.csv", "w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))

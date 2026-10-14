@@ -41,6 +41,7 @@ SPEED_SLOW = 25
 SPEED_MODERATE = 70               # the rig's "MODERATE", 0.7 mm/s
 SPEED_FAST = 200
 SPEED_QUASISTATIC = 10
+ACCEL_FULL_STEPS_S2 = 4000       # must match stage_identification.ino
 
 DRIFT_INTERVAL_S = 300.0          # return to the reference every ~5 min
 DRIFT_DWELL_S = 3.0
@@ -73,7 +74,13 @@ class Move:
         return abs(self.target - previous)
 
     def duration_s(self, previous: int) -> float:
-        return self.distance_from(previous) / self.speed + self.dwell_s
+        if self.micro_steps:
+            # Firmware emits each staircase pulse over 1 ms, then holds it.
+            return self.micro_steps * (0.001 + self.micro_dwell_s)
+        distance = self.distance_from(previous)
+        if distance == 0:
+            return self.dwell_s
+        return motion_duration_s(distance, self.speed) + self.dwell_s
 
 
 @dataclass
@@ -91,6 +98,17 @@ def mm(steps: float) -> float:
 
 def steps(millimetres: float) -> int:
     return int(round(millimetres * FULL_STEPS_PER_MM))
+
+
+def motion_duration_s(distance_steps: int, speed_steps_s: int) -> float:
+    """Duration of the symmetric triangular/trapezoidal firmware profile."""
+    if distance_steps <= 0:
+        return 0.0
+    accel_and_decel_distance = speed_steps_s**2 / ACCEL_FULL_STEPS_S2
+    if distance_steps >= accel_and_decel_distance:
+        return (2 * speed_steps_s / ACCEL_FULL_STEPS_S2
+                + (distance_steps - accel_and_decel_distance) / speed_steps_s)
+    return 2 * math.sqrt(distance_steps / ACCEL_FULL_STEPS_S2)
 
 
 # ---------------------------------------------------------------------------
@@ -205,7 +223,7 @@ def settling_matrix(seed: int = 7, repeats: int = 5,
         key="settling",
         title="3 · Point-to-point settling matrix",
         purpose="the main metric: where it actually stops",
-        method="trapezoidal moves in randomised order over distance x speed x "
+        method="acceleration-limited moves in randomised order over distance x speed x "
                "direction, 2-5 s dwell after each stop",
     )
     distances_mm = [0.1, 1.0, 10.0]
@@ -311,7 +329,8 @@ def build_sequence(seed: int = 7, mres: int = 16):
             at_boundary = (mv.group == "") or (mv.group != open_group)
             if t >= next_drift and at_boundary:
                 drift_index += 1
-                move_t = abs(REFERENCE_POSITION - position) / SPEED_MODERATE
+                move_t = motion_duration_s(
+                    abs(REFERENCE_POSITION - position), SPEED_MODERATE)
                 timeline.append(dict(
                     phase="drift", label=f"drift check {drift_index}",
                     t_start=t, t_end=t + move_t + DRIFT_DWELL_S,
@@ -356,6 +375,7 @@ def summarise(phases, timeline, total_s):
         "full_steps_per_mm": FULL_STEPS_PER_MM,
         "electrical_period_full_steps": ELECTRICAL_PERIOD_STEPS,
         "full_steps_per_rev": FULL_STEPS_PER_REV,
+        "acceleration_full_steps_s2": ACCEL_FULL_STEPS_S2,
         "phases": {
             p.key: {
                 "title": p.title,

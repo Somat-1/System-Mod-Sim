@@ -125,7 +125,13 @@ def run_board(port: str, rows: list[dict], output: Path,
                 print("Not started; plan remains loaded.")
                 return
 
-        with output.open("w", encoding="utf-8", newline="\n") as log:
+        # Command and encoder origin at the reference position, as the README
+        # requires; the recording then starts from a clean zero.
+        for line in send_expect(board, "ZERO", "# ZERO_OK"):
+            print(line)
+
+        # Line-buffered so monitor_run.py sees each sample as it arrives.
+        with output.open("w", encoding="utf-8", newline="\n", buffering=1) as log:
             log.write(f"# host_start_utc={dt.datetime.now(dt.timezone.utc).isoformat()}\n")
             log.write(f"# port={port}\n")
             log.write("record_type,seq,t_us,action,event,command_u256,encoder,"

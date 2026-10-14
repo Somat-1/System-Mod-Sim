@@ -7,11 +7,13 @@
 #include <TMCStepper.h>
 #include "driver/pulse_cnt.h"
 
-constexpr uint8_t STEP_PIN = 5, DIR_PIN = 6;
+// Stepper Isolated bench wiring. EN is TMC ENN (active low): held HIGH until
+// the driver mode is verified, then LOW.
+constexpr uint8_t STEP_PIN = 7, DIR_PIN = 8, EN_PIN = 9;
 constexpr uint8_t UART_RX_PIN = 18, UART_TX_PIN = 17, LED_PIN = 48;
-constexpr gpio_num_t ENC_A = GPIO_NUM_4, ENC_B = GPIO_NUM_7, ENC_Z = GPIO_NUM_15;
+constexpr gpio_num_t ENC_A = GPIO_NUM_4, ENC_B = GPIO_NUM_5, ENC_Z = GPIO_NUM_6;
 constexpr uint8_t DRIVER_ADDRESS = 0;
-constexpr float R_SENSE_OHM = 0.11F;
+constexpr float R_SENSE_OHM = 0.10F;   // R100 on the fitted module
 constexpr uint32_t DRIVER_BAUD = 115200, STEP_HIGH_US = 3, DIR_SETUP_US = 20;
 constexpr uint32_t MAX_PULSE_HZ = 20000;
 constexpr uint16_t DEFAULT_CURRENT_MA = 360, DEFAULT_MRES = 16;
@@ -79,6 +81,11 @@ bool setupEncoder() {
   pcnt_channel_set_level_action(chb, PCNT_CHANNEL_LEVEL_ACTION_KEEP,
                                 PCNT_CHANNEL_LEVEL_ACTION_INVERSE);
   gpio_pullup_en(ENC_A); gpio_pullup_en(ENC_B);
+  // accum_count only carries the count across the limits if the limits are
+  // watch points; without these the count silently restarts at 0 every
+  // 30000 counts (1.5 shaft revolutions on the 20000 CPR encoder).
+  pcnt_unit_add_watch_point(pcnt, 30000);
+  pcnt_unit_add_watch_point(pcnt, -30000);
   pcnt_unit_enable(pcnt); pcnt_unit_clear_count(pcnt); pcnt_unit_start(pcnt);
   pinMode(ENC_Z, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(ENC_Z), onIndex, RISING);
@@ -141,8 +148,14 @@ void setCurrent(uint16_t milliamps) {
 }
 
 bool configureDriver() {
+  digitalWrite(EN_PIN, HIGH);
   TmcSerial.begin(DRIVER_BAUD, SERIAL_8N1, UART_RX_PIN, UART_TX_PIN);
-  delay(20);
+  delay(100);
+  // Chip ID first: version 0x21 is a TMC2209 answering; 0x00/0xFF means the
+  // UART gets no reply (VM off, PDN_UART wiring, or no common ground).
+  const uint32_t ioin = driver.IOIN();
+  Serial.printf("# DRIVER_ID,ioin=0x%08lX,version=0x%02X,expected=0x21\n",
+                (unsigned long)ioin, (unsigned)((ioin >> 24) & 0xFF));
   driver.begin();
   driver.toff(5); driver.blank_time(24);
   driver.pdn_disable(true);
@@ -164,7 +177,9 @@ bool configureDriver() {
   }
   if (connection) return false;
   if (!applyMres(DEFAULT_MRES)) return false;
-  return verifyDriverMode(true);
+  const bool ok = verifyDriverMode(true);
+  if (ok) digitalWrite(EN_PIN, LOW);
+  return ok;
 }
 
 void emitSample(int eventCode = 0) {
@@ -387,6 +402,13 @@ void handleCommand(String line) {
     Serial.printf("# PLAN_ADD,index=%u,tag=%s\n", (unsigned)(planCount - 1), a.tag);
     return;
   }
+  if (line.equalsIgnoreCase("REINIT")) {
+    // Retry the driver setup without a reset, e.g. after VM was switched on.
+    if (running) { Serial.println("# ERR,reason=running"); return; }
+    driverReady = configureDriver();
+    Serial.printf("# REINIT_DONE,ready=%u\n", driverReady && encoderReady);
+    return;
+  }
   if (line.equalsIgnoreCase("PLAN RUN")) { runPlan(); return; }
   if (line.equalsIgnoreCase("ABORT")) {
     abortRequested = true; Serial.println("# ABORT_ACK"); return;
@@ -395,6 +417,7 @@ void handleCommand(String line) {
 }
 
 void setup() {
+  pinMode(EN_PIN, OUTPUT); digitalWrite(EN_PIN, HIGH);
   pinMode(STEP_PIN, OUTPUT); pinMode(DIR_PIN, OUTPUT); pinMode(LED_PIN, OUTPUT);
   digitalWrite(STEP_PIN, LOW); digitalWrite(DIR_PIN, HIGH); digitalWrite(LED_PIN, LOW);
   Serial.begin(115200);

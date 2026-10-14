@@ -16,11 +16,14 @@
  * leg: micro_n single microsteps, each followed by micro_dwell_ms, instead of a
  * continuous ramp.
  *
- * WIRING — see ../../../CONNECTIONS.md. The encoder has moved off GPIO5/6
- * because the TMC2209 uses those for STEP/DIR; both cannot have them.
+ * WIRING — the Stepper Isolated bench (see ../../../CONNECTIONS.md):
  *
- *   STEP GPIO5   DIR GPIO6   TMC UART TX GPIO17 / RX GPIO18   EN grounded
- *   ENCODER  A GPIO4   B GPIO7   Z GPIO15
+ *   STEP GPIO7   DIR GPIO8   EN GPIO9 (ENN, active low)
+ *   TMC UART TX GPIO17 (via 1k) / RX GPIO18
+ *   ENCODER  A GPIO4   B GPIO5   Z GPIO6
+ *
+ * EN is held HIGH (outputs off) until the driver configuration has been
+ * verified by readback, then LOW for the rest of the session.
  *
  * The encoder is read by the PCNT peripheral, so counts are never missed
  * regardless of what loop() is doing — which matters here, because loop() is
@@ -35,17 +38,18 @@
 #include "driver/pulse_cnt.h"
 
 // ---- pins (see CONNECTIONS.md) --------------------------------------------
-constexpr uint8_t STEP_PIN = 5;
-constexpr uint8_t DIR_PIN = 6;
+constexpr uint8_t STEP_PIN = 7;
+constexpr uint8_t DIR_PIN = 8;
+constexpr uint8_t EN_PIN = 9;     // TMC ENN: HIGH = outputs off
 constexpr uint8_t UART_RX_PIN = 18;
 constexpr uint8_t UART_TX_PIN = 17;
 constexpr uint8_t LED_PIN = 48;
 constexpr gpio_num_t ENC_A = GPIO_NUM_4;
-constexpr gpio_num_t ENC_B = GPIO_NUM_7;
-constexpr gpio_num_t ENC_Z = GPIO_NUM_15;
+constexpr gpio_num_t ENC_B = GPIO_NUM_5;
+constexpr gpio_num_t ENC_Z = GPIO_NUM_6;
 
 constexpr uint8_t DRIVER_ADDRESS = 0;
-constexpr float R_SENSE_OHM = 0.11F;
+constexpr float R_SENSE_OHM = 0.10F;   // R100 on the fitted module
 constexpr uint32_t DRIVER_BAUD = 115200;
 constexpr uint16_t DEFAULT_CURRENT_MA = 360;
 constexpr uint16_t FULL_STEPS_PER_MM = 100;
@@ -56,6 +60,8 @@ constexpr int64_t U256 = 256;            // position unit = 1/256 full step
 constexpr size_t MAX_MOVES = 512;
 constexpr uint32_t SAMPLE_INTERVAL_MS = 20;   // 50 Hz telemetry
 constexpr uint32_t MAX_PULSE_RATE_HZ = 20000;
+constexpr uint32_t ACCEL_FULLSTEPS_S2 = 4000; // 40 mm/s^2 trapezoidal profile
+constexpr int32_t DEFAULT_SOFT_LIMIT = 1100;  // +/-11 mm about ZERO
 
 HardwareSerial TmcSerial(1);
 TMC2209Stepper driver(&TmcSerial, R_SENSE_OHM, DRIVER_ADDRESS);
@@ -64,10 +70,10 @@ pcnt_unit_handle_t pcnt = nullptr;
 struct MoveSpec {
   int32_t target;          // full steps
   uint16_t speed;          // full steps/s
-  uint16_t dwell_ms;
+  uint32_t dwell_ms;
   uint16_t mres;
   uint16_t micro_n;        // >0 => staircase leg
-  uint16_t micro_dwell_ms;
+  uint32_t micro_dwell_ms;
   char tag[20];
 };
 
@@ -75,9 +81,11 @@ MoveSpec plan[MAX_MOVES];
 size_t planCount = 0;
 
 bool driverReady = false;
+bool encoderReady = false;
 bool running = false;
 bool abortRequested = false;
 int64_t posU256 = 0;
+int32_t softLimit = DEFAULT_SOFT_LIMIT;
 uint16_t mres = 16;
 uint16_t currentMa = DEFAULT_CURRENT_MA;
 int64_t stepU256 = U256 / 16;
@@ -124,6 +132,11 @@ bool setupEncoder() {
 
   gpio_pullup_en(ENC_A);
   gpio_pullup_en(ENC_B);
+  // accum_count only carries the count across the limits if the limits are
+  // watch points; without these the count silently restarts at 0 every
+  // 30000 counts (1.5 shaft revolutions on the 20000 CPR encoder).
+  pcnt_unit_add_watch_point(pcnt, 30000);
+  pcnt_unit_add_watch_point(pcnt, -30000);
   pcnt_unit_enable(pcnt);
   pcnt_unit_clear_count(pcnt);
   pcnt_unit_start(pcnt);
@@ -172,12 +185,22 @@ bool applyMres(uint16_t value) {
 }
 
 bool configureDriver() {
+  digitalWrite(EN_PIN, HIGH);
   TmcSerial.begin(DRIVER_BAUD, SERIAL_8N1, UART_RX_PIN, UART_TX_PIN);
-  delay(20);
+  delay(100);
   driver.begin();
   driver.toff(5);
   driver.blank_time(24);
+  // Current comes from IRUN/IHOLD alone, not scaled by the module's VREF
+  // potentiometer (I_scale_analog resets to 1 on this chip). Hold current is
+  // run current with no power-down: the dwells are the measurements, and
+  // halving the current part-way through each one would change what is
+  // measured.
+  driver.I_scale_analog(false);
+  driver.hold_multiplier(1.0F);
   driver.rms_current(currentMa);
+  driver.iholddelay(0);
+  driver.TPOWERDOWN(0);
   driver.en_spreadCycle(true);
   driver.TPWMTHRS(0);
   driver.intpol(false);
@@ -192,14 +215,17 @@ bool configureDriver() {
     return false;
   }
   const bool spread = g & (1UL << 2), intpol = c & (1UL << 28), stealth = d & (1UL << 30);
+  const bool analog = g & 1UL;
   Serial.printf("# DRIVER,gconf=0x%08lX,chopconf=0x%08lX,drv_status=0x%08lX,"
-                "spreadcycle=%u,intpol=%u,stealth=%u\n",
+                "spreadcycle=%u,intpol=%u,stealth=%u,i_scale_analog=%u,"
+                "irun=%u,ihold=%u\n",
                 (unsigned long)g, (unsigned long)c, (unsigned long)d,
-                spread, intpol, stealth);
-  if (!spread || intpol || stealth) {
+                spread, intpol, stealth, analog, driver.irun(), driver.ihold());
+  if (!spread || intpol || stealth || analog) {
     Serial.println("# ERR,reason=driver_mode_not_confirmed");
     return false;
   }
+  digitalWrite(EN_PIN, LOW);
   return true;
 }
 
@@ -214,23 +240,56 @@ void emitSample(const char *phase) {
   (void)phase;
 }
 
-/** Emit `count` microsteps at `periodUs`, sampling as it goes. */
-bool pulseTrain(uint32_t count, bool positive, uint32_t periodUs) {
-  digitalWrite(DIR_PIN, positive ? HIGH : LOW);
-  delayMicroseconds(DIR_SETUP_US);
+bool pulseOnce(bool positive, uint32_t periodUs) {
+  const uint64_t t0 = esp_timer_get_time();
+  digitalWrite(STEP_PIN, HIGH);
+  delayMicroseconds(STEP_HIGH_US);
+  digitalWrite(STEP_PIN, LOW);
+  posU256 += positive ? stepU256 : -stepU256;
   static uint32_t lastSample = 0;
-  for (uint32_t i = 0; i < count; ++i) {
-    const uint64_t t0 = esp_timer_get_time();
-    digitalWrite(STEP_PIN, HIGH);
-    delayMicroseconds(STEP_HIGH_US);
-    digitalWrite(STEP_PIN, LOW);
-    posU256 += positive ? stepU256 : -stepU256;
-    while ((uint32_t)(esp_timer_get_time() - t0) < periodUs) {
-      const uint32_t now = millis();
-      if (now - lastSample >= SAMPLE_INTERVAL_MS) { lastSample = now; emitSample("move"); }
-      if ((i & 31U) == 31U && pollAbort()) return false;
+  while ((uint32_t)(esp_timer_get_time() - t0) < periodUs) {
+    const uint32_t now = millis();
+    if (now - lastSample >= SAMPLE_INTERVAL_MS) {
+      lastSample = now;
+      emitSample("move");
     }
     if (pollAbort()) return false;
+  }
+  return true;
+}
+
+/** Constant-rate pulses are used only for the quasi-static staircase. */
+bool pulseTrainConstant(uint32_t count, bool positive, uint32_t periodUs) {
+  digitalWrite(DIR_PIN, positive ? HIGH : LOW);
+  delayMicroseconds(DIR_SETUP_US);
+  for (uint32_t i = 0; i < count; ++i) {
+    if (!pulseOnce(positive, periodUs)) return false;
+  }
+  return true;
+}
+
+/** Symmetric accelerate-cruise-decelerate profile for positioning moves. */
+bool pulseTrainProfiled(uint32_t count, bool positive, uint16_t cruiseFullStepsS) {
+  if (count == 0) return true;
+  const uint64_t cruisePulseHz = (uint64_t)cruiseFullStepsS * mres;
+  if (cruisePulseHz == 0 || cruisePulseHz > MAX_PULSE_RATE_HZ) {
+    Serial.println("# ERR,reason=rate_out_of_range");
+    return false;
+  }
+  digitalWrite(DIR_PIN, positive ? HIGH : LOW);
+  delayMicroseconds(DIR_SETUP_US);
+  for (uint32_t i = 0; i < count; ++i) {
+    // Distance to the nearer end, measured at the centre of this microstep.
+    // v^2 = 2*a*s gives a triangular profile for short moves and a trapezoid
+    // once the requested cruise speed can be reached.
+    const uint32_t edgePulses = min(i, count - 1U - i);
+    const float distanceFs = ((float)edgePulses + 0.5F) / (float)mres;
+    float speedFs = sqrtf(2.0F * (float)ACCEL_FULLSTEPS_S2 * distanceFs);
+    if (speedFs > cruiseFullStepsS) speedFs = cruiseFullStepsS;
+    uint32_t pulseHz = (uint32_t)(speedFs * mres + 0.5F);
+    if (pulseHz < 1) pulseHz = 1;
+    const uint32_t periodUs = 1000000UL / pulseHz;
+    if (!pulseOnce(positive, periodUs)) return false;
   }
   return true;
 }
@@ -250,31 +309,38 @@ bool runMove(const MoveSpec &m, size_t index) {
   if (m.mres != mres && !applyMres(m.mres)) return false;
   const int64_t target = (int64_t)m.target * U256;
   const int64_t delta = target - posU256;
-  if (delta == 0) return dwell(m.dwell_ms);
+
+  Serial.printf("# MOVE,%u,%s,target=%ld,speed=%u,mres=%u,micro=%u\n",
+                (unsigned)index, m.tag, (long)m.target, m.speed, m.mres,
+                m.micro_n);
+  if (delta == 0) {
+    if (!dwell(m.dwell_ms)) return false;
+    Serial.printf("# ARRIVED,%u,pos=%ld,enc=%ld\n",
+                  (unsigned)index, (long)(posU256 / U256), (long)encoderCount());
+    return true;
+  }
 
   const bool positive = delta > 0;
   const uint64_t absd = positive ? delta : -delta;
+  if (absd % stepU256) {
+    Serial.println("# ERR,reason=target_not_on_microstep_grid");
+    return false;
+  }
   const uint32_t pulses = (uint32_t)(absd / stepU256);
 
-  Serial.printf("# MOVE,%u,%s,target=%ld,speed=%u,mres=%u,pulses=%lu,micro=%u\n",
-                (unsigned)index, m.tag, (long)m.target, m.speed, m.mres,
-                (unsigned long)pulses, m.micro_n);
-
   if (m.micro_n > 0) {
+    if (pulses != m.micro_n) {
+      Serial.println("# ERR,reason=staircase_distance_mismatch");
+      return false;
+    }
     // Staircase leg: one microstep, then hold, repeated. The hold is the
     // measurement - a continuous ramp would never let the stage come to rest.
     for (uint16_t k = 0; k < m.micro_n; ++k) {
-      if (!pulseTrain(1, positive, 1000)) return false;
+      if (!pulseTrainConstant(1, positive, 1000)) return false;
       if (!dwell(m.micro_dwell_ms)) return false;
     }
   } else {
-    const uint64_t pulseHz = (uint64_t)m.speed * mres;
-    if (pulseHz == 0 || pulseHz > MAX_PULSE_RATE_HZ) {
-      Serial.println("# ERR,reason=rate_out_of_range");
-      return false;
-    }
-    const uint32_t periodUs = (uint32_t)(1000000ULL / pulseHz);
-    if (!pulseTrain(pulses, positive, periodUs)) return false;
+    if (!pulseTrainProfiled(pulses, positive, m.speed)) return false;
     if (!dwell(m.dwell_ms)) return false;
   }
   Serial.printf("# ARRIVED,%u,pos=%ld,enc=%ld\n",
@@ -307,20 +373,53 @@ bool pollAbort() {
 
 void runPlan() {
   if (!driverReady) { Serial.println("# ERR,reason=driver_not_ready"); return; }
+  if (!encoderReady) { Serial.println("# ERR,reason=encoder_not_ready"); return; }
   if (planCount == 0) { Serial.println("# ERR,reason=plan_empty"); return; }
+  if (posU256 != 0) { Serial.println("# ERR,reason=not_zero"); return; }
+  if (plan[planCount - 1].target != 0) {
+    Serial.println("# ERR,reason=plan_does_not_return_zero"); return;
+  }
   running = true;
   abortRequested = false;
+  bool failed = false;
   digitalWrite(LED_PIN, HIGH);
   Serial.printf("# RUN_START,moves=%u,pos=%ld,enc=%ld\n",
                 (unsigned)planCount, (long)(posU256 / U256), (long)encoderCount());
   for (size_t i = 0; i < planCount && !abortRequested; ++i) {
-    if (!runMove(plan[i], i)) break;
+    if (!runMove(plan[i], i)) { failed = !abortRequested; break; }
   }
   digitalWrite(LED_PIN, LOW);
   running = false;
-  Serial.printf("# RUN_%s,pos=%ld,enc=%ld\n",
-                abortRequested ? "ABORTED" : "COMPLETE",
+  const char *outcome = abortRequested ? "ABORTED" : (failed ? "FAILED" : "COMPLETE");
+  Serial.printf("# RUN_%s,pos=%ld,enc=%ld\n", outcome,
                 (long)(posU256 / U256), (long)encoderCount());
+}
+
+void runPreflight() {
+  if (!driverReady) { Serial.println("# ERR,reason=driver_not_ready"); return; }
+  if (!encoderReady) { Serial.println("# ERR,reason=encoder_not_ready"); return; }
+  if (running) { Serial.println("# ERR,reason=already_running"); return; }
+  if (posU256 != 0) { Serial.println("# ERR,reason=not_zero"); return; }
+  if (mres != 16 && !applyMres(16)) {
+    Serial.println("# ERR,reason=mres_write_failed"); return;
+  }
+  constexpr uint32_t pulses = 10U * 16U;  // 0.1 mm at 100 full steps/mm
+  const int32_t enc0 = encoderCount();
+  abortRequested = false;
+  running = true;
+  bool ok = pulseTrainProfiled(pulses, true, 25) && dwell(200);
+  const int32_t encForward = encoderCount();
+  if (ok) ok = pulseTrainProfiled(pulses, false, 25) && dwell(200);
+  const int32_t encReturn = encoderCount();
+  running = false;
+  if (!ok) {
+    Serial.printf("# CHECK_FAILED,forward_delta=%ld,return_delta=%ld\n",
+                  (long)(encForward - enc0), (long)(encReturn - enc0));
+    return;
+  }
+  Serial.printf("# CHECK,command_steps=10,forward_delta=%ld,return_delta=%ld,direction=%d\n",
+                (long)(encForward - enc0), (long)(encReturn - enc0),
+                encForward > enc0 ? 1 : (encForward < enc0 ? -1 : 0));
 }
 
 void handleCommand(String line) {
@@ -333,22 +432,49 @@ void handleCommand(String line) {
   verb.toUpperCase();
 
   if (verb == "PING") {
-    Serial.printf("# PONG,fw=stage_identification,ready=%u,moves=%u\n",
-                  driverReady, (unsigned)planCount);
+    Serial.printf("# PONG,fw=stage_identification,ready=%u,driver=%u,encoder=%u,moves=%u\n",
+                  driverReady && encoderReady, driverReady, encoderReady,
+                  (unsigned)planCount);
   } else if (verb == "STATUS") {
     Serial.printf("# STATUS,pos=%ld,enc=%ld,index=%ld,mres=%u,current_ma=%u,"
-                  "moves=%u,running=%u,steps_per_mm=%u\n",
+                  "moves=%u,running=%u,steps_per_mm=%u,limit=%ld,accel=%lu\n",
                   (long)(posU256 / U256), (long)encoderCount(), (long)indexCount,
-                  mres, currentMa, (unsigned)planCount, running, FULL_STEPS_PER_MM);
+                  mres, currentMa, (unsigned)planCount, running, FULL_STEPS_PER_MM,
+                  (long)softLimit, (unsigned long)ACCEL_FULLSTEPS_S2);
+  } else if (verb == "DRIVER") {
+    uint32_t g = 0, c = 0, d = 0;
+    if (!readTwice([] { return driver.GCONF(); }, g) ||
+        !readTwice([] { return driver.CHOPCONF(); }, c) ||
+        !readTwice([] { return driver.DRV_STATUS(); }, d)) {
+      Serial.println("# ERR,reason=uart_readback_failed");
+    } else {
+      Serial.printf("# DRIVER,gconf=0x%08lX,chopconf=0x%08lX,drv_status=0x%08lX,"
+                    "spreadcycle=%u,intpol=%u,stealth=%u\n",
+                    (unsigned long)g, (unsigned long)c, (unsigned long)d,
+                    !!(g & (1UL << 2)), !!(c & (1UL << 28)), !!(d & (1UL << 30)));
+    }
+  } else if (verb == "CHECK") {
+    runPreflight();
   } else if (verb == "ZERO") {
     posU256 = 0;
     if (pcnt) pcnt_unit_clear_count(pcnt);
     indexCount = 0;
     Serial.println("# ZERO_OK,pos=0,enc=0");
   } else if (verb == "CURRENT") {
-    currentMa = (uint16_t)rest.toInt();
+    const long requested = rest.toInt();
+    if (requested < 50 || requested > 1200) {
+      Serial.println("# ERR,reason=current_out_of_range"); return;
+    }
+    currentMa = (uint16_t)requested;
     driver.rms_current(currentMa);
     Serial.printf("# CURRENT_OK,current_ma=%u\n", currentMa);
+  } else if (verb == "LIMIT") {
+    const long requested = rest.toInt();
+    if (requested < 1050 || requested > 2200) {
+      Serial.println("# ERR,reason=limit_out_of_range"); return;
+    }
+    softLimit = (int32_t)requested;
+    Serial.printf("# LIMIT_OK,limit=%ld\n", (long)softLimit);
   } else if (verb == "PLAN") {
     String sub = rest;
     int s2 = rest.indexOf(' ');
@@ -362,14 +488,29 @@ void handleCommand(String line) {
       if (planCount >= MAX_MOVES) { Serial.println("# ERR,reason=plan_full"); return; }
       MoveSpec m = {};
       char tag[20] = "";
-      const int n = sscanf(args.c_str(), "%ld %hu %hu %hu %hu %hu %19s",
-                           (long *)&m.target, &m.speed, &m.dwell_ms, &m.mres,
-                           &m.micro_n, &m.micro_dwell_ms, tag);
-      if (n < 6) { Serial.println("# ERR,reason=plan_add_fields"); return; }
+      unsigned long dwellMs = 0, microDwellMs = 0;
+      const int n = sscanf(args.c_str(), "%ld %hu %lu %hu %hu %lu %19s",
+                           (long *)&m.target, &m.speed, &dwellMs, &m.mres,
+                           &m.micro_n, &microDwellMs, tag);
+      if (n != 7) { Serial.println("# ERR,reason=plan_add_fields"); return; }
+      m.dwell_ms = (uint32_t)dwellMs;
+      m.micro_dwell_ms = (uint32_t)microDwellMs;
+      if (labs((long)m.target) > softLimit) {
+        Serial.println("# ERR,reason=target_outside_limit"); return;
+      }
+      if (m.speed == 0 || (uint32_t)m.speed * m.mres > MAX_PULSE_RATE_HZ) {
+        Serial.println("# ERR,reason=rate_out_of_range"); return;
+      }
+      if (m.mres < 1 || m.mres > 256 || (m.mres & (m.mres - 1))) {
+        Serial.println("# ERR,reason=invalid_mres"); return;
+      }
+      if (m.micro_n > 0 && m.micro_dwell_ms == 0) {
+        Serial.println("# ERR,reason=invalid_staircase_dwell"); return;
+      }
       strncpy(m.tag, tag, sizeof(m.tag) - 1);
       plan[planCount++] = m;
-      if (planCount % 50 == 0)
-        Serial.printf("# PLAN_ADD,count=%u\n", (unsigned)planCount);
+      Serial.printf("# PLAN_ADD,index=%u,count=%u,tag=%s\n",
+                    (unsigned)(planCount - 1), (unsigned)planCount, m.tag);
     } else if (sub == "RUN") {
       runPlan();
     } else {
@@ -384,6 +525,8 @@ void handleCommand(String line) {
 }
 
 void setup() {
+  pinMode(EN_PIN, OUTPUT);
+  digitalWrite(EN_PIN, HIGH);
   pinMode(STEP_PIN, OUTPUT);
   pinMode(DIR_PIN, OUTPUT);
   digitalWrite(STEP_PIN, LOW);
@@ -397,14 +540,14 @@ void setup() {
   delay(200);
 
   Serial.println("# BOOT,fw=stage_identification");
-  Serial.printf("# PINS,step=%u,dir=%u,uart_rx=%u,uart_tx=%u,enc_a=%d,enc_b=%d,enc_z=%d\n",
-                STEP_PIN, DIR_PIN, UART_RX_PIN, UART_TX_PIN,
+  Serial.printf("# PINS,step=%u,dir=%u,en=%u,uart_rx=%u,uart_tx=%u,enc_a=%d,enc_b=%d,enc_z=%d\n",
+                STEP_PIN, DIR_PIN, EN_PIN, UART_RX_PIN, UART_TX_PIN,
                 (int)ENC_A, (int)ENC_B, (int)ENC_Z);
-  const bool enc = setupEncoder();
-  if (!enc) Serial.println("# ERR,reason=pcnt_init_failed");
+  encoderReady = setupEncoder();
+  if (!encoderReady) Serial.println("# ERR,reason=pcnt_init_failed");
   driverReady = configureDriver();
   Serial.printf("# READY,driver=%u,encoder=%u,mres=%u,current_ma=%u,steps_per_mm=%u\n",
-                driverReady, enc, mres, currentMa, FULL_STEPS_PER_MM);
+                driverReady, encoderReady, mres, currentMa, FULL_STEPS_PER_MM);
   Serial.println("# IDLE,upload a plan then PLAN RUN; nothing moves before that");
 }
 

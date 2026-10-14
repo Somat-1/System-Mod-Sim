@@ -1,27 +1,32 @@
 {
   "_comment": "Fingerprint of the committed flash image; the sketch hash is compared against the .ino so a stale image cannot be flashed silently in place of an edited sketch.",
   "image": "stage_chirp_sweep_merged.bin",
-  "image_sha256": "d00dc2008b26e7442548e49d544d5e1a328e48ab3565b08909bf2252bc3cc05b",
-  "image_bytes": 388608,
+  "image_sha256": "114ded9a6b2c5ce152d7da6becd4237cb84740b286f06b55b1c3042caaf1de16",
+  "image_bytes": 417792,
   "flash_offset": "0x0",
   "chip": "esp32s3",
   "sketch": "stage_chirp_sweep.ino",
-  "sketch_sha256": "e07317ac69d430d8612de02bb70cc4e87f473dc5f530cdc48196101660fc31ca",
+  "sketch_sha256": "1d33748fff84a360d35d7d7aa21264ab11a886309ff90f27c3b299052fe8e3d0",
   "fqbn": "esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=cdc",
-  "core": "esp32:esp32@3.3.12",
+  "core": "esp32:esp32@3.3.10",
   "libraries": [
     "TMCStepper@0.7.3"
   ],
-  "arduino_cli": "1.5.2-rc.1",
+  "arduino_cli": "1.5.1",
   "built": "2026-10-13",
-  "program_bytes": 322930,
-  "program_pct_of_flash": 24,
-  "globals_bytes": 22624,
-  "r_sense_ohm": 0.11,
-  "r_sense_warning": "the v3 chirp used 0.10 for a board marked R100; verify the board actually fitted before running",
+  "r_sense_ohm": 0.1,
+  "r_sense_warning": "0.10 for the module now fitted (marked R100); the v6 board used 0.11 - verify the board actually fitted before running",
   "resonance_gap_hz": [
     150,
     250
   ],
-  "safety": "150-250 Hz caused uncontrolled motor motion on 2026-09-15; the FULL profile omits the band entirely rather than attenuating it"
+  "safety": "150-250 Hz caused uncontrolled motor motion on 2026-09-15; the FULL profile omits the band entirely rather than attenuating it",
+  "driver_pins": {
+    "STEP": 7,
+    "DIR": 8,
+    "EN": 9,
+    "UART_TX": 17,
+    "UART_RX": 18
+  },
+  "current_mode": "I_scale_analog=0, IHOLD=IRUN, TPOWERDOWN=0"
 }

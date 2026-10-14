@@ -1,9 +1,22 @@
 {
   "sweep_rate_hz_per_s": 7.8125,
-  "cruise_full_steps": 3.0,
-  "cruise_microsteps": 48.0,
-  "mres": 16,
-  "current_rms_ma": 400,
+  "amplitude_law": "constant A0 at every frequency",
+  "a0_full_steps": 2.5,
+  "a0_microsteps": 20.0,
+  "peak_step_rate_at_1khz": 125664,
+  "amplitude_microsteps_at_hz": {
+    "1": 20.0,
+    "10": 20.0,
+    "50": 20.0,
+    "100": 20.0,
+    "150": 20.0,
+    "250": 20.0,
+    "500": 20.0,
+    "750": 20.0,
+    "1000": 20.0
+  },
+  "mres": 8,
+  "current_rms_ma": 1000,
   "resonance_gap_hz": [
     150.0,
     250.0
@@ -13,9 +26,9 @@
     "full": {
       "title": "FULL \u2014 1 Hz to 1 kHz, gap 150\u2013250 Hz",
       "purpose": "cover the whole band except the one that is unsafe to drive",
-      "duration_s": 268.14,
-      "duration_min": 4.47,
-      "segments": 11,
+      "duration_s": 268.64,
+      "duration_min": 4.48,
+      "segments": 13,
       "bands_hz": [
         [
           1.0,
@@ -31,9 +44,9 @@
     "high": {
       "title": "HIGH \u2014 250 Hz to 1 kHz, continuous",
       "purpose": "resolve whether the 250 Hz feature is the stage or the gap edge",
-      "duration_s": 236.0,
-      "duration_min": 3.93,
-      "segments": 9,
+      "duration_s": 238.5,
+      "duration_min": 3.98,
+      "segments": 12,
       "bands_hz": [
         [
           250.0,

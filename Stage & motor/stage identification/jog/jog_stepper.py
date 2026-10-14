@@ -10,6 +10,11 @@ forth between them until you stop it.
     python jog_stepper.py --simulate      # no hardware; try the interface out
     python jog_stepper.py --a -200 --b 200 --go    # straight into motion
 
+At the prompt, a bare whole number moves that many *microsteps* (at the
+present MRES) from where the stage is, and 'set a' / 'set b' take wherever it
+now sits as one end of the oscillation - so the two ends can be found by
+nudging rather than by typing coordinates.
+
 It needs esp32s3_tmc2209_jog.ino running on the board - a host script cannot
 pulse STEP and DIR by itself, those are ESP32 pins. `--simulate` stands in a
 model of that firmware so the interface can be exercised with nothing attached.
@@ -23,9 +28,9 @@ Safety, because this moves a real stage with no homing and no end stops:
 
 * Position 0 means "wherever the stage was when it was last zeroed", nothing
   more. There is no absolute reference.
-* A soft limit of +/-500 full steps (+/-5 mm) about zero is applied by the
-  firmware and refuses targets outside it. The stage's measured travel is
-  44 mm, so widen it with --limit once you know where you are within that.
+* There is no soft limit unless you set one ('limit <steps>' or --limit),
+  in which case the firmware refuses targets outside +/- that about zero.
+  The stage's measured travel is 44 mm.
 * Nothing moves until you ask. Ctrl-C, or any key while jogging, stops it.
 """
 
@@ -43,8 +48,9 @@ from pathlib import Path
 
 FULL_STEPS_PER_MM = 100
 DEFAULT_RATE_STEPS_S = 70          # 0.7 mm/s, the rigs "MODERATE"
-DEFAULT_LIMIT = 500                # +/-5 mm
+DEFAULT_LIMIT = 0                  # off; set with 'limit <steps>'
 BAUD = 115200
+FIRMWARE_ID = "esp32s3_tmc2209_jog"
 
 # ESP32-S3 native USB CDC, plus the usual bridge chips, so an older board on
 # the same rig is still found.
@@ -56,8 +62,18 @@ USB_VIDS = {
 }
 
 
+U256 = 256                         # firmware position unit: 1/256 full step
+SEQ_MRES = (1, 2, 4, 8, 16, 32, 64)  # default MRES sweep order
+RUNS_DIR = Path(__file__).resolve().parent / "runs"
+
+
 def mm(steps: float) -> str:
     return f"{steps / FULL_STEPS_PER_MM:+.2f} mm"
+
+
+def mm_fine(u: int) -> str:
+    """A 1/256-step position in mm, to the precision a microstep needs."""
+    return f"{u / U256 / FULL_STEPS_PER_MM:+.5f} mm"
 
 
 # --------------------------------------------------------------------------
@@ -74,6 +90,7 @@ class Link:
     lock: threading.Lock = field(default_factory=threading.Lock)
     alive: bool = True
     verbose: bool = False
+    fw: str = ""
 
     def start(self):
         self._t = threading.Thread(target=self._reader, daemon=True)
@@ -120,12 +137,15 @@ class Link:
         deadline = time.monotonic() + timeout
         seen = []
         while time.monotonic() < deadline:
-            for line in self.drain():
+            batch = self.drain()
+            for i, line in enumerate(batch):
                 seen.append(line)
-                for p in prefixes:
-                    if line.startswith(p):
-                        self._replay(seen, line)
-                        return line
+                if line.startswith(tuple(prefixes)):
+                    # Lines after the match in the same batch belong to the
+                    # caller too: a short move's ARRIVED often lands with the
+                    # acknowledgement and must not be dropped.
+                    self._replay(seen + batch[i + 1:], line)
+                    return line
             time.sleep(0.01)
         self._replay(seen, None)
         return None
@@ -198,6 +218,8 @@ def probe(port: str, verbose=False, settle=1.2) -> Link | None:
         link.send("PING")
         reply = link.wait_for("# PONG", timeout=1.2)
         if reply:
+            # The identification sketches answer PING too; only ours will do.
+            link.fw = parse_kv(reply).get("fw", "?").split()[0]
             return link
     link.close()
     return None
@@ -236,9 +258,16 @@ def find_board(preferred: str | None, verbose=False) -> Link | None:
     for name in order:
         print(f"Probing {name} ...")
         link = probe(name, verbose=verbose)
-        if link:
+        if link and link.fw == FIRMWARE_ID:
             print(f"Found the jog firmware on {name}.")
             return link
+        if link:
+            print(f"  {name}: the board answers, but it is running '{link.fw}', "
+                  f"not the jog firmware.")
+            print(f"  Flash the jog firmware back with:\n"
+                  f"    python {Path(__file__).name} --port {name} --flash")
+            link.close()
+            return None
         print(f"  {name}: no response to PING")
     print("\nNothing answered. Either the board is on another port, or it is not")
     print("running esp32s3_tmc2209_jog.ino (see firmware/ in this folder).")
@@ -472,6 +501,8 @@ class FakeFirmware:
         self.calib_next = 0.0
         self.calib_cycles = 0
         self.calib_out = True
+        self.seq = None
+        self._dt = 0.0
         self.out: list[str] = []
         self.last = time.monotonic()
         self.last_tel = 0.0
@@ -492,8 +523,17 @@ class FakeFirmware:
             out, self.out = self.out, []
         return out
 
+    def pu(self):
+        return round(self.pos * U256)
+
+    def snap(self):
+        """Onto the microstep grid, where the real firmware always is."""
+        self.pos = int(self.pos * self.mres) / self.mres
+
     def status(self):
-        return (f"# STATUS,pos={round(self.pos)},target={self.target},"
+        return (f"# STATUS,pos={round(self.pos)},pos_u256={self.pu()},"
+                f"a_u256={round(self.a * U256)},b_u256={round(self.b * U256)},"
+                f"target={self.target},"
                 f"a={self.a},b={self.b},mode={self.mode},"
                 f"rate_millihz={self.rate},mres={self.mres},"
                 f"current_ma={self.current},limit={self.limit},"
@@ -520,10 +560,12 @@ class FakeFirmware:
         elif verb == "STATUS":
             self.emit(self.status())
         elif verb == "POS?":
-            self.emit(f"# POS,pos={round(self.pos)}")
+            self.emit(f"# POS,pos={round(self.pos)},pos_u256={self.pu()}")
         elif verb == "STOP":
             self.mode = "IDLE"
-            self.emit(f"# STOP,pos={round(self.pos)},reason=command")
+            self.snap()
+            self.emit(f"# STOP,pos={round(self.pos)},pos_u256={self.pu()},"
+                      f"reason=command")
         elif verb == "ZERO":
             if self.mode != "IDLE":
                 self.emit("# ERR,reason=busy")
@@ -561,6 +603,7 @@ class FakeFirmware:
                 self.emit("# ERR,reason=bad_mres")
             else:
                 self.mres = v
+                self.snap()
                 self.emit(f"# MRES_OK,mres={self.mres},"
                           f"pulse_hz={self.rate*self.mres/1000:.1f}")
         elif verb == "MOVETO":
@@ -570,6 +613,35 @@ class FakeFirmware:
             else:
                 self.target, self.mode = v, "MOVING"
                 self.emit(f"# MOVETO,target={v}")
+        elif verb == "STEP":
+            n = self._num(rest)
+            t = self.pos + (n or 0) / self.mres
+            if self.mode != "IDLE":
+                self.emit("# ERR,reason=busy")
+            elif not n:
+                self.emit("# ERR,reason=bad_step_count")
+            elif not self.within(t):
+                self.emit("# ERR,reason=outside_limit")
+            else:
+                self.target, self.mode = t, "MOVING"
+                self.emit(f"# STEP,n={n},mres={self.mres},"
+                          f"target_u256={round(t * U256)}")
+        elif verb == "JOGU":
+            try:
+                a, b = (int(x) for x in rest.split())
+            except ValueError:
+                self.emit("# ERR,reason=jog_needs_two")
+                return
+            grid = U256 // self.mres
+            if a % grid or b % grid:
+                self.emit("# ERR,reason=off_microstep_grid")
+            elif not (self.within(a / U256) and self.within(b / U256)):
+                self.emit("# ERR,reason=outside_limit")
+            elif a == b:
+                self.emit("# ERR,reason=equal_positions")
+            else:
+                self.a, self.b = a / U256, b / U256
+                self.emit(f"# JOG_SET,a_u256={a},b_u256={b}")
         elif verb == "JOG":
             try:
                 a, b = (int(x) for x in rest.split())
@@ -591,6 +663,46 @@ class FakeFirmware:
                 self.mode = "JOGGING"
                 self.emit(f"# START,a={self.a},b={self.b},"
                           f"first={'B' if self.toward_b else 'A'}")
+        elif verb == "REINIT":
+            self.emit("# DRIVER_ID,ioin=0x21000040,version=0x21,expected=0x21")
+            self.emit("# REINIT_DONE,ready=1")
+        elif verb == "SEQ":
+            parts = rest.split()
+            try:
+                secs = int(parts[0]) if len(parts) > 0 else 30
+                dwell = int(parts[1]) if len(parts) > 1 else 2000
+                jump = int(parts[2]) if len(parts) > 2 else 4
+                mlist = ([int(m) for m in parts[3].split(",")]
+                         if len(parts) > 3 else list(SEQ_MRES))
+            except ValueError:
+                self.emit("# ERR,reason=bad_seq_args")
+                return
+            if self.mode != "IDLE":
+                self.emit("# ERR,reason=busy")
+            elif not (0 < secs <= 3600 and 50 <= dwell <= 60000
+                      and jump and abs(jump) <= 10000):
+                self.emit("# ERR,reason=bad_seq_args")
+            elif any(not (1 <= m <= 256 and m & (m - 1) == 0) for m in mlist):
+                self.emit("# ERR,reason=bad_seq_mres_list")
+            elif self.rate * max(mlist) > 20000 * 1000:
+                self.emit(f"# ERR,reason=rate_too_high_for_mres,"
+                          f"max_mres={max(mlist)}")
+            elif self.pu() % U256:
+                self.emit("# ERR,reason=not_on_full_step")
+            elif not self.within(self.pos + jump):
+                self.emit("# ERR,reason=outside_limit")
+            else:
+                self.mode = "SEQ"
+                self.seq = self._seq(secs, dwell / 1000.0, jump, mlist)
+                self.emit(f"# SEQ_START,blocks={len(mlist)},block_s={secs},"
+                          f"dwell_ms={dwell},jump={jump},base_u256={self.pu()},"
+                          f"rate_millihz={self.rate},t_ms={self._ms()}")
+        elif verb == "HOLD":
+            v = self._num(rest)
+            if v is None or not 0 <= v <= 100:
+                self.emit("# ERR,reason=bad_hold")
+            else:
+                self.emit(f"# HOLD_OK,hold_pct={v},irun=9,ihold={9 * v // 100}")
         elif verb == "ENC?":
             self.emit(f"# ENC,enc={self.enc},index=0")
         elif verb == "CALIB":
@@ -610,6 +722,63 @@ class FakeFirmware:
                       f"mres={self.mres},microstep_um={10.0/self.mres:.4f}")
         else:
             self.emit(f"# ERR,reason=unknown_command,verb={verb}")
+
+    @staticmethod
+    def _ms():
+        return int(time.monotonic() * 1000)
+
+    def _seq_event(self, what, block, extra=""):
+        self.emit(f"# {what},block={block},mres={self.mres},{extra}"
+                  f"pos_u256={self.pu()},enc={self.enc},t_ms={self._ms()}")
+
+    def _seq(self, secs, dwell, jump, mlist):
+        """The firmware's SEQ state machine, as a generator stepped by tick()."""
+        base, restore = self.pos, self.mres
+
+        def hold(seconds):
+            end = time.monotonic() + seconds
+            while time.monotonic() < end:
+                yield
+
+        def travel(tgt):
+            while self.pos != tgt:
+                span = self.rate / 1000.0 * self._dt
+                self.pos = tgt if abs(tgt - self.pos) <= span else \
+                    self.pos + (span if tgt > self.pos else -span)
+                self.enc = round(self.pos * 200)
+                yield
+
+        for block, m in enumerate(list(mlist) + [None]):
+            if m is not None:
+                self.mres = m
+                self._seq_event("SEQ_BLOCK", block, f"microstep_um={10.0/m:.4f},")
+            yield from travel(base + jump)
+            self._seq_event("SEQ_JUMP", block, "dir=out,")
+            yield from hold(dwell)
+            yield from travel(base)
+            self._seq_event("SEQ_JUMP", block, "dir=back,")
+            yield from hold(dwell)
+            if m is None:
+                break
+            end, out, cycles = time.monotonic() + secs, True, 0
+            while True:
+                if out and time.monotonic() >= end:
+                    self._seq_event("SEQ_OSC_END", block)
+                    break
+                self._seq_event("SEQ_OSC", block,
+                                f"next={'+' if out else '-'},"
+                                f"cycle={cycles + 1},")
+                self.pos += (1.0 / m) if out else -(1.0 / m)
+                # invented lost motion on the way back, as in tick_calib
+                self.enc += round(200 / m * (1.0 if out else -0.94))
+                if not out:
+                    cycles += 1
+                out = not out
+                yield from hold(dwell)
+        self.mres = restore
+        self.emit(f"# SEQ_DONE,blocks={len(mlist)},pos_u256={self.pu()},"
+                  f"enc={self.enc},t_ms={self._ms()},mres_restored={restore}")
+        self.mode = "IDLE"
 
     def tick_calib(self, now):
         if now >= self.calib_end:
@@ -639,6 +808,10 @@ class FakeFirmware:
         if self.mode == "CALIB":
             self.tick_calib(now)
             return
+        if self.mode == "SEQ":
+            self._dt = dt
+            next(self.seq, None)
+            return
         if self.mode != "IDLE":
             tgt = (self.b if self.toward_b else self.a) if self.mode == "JOGGING" \
                 else self.target
@@ -647,16 +820,19 @@ class FakeFirmware:
                 self.pos = float(tgt)
                 if self.mode == "JOGGING":
                     self.emit(f"# REACHED,pos={round(self.pos)},"
+                              f"pos_u256={self.pu()},"
                               f"next={'A' if self.toward_b else 'B'}")
                     self.toward_b = not self.toward_b
                 else:
-                    self.emit(f"# ARRIVED,pos={round(self.pos)}")
+                    self.emit(f"# ARRIVED,pos={round(self.pos)},"
+                              f"pos_u256={self.pu()}")
                     self.mode = "IDLE"
             else:
                 self.pos += span if tgt > self.pos else -span
             if now - self.last_tel >= 0.1:
                 self.last_tel = now
-                self.emit(f"# POS,pos={round(self.pos)},mode={self.mode}")
+                self.emit(f"# POS,pos={round(self.pos)},pos_u256={self.pu()},"
+                          f"mode={self.mode}")
 
 
 class FakeSerial:
@@ -755,24 +931,35 @@ class KeyWatcher:
 
 HELP = """
 Commands
-  <number> <number>   set both positions at once, e.g.  -200 200
-  a <number>          set position A            b <number>   set position B
+  <number>            move that many MICROSTEPS from here (negative = back),
+                      at the present mres  (now 1/{mres}: 1 microstep = {um:.4f} um)
+  set a / set b       take the present position as end A / end B
   go                  shuttle between A and B until a key is pressed
   go <n>              ... or for exactly n legs, then stop
   calib [s] [dwell]   microstep calibration: +1 / -1 microstep with long
                       dwells, default 30 s and 2000 ms. Set the step size
                       first with 'mres' - at mres 16 one microstep is
                       0.625 um.
-  moveto <number>     one move to an absolute position
+  <number> <number>   set both ends at once in full steps, e.g.  -200 200
+  a <number>          set end A in full steps   b <number>   set end B
+  seq [s] [dwell] [jump] [mres,mres,...]
+                      MRES sweep: for each MRES (default 1,2,4,8,16,32,64)
+                      a marker jump of <jump> full steps out and back, then
+                      the calib oscillation for s seconds. Defaults 30 s,
+                      2000 ms, 4 full steps. Logged to runs/*.csv.
+  moveto <number>     one move to an absolute position, in full steps
   speed <steps/s>     full-step rate      (now: {rate} steps/s, {mmps:.2f} mm/s)
   mres <1..256>       microstep resolution
   current <mA>        coil current
   limit <steps>       soft limit, +/- about zero; 0 disables
   zero                call the present position 0
   status              ask the board where it is
+  reinit              retry the TMC2209 setup (after fixing power/wiring)
+  hold <0..100>       standstill current as % of run current (default 100)
   help                this list            quit / q      leave
 
-Positions are whole full steps; {spm} full steps = 1 mm, so 1 unit = 10 um.
+Full steps: {spm} full steps = 1 mm, so 1 full step = 10 um.
+A typical session:   mres 16 / 40 / set a / -80 / set b / go
 """
 
 
@@ -803,6 +990,9 @@ class Console:
         elif line.startswith("# ERR"):
             kv = parse_kv(line)
             print(f"  refused: {kv.get('reason', line)}")
+            if kv.get("reason") == "driver_not_ready":
+                print("  (the TMC2209 did not answer over UART; fix power or "
+                      "wiring, then 'reinit')")
             return None
         return line
 
@@ -811,6 +1001,28 @@ class Console:
             return int(self.state.get("pos", 0))
         except ValueError:
             return 0
+
+    def pos_u(self) -> int:
+        """Present position in 1/256 full steps - exact, unlike pos()."""
+        try:
+            return int(self.state["pos_u256"])
+        except (KeyError, ValueError):
+            return self.pos() * U256
+
+    def mres(self) -> int:
+        try:
+            return int(self.state.get("mres", 16))
+        except ValueError:
+            return 16
+
+    def fmt(self, u: int | None) -> str:
+        """A 1/256-step position as microsteps, full steps and mm."""
+        if u is None:
+            return "-"
+        grid = U256 // self.mres()
+        micro = f"{u // grid:+d}" if u % grid == 0 else f"{u / grid:+.2f}"
+        return (f"{micro} usteps @1/{self.mres()}  "
+                f"({u / U256:+.4f} full steps, {mm_fine(u)})")
 
     # -- the jog loop -----------------------------------------------------
     def run_jog(self, max_legs=None):
@@ -827,21 +1039,27 @@ class Console:
             print("  stdin is not a terminal, so there is no key to stop on.")
             print("  give a number of legs instead:  go 6   (or --max-legs 6)")
             return
-        if self.ask(f"JOG {self.a} {self.b}", "# JOG_SET") is None:
+        if self.ask(f"JOGU {self.a} {self.b}", "# JOG_SET") is None:
+            print("  (an end not on the present microstep grid is refused - "
+                  "re-mark it, or go back to the mres it was set at)")
             return
         if self.ask("START", "# START") is None:
             return
 
         span = abs(self.b - self.a)
-        secs = span / max(self.rate, 1)
-        print(f"\n  Jogging {self.a} <-> {self.b}  ({mm(self.a)} to {mm(self.b)}, "
-              f"{span} steps = {span/FULL_STEPS_PER_MM:.2f} mm, ~{secs:.1f} s per leg)")
+        grid = U256 // self.mres()
+        secs = span / U256 / max(self.rate, 1)
+        print(f"\n  Jogging A {self.fmt(self.a)}")
+        print(f"     <-> B {self.fmt(self.b)}")
+        print(f"  span {span // grid} usteps = {span / U256:.4f} full steps = "
+              f"{span / U256 / FULL_STEPS_PER_MM * 1000:.3f} um, "
+              f"~{secs:.2f} s per leg")
         print(f"  stopping after {max_legs} legs" if max_legs
               else "  press any key to stop")
         print()
 
         legs = 0
-        pos = self.pos()
+        pos = self.pos_u()
         mode = "JOGGING"
         t0 = time.monotonic()
         try:
@@ -850,9 +1068,9 @@ class Console:
                     for line in self.link.drain():
                         kv = parse_kv(line)
                         tag = kv.get("_tag", "")
-                        if "pos" in kv:
+                        if "pos_u256" in kv:
                             try:
-                                pos = int(kv["pos"])
+                                pos = int(kv["pos_u256"])
                             except ValueError:
                                 pass
                         if tag == "REACHED":
@@ -864,7 +1082,7 @@ class Console:
                             mode = "IDLE"
                     bar = self._bar(pos)
                     sys.stdout.write(
-                        f"\r  {pos:+6d} steps  {mm(pos)}  {bar}  "
+                        f"\r  {pos / grid:+9.0f} usteps  {mm_fine(pos)}  {bar}  "
                         f"legs {legs:3d}  {time.monotonic()-t0:6.1f} s   ")
                     sys.stdout.flush()
                     if mode == "IDLE":
@@ -880,7 +1098,7 @@ class Console:
             self.link.send("STOP")
             time.sleep(0.15)
             self.refresh()
-        print(f"\n  stopped at {self.pos()} steps ({mm(self.pos())}), {legs} legs\n")
+        print(f"\n  stopped at {self.fmt(self.pos_u())}, {legs} legs\n")
 
     def run_calibration(self, seconds=30, dwell_ms=2000):
         """One microstep forward, hold, one back, hold - for `seconds`.
@@ -943,6 +1161,104 @@ class Console:
             self.refresh()
         print(f"\n  stopped after {cycles} cycles\n")
 
+    def run_sequence(self, seconds=30, dwell_ms=2000, jump=4, mres_list=SEQ_MRES):
+        """The calibration oscillation at each MRES in turn, logged to CSV.
+
+        Each block opens with a marker jump - `jump` full steps out, a dwell,
+        back, a dwell - so the boundaries between MRES settings stand out in
+        the encoder trace. The firmware runs the whole thing; this end only
+        starts it, shows progress and writes the log.
+        """
+        mres_list = list(mres_list)
+        self.refresh()
+        if self.state.get("mode", "IDLE") != "IDLE":
+            print("  the stage is busy; stop it first")
+            return
+        # Every MRES divides a full step, so the sweep must start on one.
+        if self.pos_u() % U256:
+            nearest = round(self.pos_u() / U256)
+            print(f"  not on a full step; moving to the nearest one ({nearest}) first")
+            if self.ask(f"MOVETO {nearest}", "# MOVETO") is None:
+                return
+            self._wait_arrive(f"to {nearest} full steps")
+
+        rate = max(self.rate, 1)
+        pairs = -(-seconds * 1000 // (2 * dwell_ms))              # ceil
+        osc_s = pairs * 2 * dwell_ms / 1000
+        jump_s = 2 * dwell_ms / 1000 + 2 * abs(jump) / rate
+        total = len(mres_list) * (osc_s + jump_s) + jump_s
+        print(f"\n  MRES sweep  {', '.join(f'1/{m}' for m in mres_list)}")
+        print(f"    each block  marker jump {jump:+d} full steps "
+              f"({jump * 10:+d} um) out and back, {dwell_ms} ms hold each side,")
+        print(f"                then +1/-1 microstep, {dwell_ms} ms hold, "
+              f"for {seconds} s (~{pairs} pairs)")
+        print(f"    closing     one more marker jump after the last block")
+        print(f"    total       ~{total / 60:.1f} min")
+
+        mlist = ",".join(str(m) for m in mres_list)
+        if self.ask(f"SEQ {seconds} {dwell_ms} {jump} {mlist}", "# SEQ_START",
+                    timeout=3.0) is None:
+            return
+
+        RUNS_DIR.mkdir(exist_ok=True)
+        path = RUNS_DIR / time.strftime("mres_sweep_%Y%m%d_%H%M%S.csv")
+        cols = ["host_s", "event", "block", "mres", "dir", "next", "cycle",
+                "pos_u256", "enc", "t_ms", "microstep_um"]
+        print(f"    log         {path}")
+        print("    press any key to stop early\n")
+
+        t0 = time.monotonic()
+        block, mres, cycle, enc0, enc = 0, mres_list[0], 0, None, 0
+        done = False
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(f"# SEQ {seconds} {dwell_ms} {jump} {mlist}, "
+                    f"rate {self.rate} full steps/s, "
+                    f"start {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(",".join(cols) + "\n")
+            try:
+                with KeyWatcher() as keys:
+                    while not done:
+                        for line in self.link.drain():
+                            kv = parse_kv(line)
+                            tag = kv.get("_tag", "")
+                            if tag.startswith("SEQ_"):
+                                kv["event"] = tag
+                                kv["host_s"] = f"{time.monotonic() - t0:.3f}"
+                                f.write(",".join(kv.get(c, "") for c in cols) + "\n")
+                                block = int(kv.get("block", block))
+                                mres = int(kv.get("mres", mres))
+                                cycle = int(kv.get("cycle", cycle))
+                                enc = int(kv.get("enc", enc))
+                                if enc0 is None:
+                                    enc0 = enc
+                                if tag == "SEQ_BLOCK":
+                                    cycle = 0
+                                if tag == "SEQ_DONE":
+                                    done = True
+                            elif tag == "STOP":
+                                done = True
+                            elif tag == "ERR":
+                                print(f"\n  board reported: {kv.get('reason', line)}")
+                                done = True
+                        shown = min(block + 1, len(mres_list))
+                        sys.stdout.write(
+                            f"\r    block {shown}/{len(mres_list)}  mres 1/{mres:<3d} "
+                            f"cycle {cycle:4d}  encoder {enc - (enc0 or 0):+7d}  "
+                            f"{time.monotonic() - t0:6.0f} / ~{total:.0f} s   ")
+                        sys.stdout.flush()
+                        if not done and keys.pressed():
+                            break
+                        time.sleep(0.05)
+            except KeyboardInterrupt:
+                pass
+            finally:
+                if not done:
+                    self.link.send("STOP")
+                    time.sleep(0.2)
+                self.refresh()
+        print(f"\n  {'finished' if done else 'stopped early'}; "
+              f"mres back to 1/{self.mres()}; log in {path.name}\n")
+
     def _bar(self, pos, width=30):
         lo, hi = min(self.a, self.b), max(self.a, self.b)
         if hi == lo:
@@ -957,17 +1273,19 @@ class Console:
         print("\n" + "=" * 72)
         print(f"  ESP32-S3 / TMC2209 stage jog     port {self.link.port}")
         print("=" * 72)
-        print(f"  position   {self.pos():+d} steps  ({mm(self.pos())})")
+        print(f"  position   {self.fmt(self.pos_u())}")
         print(f"  speed      {self.rate} full steps/s  "
               f"({self.rate/FULL_STEPS_PER_MM:.2f} mm/s)")
         print(f"  mres       1/{s.get('mres', '?')}        "
               f"current {s.get('current_ma', '?')} mA")
-        print(f"  soft limit +/-{self.limit} steps  "
+        print("  soft limit off" if not self.limit else
+              f"  soft limit +/-{self.limit} steps  "
               f"(+/-{self.limit/FULL_STEPS_PER_MM:.2f} mm about zero)")
-        print(f"  A {self.a if self.a is not None else '-'}   "
-              f"B {self.b if self.b is not None else '-'}")
+        print(f"  A          {self.fmt(self.a)}")
+        print(f"  B          {self.fmt(self.b)}")
         print("=" * 72)
-        print("  'help' for commands. Nothing moves until you say 'go'.")
+        print("  'help' for commands. A bare number moves that many microsteps;")
+        print("  'set a' / 'set b' mark the ends; 'go' oscillates between them.")
 
     def set_pos(self, which, value):
         if self.limit and abs(value) > self.limit:
@@ -975,8 +1293,34 @@ class Console:
                   f"({mm(value)}). Widen it with 'limit <steps>' if that is "
                   f"really where you want to go.")
             return
-        setattr(self, which, value)
-        print(f"  {which.upper()} = {value} steps  ({mm(value)})")
+        setattr(self, which, value * U256)
+        print(f"  {which.upper()} = {value} full steps  ({mm(value)})")
+
+    def mark(self, which):
+        """Take the stage's present position as end A or B."""
+        self.refresh()
+        if self.state.get("mode", "IDLE") != "IDLE":
+            print("  the stage is moving; mark it once it has stopped")
+            return
+        u = self.pos_u()
+        setattr(self, which, u)
+        print(f"  {which.upper()} = {self.fmt(u)}")
+        if self.a is not None and self.b is not None and self.a == self.b:
+            print("  (A and B are the same point - move before marking the other)")
+
+    def step(self, n):
+        """Move n microsteps from here at the present MRES."""
+        grid = U256 // self.mres()
+        target = self.pos_u() + n * grid
+        if self.limit and abs(target) > self.limit * U256:
+            print(f"  that would end at {target / U256:+.4f} full steps, outside "
+                  f"the soft limit of +/-{self.limit}. Widen it with "
+                  f"'limit <steps>' if you mean it.")
+            return
+        if self.ask(f"STEP {n}", "# STEP") is None:
+            return
+        self._wait_arrive(f"{n:+d} usteps at 1/{self.mres()} "
+                          f"({n * grid / U256 / FULL_STEPS_PER_MM * 1000:+.3f} um)")
 
     def loop(self):
         self.banner()
@@ -999,8 +1343,11 @@ class Console:
                 self.set_pos("b", nums[1])
                 continue
             if nums is not None and len(nums) == 1:
-                print("  one number is ambiguous - use 'a <n>', 'b <n>' or "
-                      "'moveto <n>', or give both positions at once")
+                self.step(nums[0])
+                continue
+            if verb in ("set", "mark") and len(args) == 1 \
+                    and args[0].lower() in ("a", "b"):
+                self.mark(args[0].lower())
                 continue
 
             if verb in ("q", "quit", "exit"):
@@ -1008,7 +1355,8 @@ class Console:
             if verb in ("help", "?", "h"):
                 print(HELP.format(rate=self.rate,
                                   mmps=self.rate / FULL_STEPS_PER_MM,
-                                  spm=FULL_STEPS_PER_MM))
+                                  spm=FULL_STEPS_PER_MM, mres=self.mres(),
+                                  um=10.0 / self.mres()))
                 continue
             if verb == "status":
                 self.refresh()
@@ -1024,16 +1372,52 @@ class Console:
                           "the full duration otherwise")
                 self.run_calibration(secs, dwell)
                 continue
+            if verb == "seq":
+                nums = [self._int(a) for a in args[:3]]
+                if None in nums:
+                    continue
+                secs, dwell, jump = (nums + [30, 2000, 4][len(nums):])[:3]
+                mlist = SEQ_MRES
+                if len(args) >= 4:
+                    try:
+                        mlist = [int(m) for m in args[3].split(",")]
+                    except ValueError:
+                        print("  mres list is comma-separated, e.g. 1,2,4,8")
+                        continue
+                if not sys.stdin.isatty():
+                    print("  'seq' needs a terminal to stop on; it runs to the end")
+                self.run_sequence(secs, dwell, jump, mlist)
+                continue
             if verb == "go":
                 legs = self._int(args[0]) if len(args) == 1 else None
                 if len(args) == 1 and legs is None:
                     continue
                 self.run_jog(max_legs=legs)
                 continue
+            if verb == "reinit":
+                self.link.send("REINIT")
+                ident = self.link.wait_for("# DRIVER_ID", timeout=3.0)
+                done = self.link.wait_for("# REINIT_DONE", timeout=5.0)
+                if ident:
+                    kv = parse_kv(ident)
+                    print(f"  driver version {kv.get('version')} "
+                          f"(TMC2209 is 0x21), IOIN {kv.get('ioin')}")
+                ok = done and parse_kv(done).get("ready") == "1"
+                print("  driver ready" if ok else
+                      "  driver still not ready - version 0x00/0xFF means the "
+                      "UART gets no answer: check VM power, GND, the 1k on "
+                      "GPIO17 and GPIO18 to PDN_UART")
+                continue
             if verb == "zero":
+                before = self.pos_u()
                 if self.ask("ZERO", "# ZERO_OK"):
                     self.refresh()
-                    print(f"  zeroed; position is now {self.pos()} steps")
+                    # A and B are physical places; keep them where they were.
+                    if self.a is not None:
+                        self.a -= before
+                    if self.b is not None:
+                        self.b -= before
+                    print(f"  zeroed; position is now {self.fmt(self.pos_u())}")
                 continue
             if verb in ("a", "b") and len(args) == 1:
                 v = self._int(args[0])
@@ -1046,7 +1430,7 @@ class Console:
                     continue
                 if self.ask(f"MOVETO {v}", "# MOVETO") is None:
                     continue
-                self._wait_arrive(v)
+                self._wait_arrive(f"{v} full steps ({mm(v)})")
                 continue
             if verb == "speed" and len(args) == 1:
                 v = self._int(args[0])
@@ -1064,7 +1448,8 @@ class Console:
                     continue
                 if self.ask(f"LIMIT {v}", "# LIMIT_OK"):
                     self.limit = v
-                    print(f"  soft limit = +/-{v} steps "
+                    print("  soft limit off" if not v else
+                          f"  soft limit = +/-{v} steps "
                           f"(+/-{v/FULL_STEPS_PER_MM:.2f} mm)")
                 continue
             if verb == "mres" and len(args) == 1:
@@ -1077,7 +1462,27 @@ class Console:
                     continue
                 if self.ask(f"MRES {v}", "# MRES_OK"):
                     self.refresh()
-                    print(f"  mres = 1/{self.state.get('mres', v)}")
+                    print(f"  mres = 1/{self.state.get('mres', v)}  "
+                          f"(1 microstep = {10.0 / self.mres():.4f} um)")
+                    grid = U256 // self.mres()
+                    for name in ("a", "b"):
+                        u = getattr(self, name)
+                        if u is not None and u % grid:
+                            print(f"  note: {name.upper()} is not on the 1/{v} "
+                                  f"grid; 'go' will refuse it until re-marked")
+                continue
+            if verb == "hold" and len(args) == 1:
+                v = self._int(args[0])
+                if v is None:
+                    continue
+                if not 0 <= v <= 100:
+                    print("  hold is a percentage of run current, 0-100")
+                    continue
+                line = self.ask(f"HOLD {v}", "# HOLD_OK")
+                if line:
+                    kv = parse_kv(line)
+                    print(f"  hold = {v}% of run current "
+                          f"(IRUN {kv.get('irun')}, IHOLD {kv.get('ihold')})")
                 continue
             if verb == "current" and len(args) == 1:
                 v = self._int(args[0])
@@ -1091,8 +1496,8 @@ class Console:
                 continue
             print(f"  don't know '{raw}'. 'help' lists the commands.")
 
-    def _wait_arrive(self, target):
-        print(f"  moving to {target} ({mm(target)}) ...")
+    def _wait_arrive(self, what):
+        print(f"  moving {what} ...")
         t0 = time.monotonic()
         while time.monotonic() - t0 < 300:
             done = False
@@ -1103,14 +1508,18 @@ class Console:
                 if kv.get("_tag") == "ERR":
                     print(f"  board reported: {kv.get('reason', line)}")
                     done = True
-                if "pos" in kv:
-                    sys.stdout.write(f"\r    at {kv['pos']:>7} steps   ")
-                    sys.stdout.flush()
+                if "pos_u256" in kv:
+                    try:
+                        u = int(kv["pos_u256"])
+                        sys.stdout.write(f"\r    at {u / U256:+11.4f} full steps   ")
+                        sys.stdout.flush()
+                    except ValueError:
+                        pass
             if done:
                 break
             time.sleep(0.05)
         self.refresh()
-        print(f"\r  at {self.pos()} steps ({mm(self.pos())})      ")
+        print(f"\r  at {self.fmt(self.pos_u())}      ")
 
     @staticmethod
     def _int(text):
@@ -1147,6 +1556,9 @@ def main():
                     help="run the microstep calibration oscillation and exit")
     ap.add_argument("--calib-dwell", type=int, default=2000, metavar="MS",
                     help="dwell at each microstep during --calib (default 2000)")
+    ap.add_argument("--seq", nargs="*", type=int, metavar="N",
+                    help="run the MRES sweep and exit: [seconds dwell_ms jump] "
+                         "(default 30 2000 4)")
     ap.add_argument("--mres", type=int,
                     help="set microstep resolution before anything else")
     ap.add_argument("--no-prompt", action="store_true",
@@ -1248,6 +1660,11 @@ def main():
         console.refresh()
         if args.calib:
             console.run_calibration(args.calib, args.calib_dwell)
+            if args.no_prompt or not sys.stdin.isatty():
+                return 0
+        if args.seq is not None:
+            secs, dwell, jump = (args.seq + [30, 2000, 4][len(args.seq):])[:3]
+            console.run_sequence(secs, dwell, jump)
             if args.no_prompt or not sys.stdin.isatty():
                 return 0
         if args.a is not None:

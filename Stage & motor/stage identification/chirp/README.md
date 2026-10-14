@@ -47,10 +47,42 @@ and the v3.2 sketch header.
 | **FULL** | 1–150 Hz + 250–1000 Hz | 4.47 min | cover everything it is safe to drive, both directions |
 | **HIGH** | 250–1000 Hz, continuous | 3.93 min | resolve what is happening at 250 Hz |
 
-Both use the parameters validated on hardware in v3: one shared sweep rate of
-**7.8125 Hz/s**, a cruise amplitude of **3 full steps** (48 microsteps at
-MRES 16), **400 mA RMS**, and 750 Hz sync marker bursts at each end so the
-recording can be aligned to the sequence.
+Both keep v3's shared sweep rate of **7.8125 Hz/s**, **400 mA RMS**, and the
+750 Hz sync marker bursts at each end for aligning an external recording.
+
+### Amplitude: constant acceleration, capped (changed 2026-10-13)
+
+```
+A(f) = A0                      f <= 100 Hz        A0 = 1 full step
+A(f) = A0 * (100 Hz / f)^2     above it           (256 microsteps at MRES 256)
+```
+
+| f [Hz] | 1–100 | 150 | 250 | 500 | 750 | 1000 |
+|---|---|---|---|---|---|---|
+| amplitude [microsteps @ 1/256] | 256 | 114 | 41 | 10.2 | 4.6 | 2.56 |
+
+The previous ±3 full steps (48 microsteps at MRES 16) had two problems:
+
+- **It wasn't constant.** The step-rate ceiling (200k microsteps/s) clamped it
+  above 663 Hz, falling to 66% at 1 kHz.
+- **It exceeded what a stepper tolerates.** A rotor that falls more than
+  2 full steps behind the field slips a whole electrical cycle, and ±3 full
+  steps lets that happen. It may be what produced the 2026-09-15 runaway.
+
+The new law fixes both:
+
+- **The command never exceeds ±1 full step**, so the rotor cannot slip even if
+  it does not move at all.
+- **Above 100 Hz the peak acceleration, and so the torque demanded, is
+  constant.**
+- **The peak step rate (161k/s, at the corner) stays 20% under the ceiling**,
+  so the amplitude is never clamped.
+
+MRES moved from 16 to 256 so the small high-frequency amplitudes are still
+many microsteps.
+
+The 150–250 Hz gap is kept. Whether the smaller amplitude makes that band safe
+has not been tested, and should not be assumed.
 
 ```bash
 python scripts/chirp_design.py     # -> chirp_plan.csv, chirp_summary.json
@@ -99,8 +131,35 @@ RUN FULL       7 s countdown, then the full sweep
 ABORT          stop now, or cancel the countdown
 ```
 
-The board streams `# SEG,...` at each segment boundary, `# F,<t>,<f>,<pos>`
-periodically during a sweep, and `# GAP_JUMP` when it crosses the gap. The LED
+With the host scripts (pyserial for the runner, Homebrew Python for the window):
+
+```bash
+python scripts/run_chirp.py --port /dev/cu.usbmodem3101 --profile high --out data/<date>_chirp
+/opt/homebrew/bin/python3 scripts/monitor_chirp.py data/<date>_chirp     # live window
+python scripts/analyse_chirp.py data/<date>_chirp
+```
+
+The board streams `# SEG,...` at each segment boundary and `# GAP_JUMP` when it
+crosses the gap. Every 0.1 s window (at least one cycle) it also streams:
+
+```
+# W,t,f,cycles,f_issued,amp_target,amp_issued,amp_enc,phase_deg,lag_max,dc_err
+```
+
+This is demodulated on the board against the sweep's own phase. It shows that
+the controller reached the frequency and amplitude it was asked for:
+
+- `amp_issued` against `amp_target`, from the steps actually issued;
+- `f_issued` against `f`, from zero crossings of the issued position;
+- `lag_max`, the worst lag of issued steps behind the target.
+
+`amp_enc` and `phase_deg` are the shaft encoder's response when one is fitted.
+A sync check then aborts the run if the rotor is more than 1.75 full steps from
+the command. With no encoder they read 0, the check is inactive, and the
+response has to come from the external sensor.
+
+`REINIT` retries the driver setup and prints the chip ID, for example after the
+motor supply has been switched on. The LED
 shows phase, because serial has proven unreliable to watch live on this rig:
 yellow waiting, blue counting down, green running, cyan done, red failed.
 
@@ -112,14 +171,13 @@ FULL run does.
 
 ## Two things to check before the first run
 
-**`R_SENSE` differs between boards on this rig.** The sketch defaults to
-**0.11 Ω**, matching the v6 campaign and everything else under `Stage & motor`.
-The v3 chirp used **0.10 Ω** for a board marked R100, noting that its 0.11
-predecessor had died. Getting it wrong mis-scales the coil current by ~10 %,
+**`R_SENSE` differs between boards on this rig.** The sketch now uses
+**0.10 Ω**, for the R100 module on the Stepper Isolated bench (2026-10-13); the
+v6 campaign's board used 0.11 Ω. Getting it wrong mis-scales the coil current by ~10 %,
 which at 400 mA is enough to change what the motor does near resonance. Read the
 markings on the board that is actually fitted and set `R_SENSE_OHM` to match.
 
-**Nothing here has run on hardware.** The sketch compiles, and its structure and
-constants come from the hardware-validated v3, but this file itself has never
-driven a motor. Given what the 150–250 Hz band did to this rig once already,
+**No sweep has run on hardware yet.** The sketch was flashed on 2026-10-13 and
+passed `CHECK` (driver ready, MRES 256, SpreadCycle, no interpolation), but has
+not yet driven a sweep. Given what the 150–250 Hz band did to this rig once already,
 treat the first run as a bring-up: `CHECK` first, then `RUN HIGH`, and watch it.

@@ -1,0 +1,32 @@
+{
+  "total_seconds": 284.8,
+  "total_minutes": 4.75,
+  "actions": 13,
+  "mres": [
+    32,
+    64,
+    128
+  ],
+  "pm1_dwell_ms": 200,
+  "rev_seconds": 42.0,
+  "stair_dwell_ms": {
+    "32": 7,
+    "64": 3,
+    "128": 2
+  },
+  "pm1_repeats": 10,
+  "current_ma": 360,
+  "counts_per_rev": 20000,
+  "counts_per_microstep": {
+    "32": 3.125,
+    "64": 1.5625,
+    "128": 0.78125
+  },
+  "driver_mode_invariants": {
+    "spreadcycle": true,
+    "microplyer_intpol": false,
+    "stealthchop": false,
+    "coolstep": false,
+    "standstill_current_reduction": false
+  }
+}

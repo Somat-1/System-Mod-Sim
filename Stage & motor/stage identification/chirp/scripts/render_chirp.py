@@ -47,9 +47,13 @@ def curve(profile):
             # the gap jump: a vertical break, drawn as a discontinuity
             t += [t0, t0]; f += [s.f_start, s.f_end]; a += [np.nan, np.nan]
         else:
-            t += [t0, t1]
-            f += [s.f_start, s.f_end]
-            a += [s.amplitude_microsteps, s.amplitude_microsteps]
+            # the amplitude follows the law along the sweep, so sample it
+            for k in range(41):
+                x = k / 40
+                fk = s.f_start + (s.f_end - s.f_start) * x
+                t.append(t0 + (t1 - t0) * x)
+                f.append(fk)
+                a.append(cd.amplitude(fk) if s.amplitude_microsteps else 0.0)
     return np.array(t), np.array(f), np.array(a)
 
 
@@ -133,7 +137,8 @@ def main():
                  fontsize=13.5, weight="bold", x=0.075, ha="left", y=0.968)
     fig.text(0.075, 0.935,
              f"sweep rate {cd.SWEEP_RATE_HZ_PER_S:g} Hz/s · amplitude "
-             f"{cd.CRUISE_FULL_STEPS:g} full steps ({cd.CRUISE_MICROSTEPS:g} µsteps "
+             f"{cd.CRUISE_FULL_STEPS:g} full step to {cd.F_CORNER_HZ:g} Hz, then 1/f² "
+             f"({cd.CRUISE_MICROSTEPS:g} µsteps "
              f"at MRES {cd.MRES}) · {cd.CURRENT_RMS_MA} mA RMS · "
              f"{cd.SYNC_FREQ_HZ:g} Hz sync bursts at each end",
              fontsize=8.6, color=MUTED)

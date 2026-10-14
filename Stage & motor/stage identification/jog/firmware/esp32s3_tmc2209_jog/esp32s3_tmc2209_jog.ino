@@ -5,15 +5,16 @@
  * to exist is the host script jog_stepper.py: set two positions, then shuttle
  * between them until told to stop.
  *
- * Wiring is the rig's established one, carried over from
- * Microstepping Test Data/v6/scripts/esp32_v6_mres_trajectory_campaign:
+ * Wiring is the Stepper Isolated bench's, as used by
+ * Stepper_Encoder_Slow_Test and TMC2209_Communication_Check:
  *
- *   STEP  GPIO5
- *   DIR   GPIO6
+ *   STEP  GPIO7
+ *   DIR   GPIO8
+ *   EN    GPIO9  (TMC ENN, active low; held HIGH until the driver is
+ *                 configured and verified, then LOW so the motor holds)
  *   UART  ESP_RX GPIO18 / ESP_TX GPIO17  (to TMC2209 PDN_UART via 1k)
+ *   ENC   A GPIO4, B GPIO5, Z GPIO6
  *   LED   GPIO48 (onboard RGB)
- *   EN/ENN externally grounded - the driver is always enabled, there is no
- *   enable line to toggle from here.
  *
  * Two deliberate differences from the campaign sketches:
  *
@@ -49,34 +50,45 @@
  *   MRES <1..256>        microstep resolution, idle only
  *   CURRENT <mA>         RMS coil current
  *   MOVETO <fullsteps>   single move
- *   JOG <a> <b>          remember two positions
+ *   STEP <n>             relative move of n microsteps at the present MRES
+ *   JOG <a> <b>          remember two positions, in full steps
+ *   JOGU <a> <b>         the same in 1/256 full-step units, so that a point
+ *                        marked between full steps is kept exactly; both must
+ *                        lie on the present microstep grid
  *   START                shuttle between them until STOP
  *   STOP                 stop at once, keep position
+ *   REINIT               retry the driver configuration without a reset
+ *   HOLD <0..100>        standstill current as % of run current (default 100)
+ *   SEQ [s] [dwell_ms] [jump_fullsteps] [m1,m2,...]
+ *                        the MRES sweep: for each MRES in turn, a marker jump
+ *                        out and back, then the CALIB +1/-1 microstep
+ *                        oscillation for s seconds. Defaults 30 s, 2000 ms,
+ *                        4 full steps, MRES 1,2,4,8,16,32,64.
  */
 
 #include <Arduino.h>
 #include <TMCStepper.h>
 #include "driver/pulse_cnt.h"
 
-constexpr uint8_t STEP_PIN = 5;
-constexpr uint8_t DIR_PIN = 6;
+constexpr uint8_t STEP_PIN = 7;
+constexpr uint8_t DIR_PIN = 8;
+constexpr uint8_t EN_PIN = 9;     // TMC ENN: HIGH = outputs off
 constexpr uint8_t UART_RX_PIN = 18;
 constexpr uint8_t UART_TX_PIN = 17;
 constexpr uint8_t LED_PIN = 48;
-// Encoder. Moved off GPIO5/6, which the TMC2209 uses for STEP/DIR; see
-// ../../../../CONNECTIONS.md for why the encoder is the side that moved.
+// Encoder, as on the Stepper Isolated bench.
 constexpr gpio_num_t ENC_A = GPIO_NUM_4;
-constexpr gpio_num_t ENC_B = GPIO_NUM_7;
-constexpr gpio_num_t ENC_Z = GPIO_NUM_15;
+constexpr gpio_num_t ENC_B = GPIO_NUM_5;
+constexpr gpio_num_t ENC_Z = GPIO_NUM_6;
 constexpr uint8_t DRIVER_ADDRESS = 0;
-constexpr float R_SENSE_OHM = 0.11F;   // Actual resistor fitted on this board.
+constexpr float R_SENSE_OHM = 0.10F;   // R100 sense resistors on this module.
 constexpr uint32_t DRIVER_BAUD = 115200;
 
 constexpr uint16_t FULL_STEPS_PER_MM = 100;
 constexpr uint16_t DEFAULT_CURRENT_MA = 360;
 constexpr uint16_t DEFAULT_MRES = 16;
 constexpr uint32_t DEFAULT_RATE_MILLIHZ = 70000;   // 70 full steps/s = 0.7 mm/s
-constexpr int32_t DEFAULT_LIMIT_FULLSTEPS = 500;   // +/-5 mm about zero
+constexpr int32_t DEFAULT_LIMIT_FULLSTEPS = 0;     // off; set with LIMIT
 
 constexpr uint32_t STEP_HIGH_US = 3;
 constexpr uint32_t DIR_SETUP_US = 20;
@@ -94,7 +106,7 @@ constexpr int64_t U256_PER_FULLSTEP = 256;
 HardwareSerial TmcSerial(1);
 TMC2209Stepper driver(&TmcSerial, R_SENSE_OHM, DRIVER_ADDRESS);
 
-enum Mode : uint8_t { IDLE, MOVING, JOGGING, CALIB };
+enum Mode : uint8_t { IDLE, MOVING, JOGGING, CALIB, SEQ };
 
 Mode mode = IDLE;
 int64_t posU256 = 0;
@@ -106,6 +118,7 @@ int32_t limitFullSteps = DEFAULT_LIMIT_FULLSTEPS;
 uint32_t rateMilliHz = DEFAULT_RATE_MILLIHZ;
 uint16_t mres = DEFAULT_MRES;
 uint16_t currentMa = DEFAULT_CURRENT_MA;
+uint8_t holdPct = 100;          // standstill current as % of run current
 bool driverReady = false;
 
 uint32_t periodUs = 0;
@@ -128,6 +141,28 @@ uint32_t calibDwellMs = 2000;
 uint32_t calibNextMs = 0;
 uint32_t calibCycles = 0;
 bool calibOutbound = true;     // the next microstep is the +1 of the pair
+
+// --- MRES sweep ----------------------------------------------------------
+// The calibration oscillation run at each MRES in turn, every block opened by
+// a marker jump: J full steps out, a dwell, back, a dwell. The jump is several
+// times the largest oscillation (one full step at MRES 1), so block boundaries
+// are unmistakable in an encoder trace even without the event log. A final
+// jump closes the last block. Every MRES divides a full step, so starting on a
+// full step keeps the base point on the grid of every block.
+enum SeqPhase : uint8_t {
+  SEQ_APPLY, SEQ_JUMP_OUT, SEQ_HOLD_OUT, SEQ_JUMP_BACK, SEQ_HOLD_BACK, SEQ_OSC
+};
+constexpr uint8_t SEQ_MAX_BLOCKS = 9;
+uint16_t seqMres[SEQ_MAX_BLOCKS] = {1, 2, 4, 8, 16, 32, 64};
+uint8_t seqCount = 7;
+uint8_t seqIdx = 0;            // == seqCount while doing the closing jump
+SeqPhase seqPhase = SEQ_APPLY;
+int64_t seqBaseU256 = 0;
+int64_t seqJumpU256 = 0;
+uint32_t seqBlockMs = 30000;
+uint32_t seqHoldUntilMs = 0;
+uint32_t seqOscEndMs = 0;
+uint16_t seqRestoreMres = DEFAULT_MRES;
 
 // --------------------------------------------------------------- encoder
 
@@ -167,6 +202,11 @@ bool setupEncoder() {
                                 PCNT_CHANNEL_LEVEL_ACTION_INVERSE);
   gpio_pullup_en(ENC_A);
   gpio_pullup_en(ENC_B);
+  // accum_count only carries the count across the limits if the limits are
+  // watch points; without these the count silently restarts at 0 every
+  // 30000 counts (1.5 shaft revolutions on the 20000 CPR encoder).
+  pcnt_unit_add_watch_point(pcnt, 30000);
+  pcnt_unit_add_watch_point(pcnt, -30000);
   pcnt_unit_enable(pcnt);
   pcnt_unit_clear_count(pcnt);
   pcnt_unit_start(pcnt);
@@ -235,12 +275,27 @@ bool applyMres(uint16_t value) {
 }
 
 bool configureDriver() {
+  digitalWrite(EN_PIN, HIGH);    // outputs off until the mode is proven
   TmcSerial.begin(DRIVER_BAUD, SERIAL_8N1, UART_RX_PIN, UART_TX_PIN);
-  delay(20);
+  delay(100);
+  // Identify the chip before writing anything: a wrong or silent UART shows
+  // up here as a version other than 0x21, which says far more than a later
+  // readback failure does.
+  const uint32_t ioin = driver.IOIN();
+  Serial.printf("# DRIVER_ID,ioin=0x%08lX,version=0x%02X,expected=0x21\n",
+                (unsigned long)ioin, (unsigned)((ioin >> 24) & 0xFF));
   driver.begin();
   driver.toff(5);
   driver.blank_time(24);
+  // Current from IRUN/IHOLD alone, not scaled by the module's VREF pot
+  // (I_scale_analog resets to 1). Hold current defaults to run current with no
+  // power-down, so the dwells in CALIB/SEQ are held at full current; HOLD
+  // changes the ratio deliberately.
+  driver.I_scale_analog(false);
+  driver.hold_multiplier(holdPct / 100.0F);
   driver.rms_current(currentMa);
+  driver.iholddelay(0);
+  driver.TPOWERDOWN(0);
   driver.en_spreadCycle(true);   // default is StealthChop; we want current mode
   driver.TPWMTHRS(0);            // never hand back to StealthChop
   driver.intpol(false);          // default is ON, which smears every microstep
@@ -259,17 +314,21 @@ bool configureDriver() {
     Serial.println("# ERR,reason=uart_readback_failed");
     return false;
   }
+  const bool analog = (gconf & 1UL) != 0;
   const bool spread = (gconf & (1UL << 2)) != 0;
   const bool intpol = (chopconf & (1UL << 28)) != 0;
   const bool stealth = (drvStatus & (1UL << 30)) != 0;
   Serial.printf("# DRIVER,gconf=0x%08lX,chopconf=0x%08lX,drv_status=0x%08lX,"
-                "spreadcycle=%u,intpol=%u,stealth=%u\n",
+                "spreadcycle=%u,intpol=%u,stealth=%u,i_scale_analog=%u,"
+                "irun=%u,ihold=%u\n",
                 (unsigned long)gconf, (unsigned long)chopconf,
-                (unsigned long)drvStatus, spread, intpol, stealth);
-  if (!spread || intpol || stealth) {
+                (unsigned long)drvStatus, spread, intpol, stealth, analog,
+                driver.irun(), driver.ihold());
+  if (!spread || intpol || stealth || analog) {
     Serial.println("# ERR,reason=driver_mode_not_confirmed");
     return false;
   }
+  digitalWrite(EN_PIN, LOW);     // enabled: the motor now holds position
   return true;
 }
 
@@ -294,8 +353,8 @@ bool withinLimit(int64_t u256) {
 
 void stopMotion(const char *why) {
   mode = IDLE;
-  Serial.printf("# STOP,pos=%ld,reason=%s\n",
-                (long)(posU256 / U256_PER_FULLSTEP), why);
+  Serial.printf("# STOP,pos=%ld,pos_u256=%lld,reason=%s\n",
+                (long)(posU256 / U256_PER_FULLSTEP), (long long)posU256, why);
 }
 
 void emitOneMicrostep(bool positive) {
@@ -329,39 +388,27 @@ void serviceCalibration() {
   calibOutbound = !calibOutbound;
 }
 
-void serviceMotion() {
-  if (mode == CALIB) { serviceCalibration(); return; }
-  if (mode == IDLE || periodUs == 0) return;
-  const int64_t target = (mode == JOGGING) ? (towardB ? jogBU256 : jogAU256)
-                                           : targetU256;
-  if (posU256 == target) {
-    if (mode == JOGGING) {
-      Serial.printf("# REACHED,pos=%ld,next=%c\n",
-                    (long)(posU256 / U256_PER_FULLSTEP), towardB ? 'A' : 'B');
-      towardB = !towardB;
-      return;
-    }
-    Serial.printf("# ARRIVED,pos=%ld\n", (long)(posU256 / U256_PER_FULLSTEP));
-    mode = IDLE;
-    return;
-  }
-
+// One pass of non-blocking step generation toward `target`: at most one
+// pulse. True once the stage is there. Stops on a soft limit, so callers must
+// check `mode` if it returns false.
+bool stepToward(int64_t target) {
+  if (posU256 == target) return true;
   const bool positive = target > posU256;
   if (positive != dirPositive) {
     // Give the driver its direction setup time before the next edge.
     digitalWrite(DIR_PIN, positive ? HIGH : LOW);
     dirPositive = positive;
     nextPulseUs = esp_timer_get_time() + DIR_SETUP_US;
-    return;
+    return false;
   }
 
   const uint64_t now = esp_timer_get_time();
-  if (now < nextPulseUs) return;
+  if (now < nextPulseUs) return false;
 
   const int64_t next = posU256 + (positive ? stepU256 : -stepU256);
   if (!withinLimit(next)) {
     stopMotion("soft_limit");
-    return;
+    return false;
   }
   digitalWrite(STEP_PIN, HIGH);
   delayMicroseconds(STEP_HIGH_US);
@@ -372,21 +419,139 @@ void serviceMotion() {
   // If the loop fell behind, resynchronise instead of trying to catch up with
   // a burst of back-to-back pulses the motor cannot follow.
   if (nextPulseUs < now) nextPulseUs = now + periodUs;
+  return false;
+}
+
+void seqEvent(const char *what, const char *extra) {
+  Serial.printf("# %s,block=%u,mres=%u,%spos_u256=%lld,enc=%ld,t_ms=%lu\n",
+                what, seqIdx, mres, extra, (long long)posU256,
+                (long)encoderCount(), (unsigned long)millis());
+}
+
+void serviceSequence() {
+  const uint32_t now = millis();
+  switch (seqPhase) {
+    case SEQ_APPLY:
+      if (seqIdx < seqCount) {
+        if (!applyMres(seqMres[seqIdx]) || !setRate(rateMilliHz)) {
+          Serial.println("# ERR,reason=seq_mres_failed");
+          stopMotion("seq_mres_failed");
+          return;
+        }
+        char extra[32];
+        snprintf(extra, sizeof extra, "microstep_um=%.4f,", 10.0 / mres);
+        seqEvent("SEQ_BLOCK", extra);
+      }
+      seqPhase = SEQ_JUMP_OUT;
+      nextPulseUs = esp_timer_get_time();
+      return;
+    case SEQ_JUMP_OUT:
+      if (!stepToward(seqBaseU256 + seqJumpU256)) return;
+      seqEvent("SEQ_JUMP", "dir=out,");
+      seqHoldUntilMs = now + calibDwellMs;
+      seqPhase = SEQ_HOLD_OUT;
+      return;
+    case SEQ_HOLD_OUT:
+      if (now < seqHoldUntilMs) return;
+      seqPhase = SEQ_JUMP_BACK;
+      nextPulseUs = esp_timer_get_time();
+      return;
+    case SEQ_JUMP_BACK:
+      if (!stepToward(seqBaseU256)) return;
+      seqEvent("SEQ_JUMP", "dir=back,");
+      seqHoldUntilMs = now + calibDwellMs;
+      seqPhase = SEQ_HOLD_BACK;
+      return;
+    case SEQ_HOLD_BACK:
+      if (now < seqHoldUntilMs) return;
+      if (seqIdx >= seqCount) {          // that was the closing jump
+        applyMres(seqRestoreMres);
+        setRate(rateMilliHz);
+        Serial.printf("# SEQ_DONE,blocks=%u,pos_u256=%lld,enc=%ld,t_ms=%lu,"
+                      "mres_restored=%u\n", seqCount, (long long)posU256,
+                      (long)encoderCount(), (unsigned long)now, mres);
+        mode = IDLE;
+        return;
+      }
+      seqOscEndMs = now + seqBlockMs;
+      calibNextMs = now;
+      calibCycles = 0;
+      calibOutbound = true;
+      seqPhase = SEQ_OSC;
+      return;
+    case SEQ_OSC:
+      // End only on a completed pair, so every block leaves the stage back
+      // at the base point for the next marker jump.
+      if (calibOutbound && now >= seqOscEndMs) {
+        seqEvent("SEQ_OSC_END", "");   // the last dwell's settled reading
+        seqIdx++;
+        seqPhase = SEQ_APPLY;
+        return;
+      }
+      if (now < calibNextMs) return;
+      // Logged before the pulse: pos_u256/enc are where the stage settled at
+      // the end of the dwell, and `next` is the microstep about to be made.
+      {
+        char extra[40];
+        snprintf(extra, sizeof extra, "next=%c,cycle=%lu,",
+                 calibOutbound ? '+' : '-',
+                 (unsigned long)(calibCycles + 1));   // pair number
+        seqEvent("SEQ_OSC", extra);
+      }
+      emitOneMicrostep(calibOutbound);
+      calibNextMs = now + calibDwellMs;
+      if (!calibOutbound) calibCycles++;
+      calibOutbound = !calibOutbound;
+      return;
+  }
+}
+
+void serviceMotion() {
+  if (mode == CALIB) { serviceCalibration(); return; }
+  if (mode == SEQ) { serviceSequence(); return; }
+  if (mode == IDLE || periodUs == 0) return;
+  const int64_t target = (mode == JOGGING) ? (towardB ? jogBU256 : jogAU256)
+                                           : targetU256;
+  if (posU256 == target) {
+    if (mode == JOGGING) {
+      Serial.printf("# REACHED,pos=%ld,pos_u256=%lld,next=%c\n",
+                    (long)(posU256 / U256_PER_FULLSTEP), (long long)posU256,
+                    towardB ? 'A' : 'B');
+      towardB = !towardB;
+      return;
+    }
+    Serial.printf("# ARRIVED,pos=%ld,pos_u256=%lld\n",
+                  (long)(posU256 / U256_PER_FULLSTEP), (long long)posU256);
+    mode = IDLE;
+    return;
+  }
+  stepToward(target);
+}
+
+const char *modeName() {
+  switch (mode) {
+    case MOVING: return "MOVING";
+    case JOGGING: return "JOGGING";
+    case CALIB: return "CALIB";
+    case SEQ: return "SEQ";
+    default: return "IDLE";
+  }
 }
 
 // --------------------------------------------------------------- commands
 
 void sendStatus() {
-  Serial.printf("# STATUS,pos=%ld,target=%ld,a=%ld,b=%ld,mode=%s,"
-                "rate_millihz=%lu,mres=%u,current_ma=%u,limit=%ld,"
+  Serial.printf("# STATUS,pos=%ld,pos_u256=%lld,a_u256=%lld,b_u256=%lld,"
+                "target=%ld,a=%ld,b=%ld,mode=%s,"
+                "rate_millihz=%lu,mres=%u,current_ma=%u,hold_pct=%u,limit=%ld,"
                 "steps_per_mm=%u,enc=%ld,index=%ld\n",
-                (long)(posU256 / U256_PER_FULLSTEP),
+                (long)(posU256 / U256_PER_FULLSTEP), (long long)posU256,
+                (long long)jogAU256, (long long)jogBU256,
                 (long)(targetU256 / U256_PER_FULLSTEP),
                 (long)(jogAU256 / U256_PER_FULLSTEP),
                 (long)(jogBU256 / U256_PER_FULLSTEP),
-                mode == IDLE ? "IDLE" : (mode == MOVING ? "MOVING" :
-                    (mode == JOGGING ? "JOGGING" : "CALIB")),
-                (unsigned long)rateMilliHz, mres, currentMa,
+                modeName(),
+                (unsigned long)rateMilliHz, mres, currentMa, holdPct,
                 (long)limitFullSteps, FULL_STEPS_PER_MM,
                 (long)encoderCount(), (long)indexCount);
 }
@@ -410,10 +575,17 @@ void handleCommand(String line) {
   }
   if (verb == "STATUS") { sendStatus(); return; }
   if (verb == "POS?") {
-    Serial.printf("# POS,pos=%ld\n", (long)(posU256 / U256_PER_FULLSTEP));
+    Serial.printf("# POS,pos=%ld,pos_u256=%lld\n",
+                  (long)(posU256 / U256_PER_FULLSTEP), (long long)posU256);
     return;
   }
   if (verb == "STOP") { stopMotion("command"); return; }
+  if (verb == "REINIT") {
+    if (mode != IDLE) { Serial.println("# ERR,reason=busy"); return; }
+    driverReady = configureDriver();
+    Serial.printf("# REINIT_DONE,ready=%u\n", driverReady);
+    return;
+  }
   if (verb == "ENC?") {
     Serial.printf("# ENC,enc=%ld,index=%ld\n", (long)encoderCount(),
                   (long)indexCount);
@@ -439,6 +611,63 @@ void handleCommand(String line) {
     return;
   }
 
+  if (verb == "SEQ") {
+    if (!driverReady) { Serial.println("# ERR,reason=driver_not_ready"); return; }
+    if (mode != IDLE) { Serial.println("# ERR,reason=busy"); return; }
+    long secs = 30, dwell = 2000, jump = 4;
+    char list[64] = {0};
+    sscanf(rest.c_str(), "%ld %ld %ld %63s", &secs, &dwell, &jump, list);
+    if (secs <= 0 || secs > 3600 || dwell < 50 || dwell > 60000 ||
+        jump == 0 || jump > 10000 || jump < -10000) {
+      Serial.println("# ERR,reason=bad_seq_args");
+      return;
+    }
+    uint16_t parsed[SEQ_MAX_BLOCKS];
+    uint8_t count = 0;
+    if (list[0]) {
+      for (char *tok = strtok(list, ","); tok; tok = strtok(nullptr, ",")) {
+        const long m = atol(tok);
+        if (count >= SEQ_MAX_BLOCKS || m < 1 || m > 256 || (m & (m - 1))) {
+          Serial.println("# ERR,reason=bad_seq_mres_list");
+          return;
+        }
+        parsed[count++] = (uint16_t)m;
+      }
+    } else {
+      const uint16_t def[] = {1, 2, 4, 8, 16, 32, 64};
+      for (uint16_t m : def) parsed[count++] = m;
+    }
+    uint16_t maxMres = 1;
+    for (uint8_t i = 0; i < count; ++i) if (parsed[i] > maxMres) maxMres = parsed[i];
+    if ((uint64_t)rateMilliHz * maxMres > (uint64_t)MAX_PULSE_RATE_HZ * 1000ULL) {
+      Serial.printf("# ERR,reason=rate_too_high_for_mres,max_mres=%u\n", maxMres);
+      return;
+    }
+    // Every MRES divides a full step, so a full-step base is on every grid.
+    if (posU256 % U256_PER_FULLSTEP != 0) {
+      Serial.println("# ERR,reason=not_on_full_step");
+      return;
+    }
+    if (!withinLimit(posU256 + (int64_t)jump * U256_PER_FULLSTEP)) {
+      Serial.println("# ERR,reason=outside_limit");
+      return;
+    }
+    for (uint8_t i = 0; i < count; ++i) seqMres[i] = parsed[i];
+    seqCount = count;
+    seqIdx = 0;
+    seqPhase = SEQ_APPLY;
+    seqBaseU256 = posU256;
+    seqJumpU256 = (int64_t)jump * U256_PER_FULLSTEP;
+    seqBlockMs = (uint32_t)secs * 1000UL;
+    calibDwellMs = (uint32_t)dwell;
+    seqRestoreMres = mres;
+    mode = SEQ;
+    Serial.printf("# SEQ_START,blocks=%u,block_s=%ld,dwell_ms=%ld,jump=%ld,"
+                  "base_u256=%lld,rate_millihz=%lu,t_ms=%lu\n", count, secs,
+                  dwell, jump, (long long)posU256, (unsigned long)rateMilliHz,
+                  (unsigned long)millis());
+    return;
+  }
   if (verb == "ZERO") {
     if (mode != IDLE) { Serial.println("# ERR,reason=busy"); return; }
     posU256 = 0;
@@ -471,6 +700,19 @@ void handleCommand(String line) {
     Serial.printf("# CURRENT_OK,current_ma=%u\n", currentMa);
     return;
   }
+  if (verb == "HOLD") {
+    const long v = rest.toInt();
+    if (rest.length() == 0 || v < 0 || v > 100) {
+      Serial.println("# ERR,reason=bad_hold");
+      return;
+    }
+    holdPct = static_cast<uint8_t>(v);
+    driver.hold_multiplier(holdPct / 100.0F);
+    driver.rms_current(currentMa);
+    Serial.printf("# HOLD_OK,hold_pct=%u,irun=%u,ihold=%u\n", holdPct,
+                  driver.irun(), driver.ihold());
+    return;
+  }
   if (verb == "MRES") {
     if (mode != IDLE) { Serial.println("# ERR,reason=busy"); return; }
     const long v = rest.toInt();
@@ -496,6 +738,45 @@ void handleCommand(String line) {
     mode = MOVING;
     nextPulseUs = esp_timer_get_time();
     Serial.printf("# MOVETO,target=%ld\n", (long)(t / U256_PER_FULLSTEP));
+    return;
+  }
+  if (verb == "STEP") {
+    // Relative move of n microsteps at whatever MRES is set, so 'STEP 1' is
+    // the smallest motion the driver can make.
+    if (!driverReady) { Serial.println("# ERR,reason=driver_not_ready"); return; }
+    if (mode != IDLE) { Serial.println("# ERR,reason=busy"); return; }
+    const long n = rest.toInt();
+    if (n == 0) { Serial.println("# ERR,reason=bad_step_count"); return; }
+    const int64_t t = posU256 + static_cast<int64_t>(n) * stepU256;
+    if (!withinLimit(t)) { Serial.println("# ERR,reason=outside_limit"); return; }
+    targetU256 = t;
+    mode = MOVING;
+    nextPulseUs = esp_timer_get_time();
+    Serial.printf("# STEP,n=%ld,mres=%u,target_u256=%lld\n", n, mres,
+                  (long long)t);
+    return;
+  }
+  if (verb == "JOGU") {
+    // Endpoints in 1/256 full-step units. They must sit on the present
+    // microstep grid, or the stage could never land exactly on them and would
+    // dither either side of the target instead of reversing.
+    long long a = 0, b = 0;
+    if (sscanf(rest.c_str(), "%lld %lld", &a, &b) != 2) {
+      Serial.println("# ERR,reason=jog_needs_two");
+      return;
+    }
+    if (a % stepU256 != 0 || b % stepU256 != 0) {
+      Serial.println("# ERR,reason=off_microstep_grid");
+      return;
+    }
+    if (!withinLimit(a) || !withinLimit(b)) {
+      Serial.println("# ERR,reason=outside_limit");
+      return;
+    }
+    if (a == b) { Serial.println("# ERR,reason=equal_positions"); return; }
+    jogAU256 = a;
+    jogBU256 = b;
+    Serial.printf("# JOG_SET,a_u256=%lld,b_u256=%lld\n", a, b);
     return;
   }
   if (verb == "JOG") {
@@ -550,6 +831,8 @@ void pollSerial() {
 // ------------------------------------------------------------------ setup
 
 void setup() {
+  pinMode(EN_PIN, OUTPUT);
+  digitalWrite(EN_PIN, HIGH);
   pinMode(STEP_PIN, OUTPUT);
   pinMode(DIR_PIN, OUTPUT);
   digitalWrite(STEP_PIN, LOW);
@@ -563,8 +846,10 @@ void setup() {
   delay(200);
 
   Serial.println("# BOOT,fw=esp32s3_tmc2209_jog");
-  Serial.printf("# PINS,step=%u,dir=%u,uart_rx=%u,uart_tx=%u,en=grounded\n",
-                STEP_PIN, DIR_PIN, UART_RX_PIN, UART_TX_PIN);
+  Serial.printf("# PINS,step=%u,dir=%u,en=%u,uart_rx=%u,uart_tx=%u,"
+                "enc_a=%d,enc_b=%d,enc_z=%d\n",
+                STEP_PIN, DIR_PIN, EN_PIN, UART_RX_PIN, UART_TX_PIN,
+                (int)ENC_A, (int)ENC_B, (int)ENC_Z);
   setRate(rateMilliHz);
   const bool encOk = setupEncoder();
   if (!encOk) Serial.println("# ERR,reason=pcnt_init_failed");
@@ -582,9 +867,9 @@ void loop() {
   const uint32_t now = millis();
   if (mode != IDLE && now - lastTelemetryMs >= TELEMETRY_INTERVAL_MS) {
     lastTelemetryMs = now;
-    Serial.printf("# POS,pos=%ld,enc=%ld,mode=%s\n",
-                  (long)(posU256 / U256_PER_FULLSTEP), (long)encoderCount(),
-                  mode == MOVING ? "MOVING" :
-                      (mode == CALIB ? "CALIB" : "JOGGING"));
+    Serial.printf("# POS,pos=%ld,pos_u256=%lld,enc=%ld,mode=%s\n",
+                  (long)(posU256 / U256_PER_FULLSTEP), (long long)posU256,
+                  (long)encoderCount(),
+                  modeName());
   }
 }
