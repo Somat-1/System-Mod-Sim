@@ -1,0 +1,34 @@
+{
+  "source": "static map, actions 15/16, direction-pair mean",
+  "model": "const + cos/sin at 1 and 2 cycles per revolution; no linear term; never refitted",
+  "positions_fitted": 3199,
+  "const_counts": -10.6227033802006,
+  "coefficients_counts": {
+    "const": -10.6227033802006,
+    "cos1": 7.776882166600605,
+    "sin1": -19.89468262077356,
+    "cos2": -0.009540882900910869,
+    "sin2": -0.16039878576183972
+  },
+  "one_per_rev": {
+    "amp_counts": 21.360671637720102,
+    "amp_deg": 0.3844920894789618,
+    "amp_arcsec": 1384.1715221242625,
+    "phase_deg": 291.3506551541096
+  },
+  "two_per_rev": {
+    "amp_counts": 0.16068229186939503,
+    "amp_deg": 0.0028922812536491104,
+    "amp_arcsec": 10.412212513136797,
+    "phase_deg": 266.59592823668254,
+    "percent_of_one_per_rev": 0.7522342676980788
+  },
+  "variance_explained_pct": 99.17494502010487,
+  "residual_rms_counts": 1.3778520050257659,
+  "current_sweep_window": {
+    "span_deg": 28.8,
+    "fit_change_over_window_counts": -10.677285373580194,
+    "max_departure_from_straight_line_counts": 0.07022824556046814
+  },
+  "implied_scale_radius_mm": 23.771159402297652
+}

@@ -1,0 +1,76 @@
+{
+  "source": {
+    "run": "data/2026-10-13_motor_identification/motor_identification_run.csv",
+    "actions": [
+      15,
+      16
+    ],
+    "commanded_positions_paired": 3199,
+    "dwell_ms": 150,
+    "settled_tail_fraction": 0.28,
+    "samples_per_dwell_median": 76.0
+  },
+  "geometry": {
+    "one_per_rev_counts": 21.360671637720102,
+    "one_per_rev_deg": 0.3844920894789618,
+    "one_per_rev_arcsec": 1384.1715221242625,
+    "one_per_rev_phase_deg": 291.3506551541096,
+    "two_per_rev_counts": 0.16068229186939503,
+    "two_per_rev_deg": 0.0028922812536491104,
+    "variance_explained_pct": 99.17494502010487,
+    "implied_scale_radius_mm": 23.771159402297652
+  },
+  "motor": {
+    "static_pp_counts": 4.780454545454451,
+    "static_pp_deg": 0.08604818181818011,
+    "static_pp_arcsec": 309.77345454544843,
+    "static_pp_pct_full_step": 4.78045454545445,
+    "hysteresis_half_counts": 2.454929991883115,
+    "hysteresis_half_deg": 0.04418873985389607,
+    "hysteresis_half_arcsec": 159.07946347402586,
+    "hysteresis_half_pct_full_step": 2.454929991883115,
+    "hysteresis_half_range_counts": [
+      2.136363636363637,
+      2.7540909090909103
+    ],
+    "fold_sem_median_counts": 0.08758316780387353,
+    "full_rev_corrected_pp_deg": 0.141282506922469
+  },
+  "harmonics_of_mean": {
+    "order_1": {
+      "counts": 21.327784958422196,
+      "arcsec": 1382.0404653057583,
+      "deg": 0.3839001292515995
+    },
+    "order_2": {
+      "counts": 0.14292322344970526,
+      "arcsec": 9.2614248795409,
+      "deg": 0.0025726180220946946
+    },
+    "order_50": {
+      "counts": 0.7526186425930665,
+      "arcsec": 48.76968804003071,
+      "deg": 0.013547135566675196
+    },
+    "order_100": {
+      "counts": 1.3284670588908827,
+      "arcsec": 86.0846654161292,
+      "deg": 0.023912407060035886
+    },
+    "order_200": {
+      "counts": 0.5459225721629213,
+      "arcsec": 35.3757826761573,
+      "deg": 0.009826606298932582
+    }
+  },
+  "checks": {
+    "counts_per_rev_mean": 20001.166666666668,
+    "counts_per_rev_std": 6.02540916084174,
+    "counts_per_rev_n_intervals": 60,
+    "counts_per_rev_nominal": 20000,
+    "settled_noise_median_counts": 0.0,
+    "staircase_closure_counts": -2.5,
+    "staircase_closure_arcsec": -162.0,
+    "whole_run_drift_counts": 267.0
+  }
+}

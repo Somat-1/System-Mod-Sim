@@ -1,0 +1,69 @@
+{
+  "samples": 1903061,
+  "duration_s": 2228.894457,
+  "sequence_gaps": 0,
+  "final_residual_counts": 267.0,
+  "final_residual_deg": 4.806,
+  "largest_boundary_jump": {
+    "action": 59,
+    "label": "20 fs/s -",
+    "counts": 415.0,
+    "degrees": 7.47
+  },
+  "static_map": {
+    "raw_mean_pp_counts": 49.45454545454595,
+    "raw_mean_pp_deg": 0.8901818181818271,
+    "hysteresis_pp_deg": 0.057681818181810736,
+    "one_per_rev_amplitude_counts": 21.2338662681854,
+    "one_per_rev_amplitude_deg": 0.38220959282733713,
+    "one_per_rev_phase_deg": 291.4844854861054,
+    "diagnostic_corrected_pp_deg": 0.13600504795695173,
+    "settled_noise_median_counts": 0.0
+  },
+  "v1_radial_runout": {
+    "eccentricity_um": 159.5205502837302,
+    "phase_deg": 109.8741169912532,
+    "tir_um": 318.5198,
+    "residual_rms_um": 2.388833563651102
+  },
+  "v1_applied_to_angle_data": false,
+  "v1_nonapplication_reason": "Missing encoder scale radius, phase registration, and common clock.",
+  "fine_microstep_summary": [
+    {
+      "mres": 32,
+      "ideal_counts": 3.125,
+      "mean_step_counts": 3.19515625,
+      "step_spread_pct": 41.87075321749061,
+      "dead_steps": 1030.0,
+      "steps": 12800.0,
+      "error_pp_arcsec": 21861.899999999998,
+      "hysteresis_arcsec": 14646.217278550224,
+      "pm1_response_pct": 107.78947368421052,
+      "pm1_overshoot_counts": 2.0
+    },
+    {
+      "mres": 64,
+      "ideal_counts": 1.5625,
+      "mean_step_counts": 1.560078125,
+      "step_spread_pct": 50.958178686055874,
+      "dead_steps": null,
+      "steps": 25600.0,
+      "error_pp_arcsec": 3122.5499999999997,
+      "hysteresis_arcsec": -2261.702741973283,
+      "pm1_response_pct": 64.0,
+      "pm1_overshoot_counts": 1.0
+    },
+    {
+      "mres": 128,
+      "ideal_counts": 0.78125,
+      "mean_step_counts": 0.780205078125,
+      "step_spread_pct": 84.41097150807767,
+      "dead_steps": null,
+      "steps": 51200.0,
+      "error_pp_arcsec": 3063.825,
+      "hysteresis_arcsec": -1008.1359790633178,
+      "pm1_response_pct": 26.94736842105263,
+      "pm1_overshoot_counts": 1.0
+    }
+  ]
+}

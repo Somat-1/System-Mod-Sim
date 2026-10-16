@@ -1,0 +1,67 @@
+{
+  "source": "\\\\192.168.2.5\\external\\tomasV\\System-Mod-Sim\\Stage & motor\\motor identification\\data\\2026-10-13_motor_identification\\motor_identification_run.csv",
+  "cpr": 20000,
+  "encoder_sign_applied": 1,
+  "fit_slope": 0.9900219619326499,
+  "fit_intercept_deg": -0.04071968795754012,
+  "loop_mean_abs_deg": 0.07285714285714287,
+  "loop_max_abs_deg": 0.1080000000000001,
+  "return_error_deg": 0.0,
+  "counts_per_microstep": 6.25,
+  "checks": [
+    {
+      "check": "Mode readback lines",
+      "observed": "spread=1; intpol=0; IHOLD=IRUN=9",
+      "expected": "SpreadCycle; intpol=0; IHOLD=IRUN confirmed",
+      "pass": true
+    },
+    {
+      "check": "mres column",
+      "observed": "16",
+      "expected": "16 throughout",
+      "pass": true
+    },
+    {
+      "check": "current_ma",
+      "observed": "360 mA",
+      "expected": "close to 360 mA setpoint",
+      "pass": true
+    },
+    {
+      "check": "Step events",
+      "observed": "+1: 64; \u22121: 64",
+      "expected": "64 outward; 64 back",
+      "pass": true
+    },
+    {
+      "check": "Direction sign",
+      "observed": "same sign; no flip",
+      "expected": "encoder and command same sign",
+      "pass": true
+    },
+    {
+      "check": "Fitted scale",
+      "observed": "0.9900 (-0.998%)",
+      "expected": "1.000 \u00b1 ~0.5%",
+      "pass": false
+    },
+    {
+      "check": "Return error",
+      "observed": "0.000\u00b0 (0.00 \u00b5step)",
+      "expected": "< ~1 microstep (0.113\u00b0)",
+      "pass": true
+    },
+    {
+      "check": "index_count",
+      "observed": "72 \u2192 72 (\u0394+0)",
+      "expected": "no change, or expected Z change",
+      "pass": true
+    },
+    {
+      "check": "Quantisation",
+      "observed": "6.25 counts/microstep",
+      "expected": "\u2265 ~10 counts per microstep",
+      "pass": false
+    }
+  ]
+}
