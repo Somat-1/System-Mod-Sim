@@ -1,0 +1,56 @@
+# Thesis figure style for the stage identification campaign.
+#
+# Figures are drawn at the size they will be printed - 160 mm across a full
+# text width, 80 mm for a half - so the type in them is the size it will be
+# read at. Nothing here is decorative: serif to match the body text, thin
+# spines, inward ticks, no grid behind data, and no colour that does not
+# carry meaning.
+
+font.family:         serif
+font.serif:          STIXGeneral, DejaVu Serif
+mathtext.fontset:    stix
+font.size:           9
+axes.labelsize:      9
+axes.titlesize:      9
+legend.fontsize:     8
+xtick.labelsize:     8
+ytick.labelsize:     8
+figure.titlesize:    9
+
+axes.labelcolor:     black
+axes.edgecolor:      black
+axes.linewidth:      0.6
+axes.spines.top:     False
+axes.spines.right:   False
+axes.grid:           False
+axes.axisbelow:      True
+axes.unicode_minus:  True
+
+xtick.direction:     in
+ytick.direction:     in
+xtick.major.width:   0.6
+ytick.major.width:   0.6
+xtick.minor.width:   0.4
+ytick.minor.width:   0.4
+xtick.major.size:    3.0
+ytick.major.size:    3.0
+xtick.minor.size:    1.6
+ytick.minor.size:    1.6
+xtick.color:         black
+ytick.color:         black
+
+lines.linewidth:     0.9
+lines.markersize:    3
+lines.solid_capstyle: round
+legend.frameon:      False
+legend.handlelength: 1.4
+legend.borderpad:    0.2
+legend.labelspacing: 0.3
+
+figure.facecolor:    white
+axes.facecolor:      white
+savefig.facecolor:   white
+savefig.dpi:         600
+savefig.bbox:        standard
+pdf.fonttype:        42
+ps.fonttype:         42

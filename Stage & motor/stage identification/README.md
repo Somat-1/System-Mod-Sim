@@ -11,7 +11,7 @@ stage identification/
 │   ├── sequence_design.py            the campaign, defined as data
 │   └── render_sequence.py            draws it
 ├── sequence/
-│   ├── stage_identification_sequence.png / .svg
+│   ├── stage_identification_sequence.png
 │   ├── sequence_plan.csv             every move, in order
 │   └── sequence_summary.json
 ├── firmware/stage_identification/    executes a plan uploaded by the host

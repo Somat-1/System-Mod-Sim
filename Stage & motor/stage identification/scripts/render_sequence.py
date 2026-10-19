@@ -3,7 +3,7 @@
 
 Reads the plan from `sequence_design.py` (not from the CSV, so the staircase can
 be drawn as real microsteps rather than inferred from a label) and writes
-`../sequence/stage_identification_sequence.{png,svg}`.
+`../sequence/stage_identification_sequence.png`.
 
 The top panel is the 42-minute run end to end — what the stage does, and when.
 Below it each phase is drawn on its own time axis, because the phases differ in
@@ -254,10 +254,8 @@ def main():
 
     png = out / "stage_identification_sequence.png"
     fig.savefig(png, dpi=170)
-    fig.savefig(png.with_suffix(".svg"))
     plt.close(fig)
     print(f"wrote {png}")
-    print(f"wrote {png.with_suffix('.svg')}")
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Draw both chirp profiles: frequency against time, and what each one covers.
 
-Writes ../sequence/chirp_sweeps.{png,svg}.
+Writes ../sequence/chirp_sweeps.png.
 
 Three panels. The two upper ones are the profiles as they run — commanded
 frequency against time, with the excitation amplitude shaded behind. The lower
@@ -152,10 +152,8 @@ def main():
 
     png = out / "chirp_sweeps.png"
     fig.savefig(png, dpi=170)
-    fig.savefig(png.with_suffix(".svg"))
     plt.close(fig)
     print(f"wrote {png}")
-    print(f"wrote {png.with_suffix('.svg')}")
 
 
 if __name__ == "__main__":

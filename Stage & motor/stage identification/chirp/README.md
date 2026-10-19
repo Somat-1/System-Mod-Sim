@@ -9,7 +9,7 @@ chirp/
 │   ├── chirp_design.py           both profiles, as data
 │   └── render_chirp.py           draws them
 ├── sequence/
-│   ├── chirp_sweeps.png / .svg
+│   ├── chirp_sweeps.png
 │   ├── chirp_plan.csv
 │   └── chirp_summary.json
 └── firmware/stage_chirp_sweep/   RUN FULL | RUN HIGH | CHECK | ABORT

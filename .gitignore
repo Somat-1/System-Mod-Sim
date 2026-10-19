@@ -47,3 +47,30 @@ Microstepping Test Data/v6/EXPrun.csv
 
 # Local v3 smoothing prototype and its generated outputs.
 /Microstepping Test Data/v3/temp_smoothed_curve_fit/
+
+# 13 October 2026 stage identification and chirp captures: raw hardware
+# exports, local-only like the other captures above. NOT regenerable --
+# keep backups outside git.
+#   IDdata.csv      : TwinCAT EL5101 counter, 1 kHz (45 MB)
+#   tempTvalm.csv   : Dewesoft 3-axis accelerometer, 20 kHz (375 MB)
+#   tempTvalm2.csv  : same, two HIGH chirp runs in one file (865 MB)
+Stage & motor/stage identification/IDdata.csv
+Stage & motor/stage identification/chirp/tempTvalm.csv
+Stage & motor/stage identification/chirp/tempTvalm2.csv
+
+# npz parse caches of the three files above; derived data, not source.
+# Rebuilt in ~45 s by Stage & motor/stage identification/analysis/cache_recordings.py.
+Stage & motor/stage identification/analysis/cache/
+
+# Scratch viewers and their crops for the stage identification campaign;
+# same policy as /temp/ at the root. Regenerated from the npz cache.
+Stage & motor/stage identification/temp/
+
+# 15 October 2026 noise and drift captures: raw hardware exports, local-only
+# like the captures above. NOT regenerable -- keep backups outside git.
+#   TvalSeis.csv       : seismometer on the stage (2.9 GB)
+#   TvalSeisfloor.csv  : seismometer on the floor (1.3 GB)
+Stage & motor/noise and drift identification/data/
+
+# npz parse caches of the two files above; derived data, not source.
+Stage & motor/noise and drift identification/analysis/cache/
