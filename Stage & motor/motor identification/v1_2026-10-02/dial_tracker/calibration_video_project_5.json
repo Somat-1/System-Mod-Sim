@@ -1,0 +1,59 @@
+{
+  "video": "../recordings/Video Project 5.mp4",
+  "frame_size": [
+    1080,
+    1080
+  ],
+  "fps": 30.0,
+  "n_frames": 1845,
+  "main": {
+    "center": [
+      536.279,
+      605.363
+    ],
+    "r_inner": 250.0,
+    "r_outer": 420.0,
+    "um_per_rev": 200.0,
+    "ticks_per_rev": 100,
+    "zero_bearing_deg": 308.925,
+    "direction": "cw"
+  },
+  "sub": {
+    "enabled": true,
+    "center": [
+      628.414,
+      696.457
+    ],
+    "r_inner": 30.0,
+    "r_outer": 76.0,
+    "mm_per_step": 0.2,
+    "deg_per_step": -90.007,
+    "zero_bearing_deg": 272.62
+  },
+  "detect": {
+    "bg_frames": 240,
+    "bg_percentile": 88,
+    "main_thresh_frac": 0.3,
+    "main_thresh_min": 12.0,
+    "main_tol_deg": 12.0,
+    "sub_thresh": 26.0,
+    "sub_tol_deg": 20.0,
+    "wedge_exclude_deg": 6.0,
+    "min_pixels_main": 40,
+    "min_pixels_sub": 20
+  },
+  "export": {
+    "start_frame": 18,
+    "end_frame": -1,
+    "reference_frame": 5,
+    "reference_reading_um": 200.0,
+    "bad_frames": [
+      13,
+      14,
+      15,
+      16,
+      17
+    ]
+  },
+  "_note": "Mitutoyo 513-425 lever indicator. Geometry fitted from the video itself; see README section 4."
+}
