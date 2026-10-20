@@ -1,0 +1,160 @@
+{
+  "seed": 7,
+  "units": "positions in u256 = 1/256 full step = 39.0625 nm; 100 full steps/mm",
+  "parts": {
+    "warmup": "not defined yet (homing to end switches + warm-up)",
+    "stepping": "x_ref baseline, B1-B3 per MRES block, end reference"
+  },
+  "sessions": 1,
+  "dropped_phases": [
+    "B4 settling matrix",
+    "B5 creep / hold"
+  ],
+  "parameters": {
+    "screw_lead_mm": 2.0,
+    "s_fs_um": 10.0,
+    "delta_nm": {
+      "1/16": 625.0,
+      "1/32": 312.5,
+      "1/64": 156.25,
+      "1/128": 78.125,
+      "1/256": 39.0625
+    },
+    "reversal_R_um": 1.71,
+    "S_fine_um": 5.625,
+    "S_fine_fs": 0.5625,
+    "sigma_floor_nm": 3.0,
+    "sigma_floor_is_placeholder": true,
+    "v_mm_s": 0.7,
+    "f_step_hz_at_256": 17920,
+    "x_start_mm": 0.0,
+    "x_ref_mm": -1.0,
+    "approach_mm": 0.1,
+    "resolvable": {
+      "1/16": true,
+      "1/32": true,
+      "1/64": true,
+      "1/128": true,
+      "1/256": true
+    },
+    "fine_tier_counts": {
+      "1/16": 9,
+      "1/32": 18,
+      "1/64": 36,
+      "1/128": 72,
+      "1/256": 144
+    },
+    "coarse_tier_increments": 55
+  },
+  "driver": {
+    "chopper": "spreadcycle",
+    "en_spreadCycle": 1,
+    "toff": 5,
+    "tbl": 24,
+    "hstrt": "firmware default - read back CHOPCONF",
+    "hend": "firmware default",
+    "irun_ma": 360,
+    "ihold_multiplier": 1.0,
+    "iholddelay": 0,
+    "tpowerdown": 0,
+    "intpol": 0,
+    "r_sense_ohm": 0.1
+  },
+  "markers_fs": {
+    "session": 60,
+    "end": 56,
+    "1/16": 32,
+    "1/32": 36,
+    "1/64": 40,
+    "1/128": 44,
+    "1/256": 48
+  },
+  "checks": [],
+  "order": [
+    "1/256",
+    "1/32",
+    "1/16",
+    "1/128",
+    "1/64",
+    "1/256"
+  ],
+  "stepping_minutes": 30.36,
+  "segments": {
+    "reference": {
+      "mres": 256,
+      "rows": 10,
+      "phases": {
+        "REF": 0.33
+      },
+      "minutes": 0.33
+    },
+    "block1": {
+      "mres": 256,
+      "rows": 19,
+      "phases": {
+        "B1": 0.08,
+        "B2": 0.63,
+        "B3": 6.73
+      },
+      "minutes": 7.44
+    },
+    "block2": {
+      "mres": 32,
+      "rows": 19,
+      "phases": {
+        "B1": 0.08,
+        "B2": 0.63,
+        "B3": 2.48
+      },
+      "minutes": 3.18
+    },
+    "block3": {
+      "mres": 16,
+      "rows": 19,
+      "phases": {
+        "B1": 0.07,
+        "B2": 0.63,
+        "B3": 2.17
+      },
+      "minutes": 2.87
+    },
+    "block4": {
+      "mres": 128,
+      "rows": 19,
+      "phases": {
+        "B1": 0.08,
+        "B2": 0.63,
+        "B3": 4.3
+      },
+      "minutes": 5.01
+    },
+    "block5": {
+      "mres": 64,
+      "rows": 19,
+      "phases": {
+        "B1": 0.08,
+        "B2": 0.63,
+        "B3": 3.08
+      },
+      "minutes": 3.79
+    },
+    "block6": {
+      "mres": 256,
+      "rows": 19,
+      "phases": {
+        "B1": 0.08,
+        "B2": 0.63,
+        "B3": 6.73
+      },
+      "minutes": 7.44
+    },
+    "end": {
+      "mres": 256,
+      "rows": 9,
+      "phases": {
+        "E": 0.3
+      },
+      "minutes": 0.3
+    }
+  }
+}
