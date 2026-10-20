@@ -1,0 +1,43 @@
+{
+  "_comment": "Single source for the ISO 230-2 session. Edit here, then run scripts/iso_design.py: it checks the values, previews the targets and writes firmware/iso230_2/iso_config.h. Reflash after any change.",
+
+  "lead_mm": 2.0,
+  "steps_per_rev": 200,
+  "mres": 16,
+
+  "run_current_ma": 360,
+  "ihold_multiplier": 1.0,
+  "tpowerdown": 0,
+  "iholddelay": 0,
+  "intpol": false,
+
+  "v_mm_s": 5.0,
+  "a_mm_s2": 40.0,
+
+  "home_side": "min",
+  "home_seek_v_mm_s": 2.0,
+  "home_slow_v_mm_s": 0.15,
+  "home_backoff_mm": 2.0,
+  "measure_far_end": true,
+  "rom_expected_mm": 140.0,
+
+  "end_margin_mm": 2.0,
+  "overrun_mm": 3.0,
+  "p_nom_mm": 5.0,
+  "target_end_quantum_mm": 0.5,
+  "seed": 2302,
+
+  "x_ref_mm": null,
+  "ref_preapproach_mm": 3.0,
+
+  "settle_margin_s": 0.5,
+  "t_record_s": 0.5,
+  "n_runs": 5,
+
+  "datum_visits": 3,
+  "end_ref_visits": 3,
+  "warmup_ref_every_cycles": 1,
+  "warmup_t_max_min": 30,
+
+  "end_motor_state": "hold"
+}

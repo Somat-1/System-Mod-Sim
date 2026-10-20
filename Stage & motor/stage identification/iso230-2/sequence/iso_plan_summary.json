@@ -1,0 +1,28 @@
+{
+  "config_sha256": "10e3652ae6f51965b58515421a351444f983b4a68f4967cf0cc51fcf80392c44",
+  "rom_mm": 140.0,
+  "u256_per_mm": 25600.0,
+  "microstep_um": 0.625,
+  "soft_limits_mm": [
+    2.0,
+    138.0
+  ],
+  "span_mm": [
+    5.0,
+    135.0
+  ],
+  "targets": 27,
+  "interval_mm": 5.0,
+  "offset_max_mm": 1.25,
+  "x_ref_mm": 70.0,
+  "t_hold_s": 0.0,
+  "t_settle_s": 0.5,
+  "dwell_s": 1.0,
+  "run_minutes": 2.3995833333333336,
+  "iso_minutes": 12.24291666666667,
+  "measured_stops": 270,
+  "pulse_rate_hz_at_v": 8000.0,
+  "lead_phase_min_gap": 0.0,
+  "lead_phase_max_gap": 0.11550000000000082,
+  "checks": []
+}

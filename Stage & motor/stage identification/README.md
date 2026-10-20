@@ -17,6 +17,7 @@ stage identification/
 ├── firmware/stage_identification/    executes a plan uploaded by the host
 ├── chirp/                            mechanical frequency sweeps, 1 Hz - 1 kHz
 ├── microstepping/                    MRES selection test, 1/16 - 1/256
+├── iso230-2/                         ISO 230-2 accuracy & repeatability baseline
 └── jog/                              run-in oscillation + microstep calibration
 ```
 

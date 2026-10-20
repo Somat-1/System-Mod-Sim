@@ -55,9 +55,10 @@ constexpr gpio_num_t ENC_A = GPIO_NUM_4;
 constexpr gpio_num_t ENC_B = GPIO_NUM_5;
 constexpr gpio_num_t ENC_Z = GPIO_NUM_6;
 
-// PLACEHOLDER pin numbers - confirm against the bench before the first run.
-constexpr uint8_t SW_NEG_PIN = 15;       // switch at the negative end
-constexpr uint8_t SW_POS_PIN = 16;       // switch at the positive end
+// End switches as wired on the bench. Which one is the negative end is still
+// to be confirmed with menu option 8; if homing seeks the wrong way, swap them.
+constexpr uint8_t SW_NEG_PIN = 10;       // switch at the negative end
+constexpr uint8_t SW_POS_PIN = 11;       // switch at the positive end
 constexpr int SWITCH_ACTIVE_LEVEL = LOW; // NO to GND + internal pull-up
 
 // ---- driver ---------------------------------------------------------------
@@ -87,10 +88,12 @@ constexpr size_t MAX_UPLOADED_ROWS = 512;
 constexpr uint16_t HOME_FAST_FS = 200;                 // 2 mm/s seek
 constexpr uint16_t HOME_SLOW_FS = 15;                  // 0.15 mm/s touch
 constexpr uint8_t  HOME_TOUCHES = 3;
-constexpr int64_t  HOME_BACKOFF_U256 = 50 * U256;      // 0.5 mm
+constexpr int64_t  HOME_BACKOFF_U256 = 200 * U256;     // 2 mm: 0.5 mm did not release the pos switch
 constexpr int64_t  HOME_TOLERANCE_U256 = 2 * U256;     // 20 um
 constexpr int64_t  HOME_MARGIN_U256 = 50 * U256;       // 0.5 mm inside the switch
-constexpr int64_t  HOME_MAX_TRAVEL_U256 = 6000 * U256; // 60 mm before giving up
+// No travel cap on the seek: it runs until its switch closes or ABORT. 1 m is
+// only there to give the move a finite target (~8 min at the seek speed).
+constexpr int64_t  HOME_MAX_TRAVEL_U256 = 100000 * U256;
 constexpr uint8_t  HOME_RETRIES = 1;
 constexpr uint32_t SWITCH_DEBOUNCE_US = 3000;
 constexpr uint16_t HOME_MRES = 16;                     // homing runs at 1/16
@@ -138,12 +141,18 @@ size_t uploadedCount = 0;
 String inBuf;
 String pendingLine;
 char pendingKey = 0;
-bool hotkeys = false;          // true while the warm-up is running
+bool hotkeys = false;          // a lone character is a key, not a line
+// While true, any key stops the motion under way: homing, the warm-up and the
+// compiled-in sequence. Off for host-driven plans, which stop on ABORT only.
+bool keyStops = false;
 
 enum StopReason : uint8_t {
   STOP_NONE = 0, STOP_ABORT, STOP_SWITCH, STOP_LIMIT, STOP_KEY, STOP_ERROR
 };
 StopReason stopReason = STOP_NONE;
+
+// What the warm-up's pause point decided.
+enum WarmupNext : uint8_t { WU_CONTINUE, WU_MENU, WU_SEQUENCE };
 
 /** How the switches are treated for one move. */
 enum GuardMode : uint8_t {
@@ -231,13 +240,53 @@ void pumpSerial() {
       }
       continue;
     }
+    if (ch == 8 || ch == 127) {
+      if (inBuf.length()) inBuf.remove(inBuf.length() - 1);
+      continue;
+    }
     if (inBuf.length() < 180) inBuf += ch;
-    // While the warm-up runs, a lone printable character is a hotkey, so a
-    // plain serial monitor that needs Enter and a raw terminal both work.
+    // While something is running, a lone character is a key, so a plain
+    // serial monitor that needs Enter and a raw terminal both work.
     if (hotkeys && inBuf.length() == 1) {
       pendingKey = inBuf[0];
       inBuf = "";
+    } else if (!hotkeys && inBuf.length() == 1 && (isdigit(ch) || ch == '?')) {
+      // Menu keys act at once. Host commands all start with a letter, so a
+      // digit or '?' at the start of a line is never part of one.
+      pendingLine = inBuf;
+      inBuf = "";
     }
+  }
+}
+
+void setKeyStops(bool on) {
+  keyStops = on;
+  hotkeys = on;
+  pendingKey = 0;
+  inBuf = "";
+}
+
+/** Throw away anything typed ahead, e.g. the Enter after a menu digit. */
+void drainInput() {
+  delay(20);
+  while (Serial.available()) Serial.read();
+}
+
+/** Wait for one key, without Enter. Enter comes back as '\n', ESC as 27. */
+char readKey(const char *prompt) {
+  const bool saved = hotkeys;
+  hotkeys = false;
+  drainInput();
+  Serial.print(prompt);
+  for (;;) {
+    while (Serial.available()) {
+      char ch = (char)Serial.read();
+      if (ch == '\r') ch = '\n';
+      Serial.println(ch == '\n' ? ' ' : ch);
+      hotkeys = saved;
+      return ch;
+    }
+    delay(2);
   }
 }
 
@@ -252,6 +301,7 @@ char takeKey() {
 String readLine(const char *prompt, uint32_t timeoutMs = 30000) {
   const bool saved = hotkeys;
   hotkeys = false;
+  drainInput();
   Serial.print(prompt);
   inBuf = "";
   pendingKey = 0;
@@ -434,6 +484,7 @@ void serviceTelemetry() {
 /** Checked before every pulse. */
 bool motionGuard(bool positive, GuardMode mode) {
   if (abortRequested) { stopReason = STOP_ABORT; return false; }
+  if (keyStops && pendingKey) { stopReason = STOP_KEY; return false; }
   if (mode == GUARD_NORMAL) {
     if (switchNeg() || switchPos()) { stopReason = STOP_SWITCH; return false; }
     if (homed) {
@@ -469,7 +520,7 @@ bool dwellMs(uint32_t ms, bool watchKeys = false) {
     serviceTelemetry();
     pumpSerial();
     if (abortRequested) { stopReason = STOP_ABORT; return false; }
-    if (watchKeys && pendingKey) { stopReason = STOP_KEY; return false; }
+    if ((watchKeys || keyStops) && pendingKey) { stopReason = STOP_KEY; return false; }
     delay(1);
   }
   return true;
@@ -523,7 +574,7 @@ bool moveToU256(int64_t target, uint16_t speedFs,
       serviceTelemetry();
       pumpSerial();
       if (abortRequested) { stopReason = STOP_ABORT; return false; }
-      if (watchKeys && pendingKey) { stopReason = STOP_KEY; return false; }
+      if ((watchKeys || keyStops) && pendingKey) { stopReason = STOP_KEY; return false; }
     }
   }
   return true;
@@ -581,6 +632,7 @@ bool homeOneEnd(bool positive, int64_t *triggerOut) {
                                             : -HOME_MAX_TRAVEL_U256);
     moveToU256(far, HOME_FAST_FS, GUARD_SEEK);
     if (abortRequested) { stopReason = STOP_ABORT; return false; }
+    if (stopReason == STOP_KEY) return false;
     if (!switchAhead(positive)) {
       Serial.printf("# ERR,reason=no_switch_within_travel,end=%s\n", name);
       return false;
@@ -599,6 +651,7 @@ bool homeOneEnd(bool positive, int64_t *triggerOut) {
                                                 : -HOME_BACKOFF_U256 * 3);
       moveToU256(creep, HOME_SLOW_FS, GUARD_SEEK);
       if (abortRequested) { stopReason = STOP_ABORT; return false; }
+      if (stopReason == STOP_KEY) return false;
       if (!switchAhead(positive)) { good = false; break; }
       touch[t] = posU256;
       Serial.printf("# HOMING,%s,touch=%u,pos=%lld\n", name,
@@ -677,133 +730,142 @@ bool goToCentre() {
   return dwellMs(500);
 }
 
-// ---------------------------------------------------------------- warm-up
+/**
+ * Make commanded full steps coincide with the driver's electrical full steps.
+ *
+ * The commanded position starts at 0 at boot and homing puts 0 at the
+ * geometric centre, but the driver's MSCNT keeps whatever phase earlier moves
+ * left it at - including fine-MRES moves, which leave it off the 1/16 grid. A
+ * commanded full step is then not an electrical one, and every MRES change in
+ * the plan is refused. This steps at 1/256 (a refinement is always legal) by at
+ * most half a full step until MSCNT is on a full-step value, and makes that
+ * point the new 0. MSCNT counts in u256, so the move is exact.
+ */
+constexpr uint16_t ALIGN_SPEED_FS = 10;          // 2560 pulses/s at 1/256
 
-void printWarmupHelp() {
-  Serial.println(F("\n  keys:  p pause/resume   s stop   c current   v speed   "
-                   "m MRES   a amplitude   ? status"));
+bool alignToElectricalFullStep() {
+  if (!applyMres(256, false)) return false;
+  // Which way does MSCNT count for a positive pulse? One microstep tells.
+  const uint32_t m0 = readMscnt();
+  if (!moveToU256(posU256 + 1, ALIGN_SPEED_FS)) return false;
+  const uint32_t m1 = readMscnt();
+  int sense = 0;
+  if (((m1 + 1024 - m0) & 1023) == 1) sense = 1;
+  else if (((m0 + 1024 - m1) & 1023) == 1) sense = -1;
+  if (!sense) {
+    Serial.printf("# ERR,reason=mscnt_not_tracking,before=%lu,after=%lu\n",
+                  (unsigned long)m0, (unsigned long)m1);
+    return false;
+  }
+  // Shortest MSCNT change to the nearest full-step value, at most 128 (0.5 FS).
+  const int off = (int)((m1 + 1024 - MSCNT_FULL_STEP_OFFSET) % MSCNT_FULL_STEP_PERIOD);
+  const int change = off <= 128 ? -off : (int)MSCNT_FULL_STEP_PERIOD - off;
+  if (!moveToU256(posU256 + (int64_t)change * sense, ALIGN_SPEED_FS)) return false;
+  if (!dwellMs(200)) return false;
+  const uint32_t m2 = readMscnt();
+  if (!mscntOnFullStep(m2)) {
+    Serial.printf("# ERR,reason=align_failed,mscnt=%lu\n", (unsigned long)m2);
+    return false;
+  }
+  // Re-label this point 0. Shift everything measured with it so the switch
+  // positions and soft limits keep their physical meaning.
+  const int64_t shift = posU256;
+  posU256 = 0;
+  swNegU256 -= shift;
+  swPosU256 -= shift;
+  limNegU256 -= shift;
+  limPosU256 -= shift;
+  Serial.printf("# ALIGNED,mscnt_before=%lu,mscnt=%lu,shift_u256=%lld,shift_um=%.3f\n",
+                (unsigned long)m0, (unsigned long)m2, (long long)shift,
+                (double)shift * 1000.0 / (double)U256_PER_MM);
+  return true;
 }
 
-/** Continuous shuttle between the soft limits. Runs until stopped. */
-void runWarmup() {
-  if (!homed) { Serial.println("Not homed - run homing first."); return; }
-  Serial.printf("\nWarm-up: %.3f mm peak-to-peak at %u FS/s, 1/%u, %u mA\n",
-                (double)cfg.warmupAmplitudeU256 / (double)U256_PER_MM,
-                cfg.warmupSpeedFs, cfg.mres, cfg.currentMa);
-  printWarmupHelp();
+// ---------------------------------------------------------------- warm-up
 
-  bool paused = false, positive = true;
-  uint32_t cycles = 0;
-  const uint32_t started = millis();
-  running = true;
-  hotkeys = true;
-  abortRequested = false;
+void settingsMenu();
+void runSequence();
 
-  while (running) {
-    if (!paused) {
-      // Endpoints snap to a full step so an MRES change is legal there.
-      int64_t half = (cfg.warmupAmplitudeU256 / 2 / U256) * U256;
-      int64_t target = positive ? half : -half;
-      if (target > limPosU256) target = (limPosU256 / U256) * U256;
-      if (target < limNegU256) target = ((limNegU256 + U256 - 1) / U256) * U256;
+void printWarmupStatus(uint32_t cycles, uint32_t started) {
+  Serial.printf("  pos %.4f mm   %lu cycles   %lus   1/%u   %u mA   %u FS/s   "
+                "amplitude %.3f mm\n",
+                (double)posU256 / (double)U256_PER_MM, (unsigned long)cycles,
+                (unsigned long)((millis() - started) / 1000), cfg.mres,
+                cfg.currentMa, cfg.warmupSpeedFs,
+                (double)cfg.warmupAmplitudeU256 / (double)U256_PER_MM);
+}
 
-      stopReason = STOP_NONE;
-      const bool ok = moveToU256(target, cfg.warmupSpeedFs, GUARD_NORMAL, true);
-      if (!ok && stopReason != STOP_KEY) {
-        Serial.printf("\n# WARMUP_STOPPED,reason=%u,pos=%lld\n",
-                      (unsigned)stopReason, (long long)posU256);
-        break;
-      }
-      if (ok) {
-        positive = !positive;
-        if (positive) ++cycles;
-        dwellMs(WARMUP_END_DWELL_MS, true);
-      }
-    } else {
-      dwellMs(50, true);
-    }
-
-    const char key = takeKey();
-    if (!key) continue;
-    switch (key) {
-      case 'p':
-      case ' ':
-        paused = !paused;
-        Serial.printf("\n  %s at %.4f mm\n", paused ? "paused" : "resumed",
-                      (double)posU256 / (double)U256_PER_MM);
-        break;
-      case 's':
-      case 'q':
-        running = false;
-        break;
-      case '?':
-        Serial.printf("\n  cycles=%lu elapsed=%lus pos=%.4f mm enc=%ld "
-                      "1/%u %u mA %u FS/s amp=%.3f mm\n",
-                      (unsigned long)cycles,
-                      (unsigned long)((millis() - started) / 1000),
-                      (double)posU256 / (double)U256_PER_MM,
-                      (long)encoderCount(), cfg.mres, cfg.currentMa,
-                      cfg.warmupSpeedFs,
-                      (double)cfg.warmupAmplitudeU256 / (double)U256_PER_MM);
-        break;
-      case 'c': {
-        const long v = readLine("\n  run current mA (50-1200): ").toInt();
-        if (v >= 50 && v <= 1200) {
-          applyCurrent((uint16_t)v);
-          Serial.printf("  current = %u mA\n", cfg.currentMa);
-        } else {
-          Serial.println("  unchanged");
-        }
-        break;
-      }
-      case 'v': {
-        const long v = readLine("\n  speed full-step/s (1-800): ").toInt();
-        if (v >= 1 && v <= 800 && (uint32_t)v * cfg.mres <= MAX_PULSE_RATE_HZ) {
-          cfg.warmupSpeedFs = (uint16_t)v;
-          Serial.printf("  speed = %u FS/s\n", cfg.warmupSpeedFs);
-        } else {
-          Serial.printf("  rejected: %ld x 1/%u would exceed %lu Hz\n",
-                        v, cfg.mres, (unsigned long)MAX_PULSE_RATE_HZ);
-        }
-        break;
-      }
-      case 'm': {
-        const long v = readLine("\n  MRES (1,2,4,...,256): ").toInt();
-        if (v < 1 || v > 256 || (v & (v - 1))) {
-          Serial.println("  rejected: not a power of two");
-        } else if ((uint32_t)cfg.warmupSpeedFs * v > MAX_PULSE_RATE_HZ) {
-          Serial.printf("  rejected: %u FS/s x 1/%ld would exceed %lu Hz\n",
-                        cfg.warmupSpeedFs, v, (unsigned long)MAX_PULSE_RATE_HZ);
-        } else if (posU256 % U256 != 0) {
-          Serial.println("  refused: not on a full step (pause at an endpoint)");
-        } else if (applyMres((uint16_t)v, true)) {
-          Serial.printf("  MRES = 1/%u\n", cfg.mres);
-        }
-        break;
-      }
-      case 'a': {
-        const double mm = readLine("\n  peak-to-peak mm (0 = full travel): ").toDouble();
-        const int64_t full = limPosU256 - limNegU256;
-        const int64_t want = (int64_t)llround(mm * (double)U256_PER_MM);
-        if (mm <= 0 || want > full) {
-          cfg.warmupAmplitudeU256 = full;
-          if (mm > 0) Serial.println("  clamped to full travel");
-        } else {
-          cfg.warmupAmplitudeU256 = want;
-        }
-        Serial.printf("  amplitude = %.3f mm peak-to-peak\n",
-                      (double)cfg.warmupAmplitudeU256 / (double)U256_PER_MM);
-        break;
-      }
-      default:
-        printWarmupHelp();
-        break;
+/** The pause point of the warm-up: hold position and ask what next. */
+WarmupNext warmupPause(uint32_t cycles, uint32_t started) {
+  setKeyStops(false);
+  for (;;) {
+    Serial.println(F("\n  -- warm-up paused --"));
+    printWarmupStatus(cycles, started);
+    const char k = readKey("  c continue   s settings   r run MRES sequence   "
+                           "m main menu > ");
+    switch (k) {
+      case 'c': case ' ': case '\n': return WU_CONTINUE;
+      case 's': settingsMenu(); break;
+      case 'r': return WU_SEQUENCE;
+      case 'm': case 27: return WU_MENU;
+      default: break;
     }
   }
-  hotkeys = false;
+}
+
+/**
+ * Shuttle between the soft limits until a key is pressed. A key pauses at
+ * once, wherever the stage is; from the pause it can continue, change
+ * settings, start the MRES sequence or go back to the menu.
+ */
+void runWarmup() {
+  if (!homed) { Serial.println("Not homed - run 1 (Home) first."); return; }
+  Serial.printf("\nWarm-up: %.3f mm peak-to-peak at %u FS/s, 1/%u, %u mA\n"
+                "  press any key to pause\n",
+                (double)cfg.warmupAmplitudeU256 / (double)U256_PER_MM,
+                cfg.warmupSpeedFs, cfg.mres, cfg.currentMa);
+
+  bool positive = true;
+  uint32_t cycles = 0;
+  const uint32_t started = millis();
+  WarmupNext next = WU_MENU;
+  running = true;
+  abortRequested = false;
+  setKeyStops(true);
+
+  for (;;) {
+    // Endpoints snap to a full step so an MRES change is legal there.
+    const int64_t half = (cfg.warmupAmplitudeU256 / 2 / U256) * U256;
+    int64_t target = positive ? half : -half;
+    if (target > limPosU256) target = (limPosU256 / U256) * U256;
+    if (target < limNegU256) target = ((limNegU256 + U256 - 1) / U256) * U256;
+
+    stopReason = STOP_NONE;
+    bool ok = moveToU256(target, cfg.warmupSpeedFs, GUARD_NORMAL);
+    if (ok) {
+      positive = !positive;
+      if (positive) ++cycles;
+      ok = dwellMs(WARMUP_END_DWELL_MS);
+    }
+    if (ok) continue;
+
+    if (stopReason == STOP_KEY) {
+      next = warmupPause(cycles, started);
+      if (next != WU_CONTINUE) break;
+      Serial.println("  resumed - any key pauses");
+      abortRequested = false;
+      setKeyStops(true);
+      continue;
+    }
+    Serial.printf("\n# WARMUP_STOPPED,reason=%u,pos=%lld\n",
+                  (unsigned)stopReason, (long long)posU256);
+    break;
+  }
+  setKeyStops(false);
   running = false;
   Serial.printf("\n# WARMUP_END,cycles=%lu,pos=%lld\n", (unsigned long)cycles,
                 (long long)posU256);
+  if (next == WU_SEQUENCE) runSequence();
 }
 
 // ----------------------------------------------------------- plan executor
@@ -852,14 +914,18 @@ void runPlan(const PlanRow *rows, uint16_t count, const char *what) {
   Serial.printf("# RUN_START,moves=%u,pos=%lld,what=%s\n", count,
                 (long long)posU256, what);
   bool ok = true;
+  uint16_t stoppedRow = 0;
   for (uint16_t i = 0; i < count && !abortRequested; ++i) {
-    if (!executeRow(rows[i], i)) { ok = false; break; }
+    if (!executeRow(rows[i], i)) { ok = false; stoppedRow = i; break; }
   }
   digitalWrite(LED_PIN, LOW);
   currentRow = -1;
   running = false;
   if (abortRequested)
     Serial.printf("# RUN_ABORTED,pos=%lld\n", (long long)posU256);
+  else if (!ok && stopReason == STOP_KEY)
+    Serial.printf("# RUN_STOPPED,by=key,row=%u,pos=%lld\n", (unsigned)stoppedRow,
+                  (long long)posU256);
   else if (!ok)
     Serial.printf("# RUN_FAILED,pos=%lld,reason=%u\n", (long long)posU256,
                   (unsigned)stopReason);
@@ -870,7 +936,7 @@ void runPlan(const PlanRow *rows, uint16_t count, const char *what) {
 /** Part 2: centre the stage, then run the compiled-in sequence. */
 void runSequence() {
   if (!homed) {
-    Serial.println("\nPart 2 needs the travel measured first. Run 1 or 4.");
+    Serial.println("\nPart 2 needs the travel measured first. Run 1 (Home).");
     return;
   }
   Serial.printf("\nPart 2: %u rows, about %lu min. The stage moves +/-2 mm\n"
@@ -880,12 +946,22 @@ void runSequence() {
     Serial.println("Cancelled.");
     return;
   }
-  if (!goToCentre()) { Serial.println("# ERR,reason=centre_failed"); return; }
-  if (posU256 % U256 != 0) {
-    Serial.println("# ERR,reason=x_start_not_full_step");
+  Serial.println("Running - any key stops the sequence (the block in progress "
+                 "then has to be rerun).");
+  abortRequested = false;
+  setKeyStops(true);
+  if (!goToCentre()) {
+    setKeyStops(false);
+    Serial.println(stopReason == STOP_KEY ? "Stopped." : "# ERR,reason=centre_failed");
+    return;
+  }
+  if (!alignToElectricalFullStep()) {
+    setKeyStops(false);
+    Serial.println(stopReason == STOP_KEY ? "Stopped." : "# ERR,reason=align_failed");
     return;
   }
   runPlan(MRES_PLAN, MRES_PLAN_ROWS, "embedded");
+  setKeyStops(false);
 }
 
 // ----------------------------------------------------------- host protocol
@@ -1003,9 +1079,9 @@ bool handleHostCommand(const String &line) {
 void printMenu() {
   Serial.println(F("\n================================================================"));
   Serial.println(F(" MRES test firmware - microstep-resolution selection"));
-  Serial.printf(  " driver=%u encoder=%u homed=%u   1/%u   %u mA\n",
+  Serial.printf(  " driver=%u encoder=%u homed=%u   1/%u   %u mA   %u FS/s\n",
                 driverReady ? 1u : 0u, encoderReady ? 1u : 0u, homed ? 1u : 0u,
-                cfg.mres, cfg.currentMa);
+                cfg.mres, cfg.currentMa, cfg.warmupSpeedFs);
   if (homed) {
     Serial.printf(" travel %.4f mm   soft limits %.3f .. %.3f mm   pos %.4f mm\n",
                   (double)(swPosU256 - swNegU256) / (double)U256_PER_MM,
@@ -1013,20 +1089,20 @@ void printMenu() {
                   (double)limPosU256 / (double)U256_PER_MM,
                   (double)posU256 / (double)U256_PER_MM);
   } else {
-    Serial.println(F(" travel not measured yet - run 1 or 4 before 2"));
+    Serial.println(F(" travel not measured yet - run 1 first"));
   }
   Serial.println(F("================================================================"));
-  Serial.println(F("  1  Home + warm-up    measure both ends, then shuttle"));
-  Serial.printf (  "  2  MRES sequence     home to centre, run %u rows (~%lu min)\n",
+  Serial.println(F("  1  Home              find both end switches, then wait here"));
+  Serial.println(F("  2  Warm-up           shuttle between the limits; any key pauses"));
+  Serial.printf (  "  3  MRES sequence     centre, then %u rows (~%lu min); any key stops\n",
                 MRES_PLAN_ROWS, (unsigned long)(MRES_PLAN_SECONDS / 60));
-  Serial.println(F("  3  Host plan mode    PLAN ADD / PLAN RUN for run_mres.py"));
-  Serial.println(F("  4  Home only         measure both ends, then stop"));
+  Serial.println(F("  4  Settings          current, speed, MRES, amplitude"));
   Serial.println(F("  5  Go to centre      move to x_start on a full step"));
-  Serial.println(F("  6  Settings          current, speed, MRES, amplitude"));
+  Serial.println(F("  6  Host plan mode    PLAN ADD / PLAN RUN for run_mres.py"));
   Serial.println(F("  7  Driver readback   the # DRIVER line"));
   Serial.println(F("  8  Switch state      read both end switches now"));
   Serial.println(F("  0  Release motor     EN high, outputs off"));
-  Serial.println(F("  ?  This menu"));
+  Serial.println(F("  ?  This menu         (keys act at once - no Enter needed)"));
   Serial.print  (F("\n> "));
 }
 
@@ -1039,61 +1115,92 @@ void settingsMenu() {
                   (double)cfg.warmupAmplitudeU256 / (double)U256_PER_MM,
                   cfg.iholdMultiplier, cfg.tpowerdown, cfg.iholddelay,
                   cfg.intpol ? 1u : 0u);
-    const String s = readLine("  c current  v speed  m MRES  a amplitude  "
-                              "Enter to go back > ");
-    if (s.length() == 0) return;
-    switch (s[0]) {
+    const char k = readKey("  c current  v speed  m MRES  a amplitude  "
+                           "b back > ");
+    switch (k) {
       case 'c': {
-        const long v = readLine("  run current mA (50-1200): ").toInt();
+        const long v = readLine("  run current mA (50-1200), Enter: ").toInt();
         if (v >= 50 && v <= 1200) applyCurrent((uint16_t)v);
+        else Serial.println("  unchanged");
         break;
       }
       case 'v': {
-        const long v = readLine("  speed full-step/s (1-800): ").toInt();
+        const long v = readLine("  speed full-step/s (1-800), Enter: ").toInt();
         if (v >= 1 && v <= 800 && (uint32_t)v * cfg.mres <= MAX_PULSE_RATE_HZ)
           cfg.warmupSpeedFs = (uint16_t)v;
-        else Serial.println("  rejected");
+        else
+          Serial.printf("  rejected: needs 1-800 and at most %lu Hz at 1/%u\n",
+                        (unsigned long)MAX_PULSE_RATE_HZ, cfg.mres);
         break;
       }
       case 'm': {
-        const long v = readLine("  MRES (1,2,4,...,256): ").toInt();
-        if (v >= 1 && v <= 256 && (v & (v - 1)) == 0)
+        const long v = readLine("  MRES (1,2,4,...,256), Enter: ").toInt();
+        if (v < 1 || v > 256 || (v & (v - 1))) {
+          Serial.println("  rejected: not a power of two");
+        } else if ((uint32_t)cfg.warmupSpeedFs * v > MAX_PULSE_RATE_HZ) {
+          Serial.printf("  rejected: %u FS/s at 1/%ld would exceed %lu Hz - "
+                        "lower the speed first\n", cfg.warmupSpeedFs, v,
+                        (unsigned long)MAX_PULSE_RATE_HZ);
+        } else if (posU256 % U256 != 0) {
+          // Changing MRES off a full step shifts the microstep reference.
+          Serial.println("  refused: not on a full step - continue to an "
+                         "endpoint or go to centre (5) first");
+        } else {
           applyMres((uint16_t)v, false);
-        else Serial.println("  rejected");
+        }
         break;
       }
       case 'a': {
         if (!homed) { Serial.println("  home first"); break; }
-        const double mm = readLine("  peak-to-peak mm (0 = full travel): ").toDouble();
+        const double mm = readLine("  peak-to-peak mm (0 = full travel), Enter: ").toDouble();
         const int64_t full = limPosU256 - limNegU256;
         const int64_t want = (int64_t)llround(mm * (double)U256_PER_MM);
         cfg.warmupAmplitudeU256 = (mm <= 0 || want > full) ? full : want;
         break;
       }
-      default:
+      case 'b': case 27: case '\n': case 'q':
         return;
+      default:
+        break;
     }
   }
 }
 
 void dispatchMenu(char key) {
+  Serial.println(key);
   switch (key) {
     case '1':
-      if (homeBothEnds()) runWarmup();
-      else Serial.println("Homing failed - warm-up not started.");
+      abortRequested = false;
+      setKeyStops(true);
+      Serial.println("Homing - any key stops it.");
+      if (homeBothEnds()) {
+        setKeyStops(false);
+        Serial.println("Homed. Choose 2 to warm up, 3 for the MRES sequence, "
+                       "4 to change settings.");
+      } else {
+        const bool byKey = stopReason == STOP_KEY;
+        setKeyStops(false);
+        Serial.println(byKey ? "Homing stopped - travel not measured."
+                             : "Homing failed - travel not measured.");
+      }
       break;
-    case '2': runSequence(); break;
-    case '3':
+    case '2': runWarmup(); break;
+    case '3': runSequence(); break;
+    case '4': settingsMenu(); break;
+    case '5':
+      abortRequested = false;
+      setKeyStops(true);
+      if (goToCentre())
+        Serial.printf("At centre, pos=%lld\n", (long long)posU256);
+      else if (stopReason == STOP_KEY)
+        Serial.println("Stopped.");
+      setKeyStops(false);
+      break;
+    case '6':
       Serial.println(F("\nHost plan mode: PING DRIVER HOLD INTPOL ZERO STATUS\n"
                        "PLAN CLEAR / PLAN ADD ... / PLAN RUN, ABORT.\n"
                        "run_mres.py can take it from here. ? for the menu."));
       return;                       // no menu reprint, the host is talking
-    case '4': if (homeBothEnds()) Serial.println("Homed."); break;
-    case '5':
-      if (goToCentre())
-        Serial.printf("At centre, pos=%lld\n", (long long)posU256);
-      break;
-    case '6': settingsMenu(); break;
     case '7': reportDriver(); break;
     case '8':
       Serial.printf("# SWITCHES,neg=%u,pos=%u\n", switchNeg() ? 1u : 0u,

@@ -138,7 +138,14 @@ def choose_port() -> str:
 
 def open_board(port: str):
     import serial
-    board = serial.Serial(port, BAUD, timeout=0.2, write_timeout=2)
+    # On the ESP32-S3's built-in USB serial, DTR and RTS drive reset and the
+    # boot strap: opening with them asserted (pyserial's default) restarts the
+    # chip into the ROM bootloader, where it waits silently for a flasher.
+    board = serial.Serial()
+    board.port, board.baudrate = port, BAUD
+    board.timeout, board.write_timeout = 0.2, 2
+    board.dtr = board.rts = False
+    board.open()
     time.sleep(1.5)
     board.reset_input_buffer()
     return board
