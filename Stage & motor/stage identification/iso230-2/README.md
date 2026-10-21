@@ -59,8 +59,13 @@ every `# PLAN` line, so a log always says which config produced it.
   6  Home only         home and place the targets, then wait
   7  Driver readback   registers and status
   8  Switch state      read both end switches now
+  9  Trajectory test   speed/accel/dwell profiles + home closure checks
   0  Release motor     EN high, outputs off
 ```
+
+Option **9** is the pre-ISO open-loop diagnostic. It does not change or run the
+ISO sequence. See [`OPEN_LOOP_TRAJECTORY_DIAGNOSTIC.md`](OPEN_LOOP_TRAJECTORY_DIAGNOSTIC.md)
+for its motion profiles, operator steps, log fields, and pass/fail checklist.
 
 **1 – Home + warm-up** runs INIT → HOME → WARMUP:
 
@@ -144,6 +149,10 @@ commanded position:
 # EVENT,<t_ms>,<state>,<event>,<run>,<dir>,<i>,<x_u256>
 # TARGET,<i>,<x_u256>,<x_mm>          # PLAN,...   # HOMED,...   # SWITCH,...
 ```
+
+This rig has no motor encoder. `encoder_present: false` makes `# READY` report
+`encoder=0`; the retained `enc`/`enc_mean` compatibility fields are therefore
+zero and must not be interpreted as position feedback.
 
 `iso_terminal.py` writes all of it, with host timestamps, to
 `data/terminal_<stamp>.log`.

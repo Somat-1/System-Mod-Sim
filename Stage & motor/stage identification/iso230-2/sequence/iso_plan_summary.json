@@ -1,11 +1,11 @@
 {
-  "config_sha256": "657ba8507e2a177402ceb90aebb42f6f152b7a60b71763d0ff119849906f2dd2",
-  "rom_mm": 122.6969,
+  "config_sha256": "96d325dacb94777cca679fb64387f7f994b2e983467cd0b6170d96677fe38308",
+  "rom_mm": 122.695,
   "u256_per_mm": 25600.0,
   "microstep_um": 0.625,
   "soft_limits_mm": [
     2.0,
-    120.6969
+    120.695
   ],
   "span_mm": [
     5.0,

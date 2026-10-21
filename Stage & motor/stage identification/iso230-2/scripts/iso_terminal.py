@@ -89,7 +89,7 @@ def main() -> int:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     log_path = LOG_DIR / dt.datetime.now().strftime("terminal_%Y%m%d_%H%M%S.log")
     log = log_path.open("w", encoding="utf-8", buffering=1)
-    print(f"MRES test control terminal - {port}")
+    print(f"ISO 230-2 control terminal - {port}")
     print(f"Logging everything (position samples included) to {log_path.name}")
     print("Keys act at once. ? = menu, Ctrl+C = ABORT, Ctrl+] = close.\n")
 

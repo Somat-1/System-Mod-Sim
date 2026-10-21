@@ -27,7 +27,7 @@
  * and the record window of every stop, so the IDS record can be cut into stops
  * offline. Lines:
  *
- *   # S,<t_ms>,<x_u256>,<enc>,<mscnt>,<state>        50 Hz while moving/dwelling
+ *   # S,<t_ms>,<x_u256>,<enc_or_0>,<mscnt>,<state>   50 Hz while moving/dwelling
  *   # EVENT,<t_ms>,<state>,<event>,<run>,<dir>,<i>,<x_u256>
  *   # STOP,<state>,<run>,<dir>,<i>,<x_u256>,<x_mm>,<t_arrive>,<t_rec0>,<t_rec1>,<enc_mean>
  *   # TARGET,<i>,<x_u256>,<x_mm>
@@ -35,7 +35,7 @@
  * WIRING - the Stepper Isolated bench (see ../../../../CONNECTIONS.md):
  *   STEP GPIO7   DIR GPIO8   EN GPIO9 (ENN, active low)
  *   TMC UART TX GPIO17 (via 1k) / RX GPIO18
- *   ENCODER  A GPIO4   B GPIO5   Z GPIO6
+ *   OPTIONAL ENCODER  A GPIO4   B GPIO5   Z GPIO6 (not fitted on this rig)
  *   END SWITCH neg GPIO10   pos GPIO11   (NO to GND, internal pull-up)
  */
 
@@ -86,10 +86,11 @@ pcnt_unit_handle_t pcnt = nullptr;
 // ---- state ----------------------------------------------------------------
 enum State : uint8_t {
   ST_IDLE, ST_INIT, ST_HOME, ST_WARMUP, ST_WARMUP_REF, ST_DATUM, ST_ISO,
-  ST_ISO_REF, ST_END_REF, ST_PARK, ST_ABORT
+  ST_ISO_REF, ST_END_REF, ST_PARK, ST_DIAG, ST_ABORT
 };
 const char *STATE_NAME[] = {"IDLE", "INIT", "HOME", "WARMUP", "WARMUP_REF",
-                            "DATUM", "ISO", "ISO_REF", "END_REF", "PARK", "ABORT"};
+                            "DATUM", "ISO", "ISO_REF", "END_REF", "PARK",
+                            "DIAG", "ABORT"};
 
 enum StopReason : uint8_t {
   STOP_NONE = 0, STOP_ABORT, STOP_SWITCH, STOP_LIMIT, STOP_KEY, STOP_ERROR,
@@ -601,7 +602,7 @@ bool moveX(int64_t x) {
 /**
  * Arrive, settle t_settle (t_hold + margin), then record t_record. The record
  * window is reported with board times so the interferometer stream can be cut
- * offline; the encoder is averaged over the same window.
+ * offline; the optional encoder field remains zero when no encoder is fitted.
  */
 bool dwellRecord(int run, int dir, int i) {
   const uint32_t tArrive = millis();
@@ -949,6 +950,186 @@ void runIso() {
   setState(ST_IDLE);
 }
 
+// ---------------------------------------------------- open-loop diagnostic
+
+uint32_t diagnosticAccelPulses(double mmPerS2) {
+  return (uint32_t)lround(mmPerS2 * FS_PER_MM * MRES);
+}
+
+/**
+ * A diagnostic move with explicit speed and acceleration. The start/end lines
+ * prove how many STEP pulses were requested and emitted and how long the
+ * blocking move actually took. They do not claim that the rotor followed.
+ */
+bool diagnosticMove(uint8_t profile, int cycle, const char *leg, int64_t target) {
+  const double v = CFG_DIAG_V_MM_S[profile];
+  const double a = CFG_DIAG_A_MM_S2[profile];
+  const uint16_t speedFs = fsOf(v);
+  accelPulsesS2 = diagnosticAccelPulses(a);
+  const int64_t targetMotor = motorOf(target);
+  const int64_t beforeMotor = motorU256;
+  const int64_t delta = targetMotor - beforeMotor;
+  const uint32_t requested = (uint32_t)((delta >= 0 ? delta : -delta) / STEP_U256);
+  const uint32_t t0 = millis();
+  Serial.printf("# DIAG_MOVE_START,profile=%s,cycle=%d,leg=%s,t_ms=%lu,"
+                "x_from_mm=%.6f,x_to_mm=%.6f,v_mm_s=%.3f,a_mm_s2=%.3f,pulses=%lu\n",
+                CFG_DIAG_PROFILE_NAME[profile], cycle, leg, (unsigned long)t0,
+                mmOf(xNow()), mmOf(target), v, a, (unsigned long)requested);
+  const bool ok = moveMotorTo(targetMotor, speedFs, GUARD_NORMAL);
+  const uint32_t t1 = millis();
+  const int64_t emittedDelta = motorU256 - beforeMotor;
+  const uint32_t emitted = (uint32_t)((emittedDelta >= 0 ? emittedDelta : -emittedDelta) /
+                                      STEP_U256);
+  Serial.printf("# DIAG_MOVE_END,profile=%s,cycle=%d,leg=%s,t_ms=%lu,elapsed_ms=%lu,"
+                "requested_pulses=%lu,emitted_pulses=%lu,complete=%u,x_mm=%.6f,reason=%s\n",
+                CFG_DIAG_PROFILE_NAME[profile], cycle, leg, (unsigned long)t1,
+                (unsigned long)(t1 - t0), (unsigned long)requested,
+                (unsigned long)emitted, ok && emitted == requested ? 1u : 0u,
+                mmOf(xNow()), STOP_NAME[stopReason]);
+  if (!ok) return false;
+  if (emitted != requested) {
+    Serial.println("# ERR,reason=diagnostic_pulse_count_mismatch");
+    stopReason = STOP_ERROR;
+    return false;
+  }
+  return driverHealthy();
+}
+
+/** A long stationary window; the interferometer later shows its settling curve. */
+bool diagnosticHold(uint8_t profile, int cycle, const char *point) {
+  const uint32_t t0 = millis();
+  Serial.printf("# DIAG_HOLD_START,profile=%s,cycle=%d,point=%s,t_ms=%lu,"
+                "x_mm=%.6f,hold_ms=%lu\n", CFG_DIAG_PROFILE_NAME[profile], cycle,
+                point, (unsigned long)t0, mmOf(xNow()),
+                (unsigned long)CFG_DIAG_HOLD_MS);
+  const bool ok = dwellMs(CFG_DIAG_HOLD_MS);
+  Serial.printf("# DIAG_HOLD_END,profile=%s,cycle=%d,point=%s,t_ms=%lu,"
+                "elapsed_ms=%lu,x_mm=%.6f,complete=%u\n",
+                CFG_DIAG_PROFILE_NAME[profile], cycle, point,
+                (unsigned long)millis(), (unsigned long)(millis() - t0),
+                mmOf(xNow()), ok ? 1u : 0u);
+  return ok;
+}
+
+/**
+ * Approach the home switch slowly, report where the open-loop coordinate says
+ * it closed, then re-establish zero and back off. This detects accumulated
+ * position loss, but equal outward/return losses can cancel and still require
+ * the interferometer trace to identify.
+ */
+bool diagnosticHomeClosure(const char *phase, int repeat) {
+  const bool positive = towardsHomeIsPositiveMotor();
+  const int64_t seek = snapU256(fabs(mmOf(xNow())) + 2.0 * CFG_HOME_BACKOFF_MM);
+  const int64_t target = motorU256 + (positive ? seek : -seek);
+  stopReason = STOP_NONE;
+  const uint32_t t0 = millis();
+  Serial.printf("# DIAG_HOME_START,phase=%s,repeat=%d,t_ms=%lu,x_mm=%.6f\n",
+                phase, repeat, (unsigned long)t0, mmOf(xNow()));
+  moveMotorTo(target, fsOf(CFG_HOME_SLOW_MM_S), GUARD_SEEK);
+  if (stopReason != STOP_SWITCH || !switchAhead(positive)) {
+    if (stopReason == STOP_NONE)
+      Serial.println("# ERR,reason=diagnostic_home_switch_not_reached");
+    else
+      Serial.printf("# ERR,reason=diagnostic_home_check_failed,stop=%s\n",
+                    STOP_NAME[stopReason]);
+    if (stopReason == STOP_NONE || stopReason == STOP_SWITCH) stopReason = STOP_ERROR;
+    return false;
+  }
+  const int64_t correction = xNow();
+  Serial.printf("# DIAG_HOME_CHECK,phase=%s,repeat=%d,t_ms=%lu,elapsed_ms=%lu,"
+                "closure_u256=%lld,closure_mm=%.6f\n", phase, repeat,
+                (unsigned long)millis(), (unsigned long)(millis() - t0),
+                (long long)correction, mmOf(correction));
+
+  // The physical home switch is now authoritative for the next profile.
+  homeMotorU256 = motorU256;
+  stopReason = STOP_NONE;
+  if (!backOff(!positive, CFG_HOME_BACKOFF_MM)) return false;
+  if (switchAhead(positive)) {
+    Serial.println("# ERR,reason=diagnostic_home_switch_still_closed");
+    stopReason = STOP_ERROR;
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Reference-transfer diagnostic. It deliberately preserves the observed
+ * 2 mm -> pre-approach -> x_ref -> 2 mm path and changes one motion property
+ * at a time. Ctrl+C aborts; no ISO results are produced by this routine.
+ */
+void runTrajectoryDiagnostic() {
+  if (!homed) { Serial.println("Not homed - run 6 first."); return; }
+  if (!driverHealthy()) { abortAndMaybePark(); return; }
+  abortRequested = false;
+  stopReason = STOP_NONE;
+  setKeys(false, false);                 // Ctrl+C remains an immediate ABORT
+  setState(ST_DIAG);
+  digitalWrite(LED_PIN, HIGH);
+  const uint32_t started = millis();
+  const uint32_t savedAccel = accelPulsesS2;
+  const int64_t low = softMinU256;
+  const int64_t pre = snapU256(mmOf(xRefU256) - CFG_REF_PREAPPROACH_MM);
+  const uint8_t conservative = CFG_DIAG_PROFILE_COUNT - 1;
+
+  Serial.printf("\n# DIAG_BEGIN,t_ms=%lu,profiles=%u,cycles=%u,hold_ms=%lu,"
+                "switch_repeats=%u,low_mm=%.6f,pre_mm=%.6f,xref_mm=%.6f,config=%s\n",
+                (unsigned long)started, CFG_DIAG_PROFILE_COUNT,
+                CFG_DIAG_CYCLES_PER_PROFILE, (unsigned long)CFG_DIAG_HOLD_MS,
+                CFG_DIAG_SWITCH_REPEATS, mmOf(low), mmOf(pre), mmOf(xRefU256), CFG_HASH);
+  Serial.println("# DIAG_NOTE,step_pulses_are_verified_but_physical_motion_requires_IFM_or_switch_evidence");
+  for (uint8_t p = 0; p < CFG_DIAG_PROFILE_COUNT; ++p)
+    Serial.printf("# DIAG_PROFILE,index=%u,name=%s,v_mm_s=%.3f,a_mm_s2=%.3f\n",
+                  p, CFG_DIAG_PROFILE_NAME[p], CFG_DIAG_V_MM_S[p],
+                  CFG_DIAG_A_MM_S2[p]);
+
+  // Establish the home-switch noise floor before applying the test profiles.
+  if (!diagnosticMove(conservative, -1, "setup_to_low", low)) {
+    accelPulsesS2 = savedAccel; abortAndMaybePark(); return;
+  }
+  if (!diagnosticHomeClosure("setup", 0)) {
+    accelPulsesS2 = savedAccel; abortAndMaybePark(); return;
+  }
+  for (uint8_t k = 0; k < CFG_DIAG_SWITCH_REPEATS; ++k) {
+    if (!diagnosticHomeClosure("switch_baseline", k + 1)) {
+      accelPulsesS2 = savedAccel; abortAndMaybePark(); return;
+    }
+  }
+
+  for (uint8_t p = 0; p < CFG_DIAG_PROFILE_COUNT; ++p) {
+    Serial.printf("# DIAG_PROFILE_START,index=%u,name=%s,t_ms=%lu\n", p,
+                  CFG_DIAG_PROFILE_NAME[p], (unsigned long)millis());
+    for (uint8_t cycle = 0; cycle < CFG_DIAG_CYCLES_PER_PROFILE; ++cycle) {
+      if (!diagnosticMove(p, cycle + 1, "low_to_pre", pre) ||
+          !diagnosticMove(p, cycle + 1, "pre_to_xref", xRefU256) ||
+          !diagnosticHold(p, cycle + 1, "xref") ||
+          !diagnosticMove(p, cycle + 1, "xref_to_low", low) ||
+          !diagnosticHold(p, cycle + 1, "low")) {
+        accelPulsesS2 = savedAccel; abortAndMaybePark(); return;
+      }
+    }
+    if (!diagnosticHomeClosure(CFG_DIAG_PROFILE_NAME[p],
+                               CFG_DIAG_CYCLES_PER_PROFILE)) {
+      accelPulsesS2 = savedAccel; abortAndMaybePark(); return;
+    }
+    Serial.printf("# DIAG_PROFILE_END,index=%u,name=%s,t_ms=%lu\n", p,
+                  CFG_DIAG_PROFILE_NAME[p], (unsigned long)millis());
+  }
+
+  // Park using only the final conservative profile.
+  if (!diagnosticMove(conservative, -1, "park_to_pre", pre) ||
+      !diagnosticMove(conservative, -1, "park_to_xref", xRefU256)) {
+    accelPulsesS2 = savedAccel; abortAndMaybePark(); return;
+  }
+  accelPulsesS2 = savedAccel;
+  digitalWrite(LED_PIN, LOW);
+  setKeys(false, false);
+  Serial.printf("# DIAG_DONE,t_ms=%lu,elapsed_ms=%lu,x_mm=%.6f\n",
+                (unsigned long)millis(), (unsigned long)(millis() - started),
+                mmOf(xNow()));
+  setState(ST_IDLE);
+}
+
 // -------------------------------------------------------------------- menu
 
 void printConfig() {
@@ -1032,6 +1213,7 @@ void printMenu() {
   Serial.println(F("  6  Home only         home and place the targets, then wait"));
   Serial.println(F("  7  Driver readback   registers and status"));
   Serial.println(F("  8  Switch state      read both end switches now"));
+  Serial.println(F("  9  Trajectory test   speed/accel/dwell profiles + home closure checks"));
   Serial.println(F("  0  Release motor     EN high, outputs off"));
   Serial.println(F("  ?  This menu         (keys act at once - Ctrl+C sends ABORT)"));
   Serial.print  (F("\n> "));
@@ -1086,6 +1268,7 @@ void dispatchMenu(char key) {
       Serial.printf("# SWITCHES,neg=%u,pos=%u,home=%s\n", switchNeg() ? 1u : 0u,
                     switchPos() ? 1u : 0u, CFG_HOME_MIN ? "neg" : "pos");
       break;
+    case '9': runTrajectoryDiagnostic(); break;
     case '0':
       digitalWrite(EN_PIN, HIGH);
       homed = false;
@@ -1143,7 +1326,7 @@ void setup() {
   Serial.printf("# PINS,step=%u,dir=%u,en=%u,sw_neg=%u,sw_pos=%u,home=%s\n",
                 STEP_PIN, DIR_PIN, EN_PIN, SW_NEG_PIN, SW_POS_PIN,
                 CFG_HOME_MIN ? "neg" : "pos");
-  encoderReady = setupEncoder();
+  encoderReady = CFG_ENCODER_PRESENT ? setupEncoder() : false;
   // INIT: rates first - a velocity the step generator cannot make is a config
   // error, and the motor is never enabled with one.
   bool ratesOk = true;

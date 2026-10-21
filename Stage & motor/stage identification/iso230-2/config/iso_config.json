@@ -10,6 +10,7 @@
   "tpowerdown": 0,
   "iholddelay": 0,
   "intpol": false,
+  "encoder_present": false,
 
   "v_mm_s": 5.0,
   "a_mm_s2": 40.0,
@@ -43,5 +44,15 @@
 
   "auto_run_on_boot": true,
   "auto_countdown_s": 10,
-  "auto_centre_wait_s": 0
+  "auto_centre_wait_s": 0,
+
+  "diagnostic_switch_repeats": 5,
+  "diagnostic_cycles_per_profile": 2,
+  "diagnostic_hold_s": 10.0,
+  "diagnostic_profiles": [
+    {"name": "current",      "v_mm_s": 5.0, "a_mm_s2": 40.0},
+    {"name": "low_accel",    "v_mm_s": 5.0, "a_mm_s2": 10.0},
+    {"name": "low_speed",    "v_mm_s": 2.0, "a_mm_s2": 40.0},
+    {"name": "conservative", "v_mm_s": 1.0, "a_mm_s2": 5.0}
+  ]
 }
