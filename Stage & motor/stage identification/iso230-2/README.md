@@ -87,6 +87,10 @@ for its motion profiles, operator steps, log fields, and pass/fail checklist.
 not stop the measurement. After an abort, a switch, soft-limit or driver fault
 disables the motor. A plain Ctrl+C asks whether to park.
 
+With the current generated configuration, boot is fully automatic: a 10-second
+countdown is followed by homing, a 15-second hold at `x_ref` for acquisition to
+be established, and then the ISO sequence starts without a menu key.
+
 ## How the targets are placed
 
 They're placed **on the board, after homing, from the travel it measured**.
@@ -128,9 +132,9 @@ the largest gap in phase coverage is 0.12 of a lead period.
 
 | | |
 |---|---|
-| dwell | 1.0 s: settle 0.5 s (t_hold 0 + 0.5 margin) + record 0.5 s |
-| one run | 2.4 min (27 targets × 2 directions) |
-| ISO sequence | 12.2 min for 5 runs, 270 measured stops |
+| dwell | 2.5 s: settle 2.0 s + record 0.5 s |
+| one run | ≈ 5.0 min for the measured 122.695 mm travel (24 targets × 2 directions) |
+| ISO sequence | ≈ 25.8 min for 5 runs, 240 measured stops |
 
 The dwell is shorter than the procedure's "≈ 2 s" because the config holds at
 run current with TPOWERDOWN 0, as the identification campaign does, so t_hold

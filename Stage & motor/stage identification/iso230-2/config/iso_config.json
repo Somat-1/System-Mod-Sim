@@ -1,5 +1,5 @@
 {
-  "_comment": "auto_centre_wait_s 0 = home, centre, then wait at the menu for 2 (ISO sequence). Single source for the ISO 230-2 session. Edit here, then run scripts/iso_design.py: it checks the values, previews the targets and writes firmware/iso230_2/iso_config.h. Reflash after any change.",
+  "_comment": "ISO profile updated after IsoTest.csv: 2 mm/s avoids the observed 2.5 mm/s IFM/EL5101 recording ceiling; 2 s settling precedes each 0.5 s record window. On boot the firmware counts down, homes, waits 15 s at the centre for acquisition, then starts ISO automatically. Edit here, regenerate iso_config.h, and reflash.",
 
   "lead_mm": 2.0,
   "steps_per_rev": 200,
@@ -12,7 +12,7 @@
   "intpol": false,
   "encoder_present": false,
 
-  "v_mm_s": 5.0,
+  "v_mm_s": 2.0,
   "a_mm_s2": 40.0,
 
   "home_side": "min",
@@ -31,7 +31,7 @@
   "x_ref_mm": null,
   "ref_preapproach_mm": 3.0,
 
-  "settle_margin_s": 0.5,
+  "settle_margin_s": 2.0,
   "t_record_s": 0.5,
   "n_runs": 5,
 
@@ -44,7 +44,7 @@
 
   "auto_run_on_boot": true,
   "auto_countdown_s": 10,
-  "auto_centre_wait_s": 0,
+  "auto_centre_wait_s": 15,
 
   "diagnostic_switch_repeats": 5,
   "diagnostic_cycles_per_profile": 2,
