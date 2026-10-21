@@ -1,0 +1,12 @@
+# host_start_utc=2026-10-13T15:05:04.533334+00:00
+# profile=high
+# PONG,fw=stage_chirp_sweep,ready=1
+# CHECK,ready=1,mres=256,current_ma=400,r_sense=0.100,a0_microsteps=256,f_corner=100,amp_250=41.0,amp_1000=2.56,gap=150-250,enc=0
+# COUNTDOWN,7
+# COUNTDOWN,6
+# COUNTDOWN,5
+# COUNTDOWN,4
+# COUNTDOWN,3
+# COUNTDOWN,2
+# COUNTDOWN,1
+# RUN_START,profile=HIGH,a0_microsteps=256,f_corner=100,mres=256,current_ma=400,us_per_count=2.56

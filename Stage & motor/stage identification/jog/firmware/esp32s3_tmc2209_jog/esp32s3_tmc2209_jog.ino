@@ -85,7 +85,7 @@ constexpr float R_SENSE_OHM = 0.10F;   // R100 sense resistors on this module.
 constexpr uint32_t DRIVER_BAUD = 115200;
 
 constexpr uint16_t FULL_STEPS_PER_MM = 100;
-constexpr uint16_t DEFAULT_CURRENT_MA = 360;
+constexpr uint16_t DEFAULT_CURRENT_MA = 400;
 constexpr uint16_t DEFAULT_MRES = 16;
 constexpr uint32_t DEFAULT_RATE_MILLIHZ = 70000;   // 70 full steps/s = 0.7 mm/s
 constexpr int32_t DEFAULT_LIMIT_FULLSTEPS = 0;     // off; set with LIMIT
@@ -124,6 +124,7 @@ bool driverReady = false;
 uint32_t periodUs = 0;
 int64_t stepU256 = U256_PER_FULLSTEP / DEFAULT_MRES;
 uint64_t nextPulseUs = 0;
+float velFs = 0.0F;            // present rate of the motion profile, full steps/s
 bool dirPositive = true;
 uint32_t lastTelemetryMs = 0;
 
@@ -353,6 +354,7 @@ bool withinLimit(int64_t u256) {
 
 void stopMotion(const char *why) {
   mode = IDLE;
+  velFs = 0.0F;
   Serial.printf("# STOP,pos=%ld,pos_u256=%lld,reason=%s\n",
                 (long)(posU256 / U256_PER_FULLSTEP), (long long)posU256, why);
 }
@@ -391,14 +393,25 @@ void serviceCalibration() {
 // One pass of non-blocking step generation toward `target`: at most one
 // pulse. True once the stage is there. Stops on a soft limit, so callers must
 // check `mode` if it returns false.
+// Motion profile. Moves used to start, stop and reverse at full speed, with
+// only DIR_SETUP_US between a direction change and the next edge. A rotor hit
+// with full rate from rest - or while still moving the other way after a
+// reversal - can fail to lock and slip an electrical cycle, sometimes
+// backwards, which showed up as the stage occasionally moving opposite to
+// the command. Now every move accelerates and decelerates at ACCEL_FS_S2, and
+// every reversal waits REVERSAL_PAUSE_US at rest first.
+constexpr float ACCEL_FS_S2 = 4000.0F;            // as stage_identification
+constexpr uint32_t REVERSAL_PAUSE_US = 20000;     // 20 ms settle before reversing
+
 bool stepToward(int64_t target) {
-  if (posU256 == target) return true;
+  if (posU256 == target) { velFs = 0.0F; return true; }
   const bool positive = target > posU256;
   if (positive != dirPositive) {
-    // Give the driver its direction setup time before the next edge.
+    // Come to rest, settle, then set DIR well before the next edge.
     digitalWrite(DIR_PIN, positive ? HIGH : LOW);
     dirPositive = positive;
-    nextPulseUs = esp_timer_get_time() + DIR_SETUP_US;
+    velFs = 0.0F;
+    nextPulseUs = esp_timer_get_time() + REVERSAL_PAUSE_US;
     return false;
   }
 
@@ -415,10 +428,22 @@ bool stepToward(int64_t target) {
   digitalWrite(STEP_PIN, LOW);
   posU256 = next;
 
-  nextPulseUs += periodUs;
+  // Next rate: one microstep's worth of acceleration, but never more than the
+  // cruise rate, nor more than still allows stopping exactly at the target.
+  const float stepFs = 1.0F / mres;
+  const float remainingFs = (float)llabs(target - posU256) / U256_PER_FULLSTEP;
+  const float cruiseFs = rateMilliHz / 1000.0F;
+  const float vMin = sqrtf(2.0F * ACCEL_FS_S2 * stepFs);
+  float v = sqrtf(velFs * velFs + 2.0F * ACCEL_FS_S2 * stepFs);
+  v = fminf(v, cruiseFs);
+  v = fminf(v, fmaxf(sqrtf(2.0F * ACCEL_FS_S2 * remainingFs), vMin));
+  v = fmaxf(fminf(v, cruiseFs), fminf(vMin, cruiseFs));
+  velFs = v;
+  const uint32_t period = (uint32_t)(1e6F / (v * mres));
+  nextPulseUs += period;
   // If the loop fell behind, resynchronise instead of trying to catch up with
   // a burst of back-to-back pulses the motor cannot follow.
-  if (nextPulseUs < now) nextPulseUs = now + periodUs;
+  if (nextPulseUs < now) nextPulseUs = now + period;
   return false;
 }
 
@@ -443,7 +468,7 @@ void serviceSequence() {
         seqEvent("SEQ_BLOCK", extra);
       }
       seqPhase = SEQ_JUMP_OUT;
-      nextPulseUs = esp_timer_get_time();
+      nextPulseUs = esp_timer_get_time(); velFs = 0.0F;
       return;
     case SEQ_JUMP_OUT:
       if (!stepToward(seqBaseU256 + seqJumpU256)) return;
@@ -454,7 +479,7 @@ void serviceSequence() {
     case SEQ_HOLD_OUT:
       if (now < seqHoldUntilMs) return;
       seqPhase = SEQ_JUMP_BACK;
-      nextPulseUs = esp_timer_get_time();
+      nextPulseUs = esp_timer_get_time(); velFs = 0.0F;
       return;
     case SEQ_JUMP_BACK:
       if (!stepToward(seqBaseU256)) return;
@@ -736,7 +761,7 @@ void handleCommand(String line) {
     if (!withinLimit(t)) { Serial.println("# ERR,reason=outside_limit"); return; }
     targetU256 = t;
     mode = MOVING;
-    nextPulseUs = esp_timer_get_time();
+    nextPulseUs = esp_timer_get_time(); velFs = 0.0F;
     Serial.printf("# MOVETO,target=%ld\n", (long)(t / U256_PER_FULLSTEP));
     return;
   }
@@ -751,7 +776,7 @@ void handleCommand(String line) {
     if (!withinLimit(t)) { Serial.println("# ERR,reason=outside_limit"); return; }
     targetU256 = t;
     mode = MOVING;
-    nextPulseUs = esp_timer_get_time();
+    nextPulseUs = esp_timer_get_time(); velFs = 0.0F;
     Serial.printf("# STEP,n=%ld,mres=%u,target_u256=%lld\n", n, mres,
                   (long long)t);
     return;
@@ -804,7 +829,7 @@ void handleCommand(String line) {
     const int64_t dA = jogAU256 - posU256;
     towardB = (dB < 0 ? -dB : dB) >= (dA < 0 ? -dA : dA);
     mode = JOGGING;
-    nextPulseUs = esp_timer_get_time();
+    nextPulseUs = esp_timer_get_time(); velFs = 0.0F;
     Serial.printf("# START,a=%ld,b=%ld,first=%c\n",
                   (long)(jogAU256 / U256_PER_FULLSTEP),
                   (long)(jogBU256 / U256_PER_FULLSTEP), towardB ? 'B' : 'A');

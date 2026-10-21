@@ -1,0 +1,147 @@
+1792505911.561 ESP-ROM:esp32s3-20210327
+1792505911.561 Build:Mar 27 2021
+1792505911.561 rst:0x15 (USB_UART_CHIP_RESET),boot:0x29 (SPI_FAST_FLASH_BOOT)
+1792505911.561 Saved PC:0x40378c26
+1792505911.561 SPIWP:0xee
+1792505911.561 mode:DIO, clock div:1
+1792505911.561 load:0x3fce2820,len:0x10cc
+1792505911.561 load:0x403c8700,len:0xc2c
+1792505911.561 load:0x403cb700,len:0x30c0
+1792505911.561 entry 0x403c88b8
+1792505911.824 # BOOT,fw=iso230_2,config=10e3652ae6f5
+1792505911.824 # PINS,step=7,dir=8,en=9,sw_neg=10,sw_pos=11,home=neg
+1792505911.926 # DRIVER_ID,ioin=0x21000241,version=0x21,expected=0x21
+1792505912.031 # DRIVER,gconf=0x000001C4,chopconf=0x04028055,drv_status=0x80090000,spreadcycle=1,intpol=0,stealth=0,mres=16,irun=9,ihold=9,tpowerdown=0,iholddelay=0,current_ma=360
+1792505912.031 # READY,driver=1,encoder=1
+1792505912.031   lead 2.000 mm  200 steps/rev  1/16  (0.6250 um per microstep)
+1792505912.031   run current 360 mA  ihold x1.00  tpowerdown 0  iholddelay 0  intpol 0
+1792505912.031   v 5.00 mm/s (500 FS/s)  a 40.0 mm/s^2  home seek 2.00 / slow 0.15 mm/s
+1792505912.031   margin 2.0  overrun 3.0  p_nom 5.0 mm  seed 2302  x_ref centre
+1792505912.031   settle 500 ms + record 500 ms   runs 5   warm-up max 30 min   end hold   config 10e3652ae6f5
+1792505912.031 
+1792505912.031 ================================================================
+1792505912.031  ISO 230-2 baseline - positioning accuracy and repeatability
+1792505912.031  driver=1 homed=0   1/16   360 mA   v 5.00 mm/s   config 10e3652ae6f5
+1792505912.031  not homed - run 1 first
+1792505912.031 ================================================================
+1792505912.031   1  Home + warm-up    home, place the targets, warm up (key = stop after cycle)
+1792505912.031   2  ISO sequence      datum, n runs, end reference, park
+1792505912.031   3  Settings          current, velocity, runs, warm-up max
+1792505912.031   4  Show plan         targets, limits, x_ref
+1792505912.031   5  Go to x_ref       fixed-side approach
+1792505912.031   6  Home only         home and place the targets, then wait
+1792505912.031   7  Driver readback   registers and status
+1792505912.031   8  Switch state      read both end switches now
+1792505912.031   0  Release motor     EN high, outputs off
+1792505912.031   ?  This menu         (keys act at once - Ctrl+C sends ABORT)
+1792505912.031 
+1792505912.031 > ?
+1792505912.031 
+1792505912.031 ================================================================
+1792505912.031  ISO 230-2 baseline - positioning accuracy and repeatability
+1792505912.031  driver=1 homed=0   1/16   360 mA   v 5.00 mm/s   config 10e3652ae6f5
+1792505912.031  not homed - run 1 first
+1792505912.031 ================================================================
+1792505912.031   1  Home + warm-up    home, place the targets, warm up (key = stop after cycle)
+1792505912.031   2  ISO sequence      datum, n runs, end reference, park
+1792505912.031   3  Settings          current, velocity, runs, warm-up max
+1792505912.031   4  Show plan         targets, limits, x_ref
+1792505912.031   5  Go to x_ref       fixed-side approach
+1792505912.031   6  Home only         home and place the targets, then wait
+1792505912.032   7  Driver readback   registers and status
+1792505912.032   8  Switch state      read both end switches now
+1792505912.032   0  Release motor     EN high, outputs off
+1792505912.032   ?  This menu         (keys act at once - Ctrl+C sends ABORT)
+1792505912.032 
+1792505912.032 > 
+1792505915.022 1
+1792505915.022 Homing - any key stops it.
+1792505915.022 # EVENT,3365,HOME,state_change,-1,0,-1,0
+1792505915.022 # EVENT,3366,HOME,seek_neg,-1,0,-1,0
+1792505915.022 # S,3366,-16,0,424,HOME
+1792505915.022 # S,3386,-272,0,680,HOME
+1792505915.022 # S,3406,-784,0,168,HOME
+1792505915.074 # S,3426,-1536,0,920,HOME
+1792505915.075 # S,3446,-2352,0,712,HOME
+1792505915.126 # S,3466,-3168,0,504,HOME
+1792505915.126 # S,3486,-3984,0,296,HOME
+1792505915.126 # S,3506,-4800,0,88,HOME
+1792505915.176 # S,3526,-5616,0,904,HOME
+1792505915.177 # S,3546,-6432,0,696,HOME
+1792505915.228 # S,3566,-7248,0,488,HOME
+1792505915.228 # S,3586,-8064,0,280,HOME
+1792505915.228 # S,3606,-8880,0,72,HOME
+1792505915.280 # S,3626,-9696,0,888,HOME
+1792505915.280 # S,3646,-10512,0,680,HOME
+1792505915.332 # S,3666,-11328,0,472,HOME
+1792505915.333 # S,3686,-12144,0,264,HOME
+1792505915.333 # S,3706,-12960,0,56,HOME
+1792505915.383 # S,3726,-13776,0,872,HOME
+1792505915.383 # S,3746,-14592,0,664,HOME
+1792505915.383 # S,3766,-15408,0,456,HOME
+1792505915.436 # S,3786,-16224,0,248,HOME
+1792505915.438 # S,3806,-17040,0,40,HOME
+1792505915.489 # S,3826,-17856,0,856,HOME
+1792505915.489 # S,3846,-18672,0,648,HOME
+1792505915.489 # S,3866,-19488,0,440,HOME
+1792505915.542 # S,3886,-20304,0,232,HOME
+1792505915.542 # S,3906,-21120,0,24,HOME
+1792505915.542 # S,3926,-21936,0,840,HOME
+1792505915.594 # S,3946,-22752,0,632,HOME
+1792505915.594 # S,3966,-23568,0,424,HOME
+1792505915.645 # S,3986,-24384,0,216,HOME
+1792505915.645 # S,4006,-25200,0,8,HOME
+1792505915.645 # S,4026,-26016,0,824,HOME
+1792505915.697 # S,4046,-26832,0,616,HOME
+1792505915.697 # S,4066,-27648,0,408,HOME
+1792505915.747 # S,4086,-28464,0,200,HOME
+1792505915.747 # S,4106,-29280,0,1016,HOME
+1792505915.747 # S,4126,-30096,0,808,HOME
+1792505915.799 # S,4146,-30912,0,600,HOME
+1792505915.799 # S,4166,-31728,0,392,HOME
+1792505915.850 # S,4186,-32544,0,184,HOME
+1792505915.850 # S,4206,-33360,0,1000,HOME
+1792505915.850 # S,4226,-34176,0,792,HOME
+1792505915.902 # S,4246,-34992,0,584,HOME
+1792505915.902 # S,4266,-35808,0,376,HOME
+1792505915.902 # S,4286,-36624,0,168,HOME
+1792505915.953 # S,4306,-37440,0,984,HOME
+1792505915.953 # S,4326,-38256,0,776,HOME
+1792505916.003 # S,4346,-39072,0,568,HOME
+1792505916.003 # S,4366,-39888,0,360,HOME
+1792505916.003 # S,4386,-40704,0,152,HOME
+1792505916.055 # S,4406,-41520,0,968,HOME
+1792505916.055 # S,4426,-42336,0,760,HOME
+1792505916.106 # S,4446,-43152,0,552,HOME
+1792505916.106 # S,4466,-43968,0,344,HOME
+1792505916.106 # S,4486,-44784,0,136,HOME
+1792505916.158 # S,4506,-45600,0,952,HOME
+1792505916.158 # S,4526,-46416,0,744,HOME
+1792505916.209 # S,4546,-47232,0,536,HOME
+1792505916.209 # S,4566,-48048,0,328,HOME
+1792505916.209 # S,4586,-48864,0,120,HOME
+1792505916.261 # S,4606,-49680,0,936,HOME
+1792505916.261 # S,4626,-50496,0,728,HOME
+1792505916.314 # S,4646,-51312,0,520,HOME
+1792505916.314 # S,4666,-52128,0,312,HOME
+1792505916.314 # S,4686,-52944,0,104,HOME
+1792505916.369 # S,4706,-53760,0,920,HOME
+1792505916.369 Homing stopped (key) - not homed.
+1792505916.369 
+1792505916.369 ================================================================
+1792505916.369  ISO 230-2 baseline - positioning accuracy and repeatability
+1792505916.369  driver=1 homed=0   1/16   360 mA   v 5.00 mm/s   config 10e3652ae6f5
+1792505916.369  not homed - run 1 first
+1792505916.369 ================================================================
+1792505916.369   1  Home + warm-up    home, place the targets, warm up (key = stop after cycle)
+1792505916.369   2  ISO sequence      datum, n runs, end reference, park
+1792505916.369   3  Settings          current, velocity, runs, warm-up max
+1792505916.369   4  Show plan         targets, limits, x_ref
+1792505916.369   5  Go to x_ref       fixed-side approach
+1792505916.369   6  Home only         home and place the targets, then wait
+1792505916.369   7  Driver readback   registers and status
+1792505916.369   8  Switch state      read both end switches now
+1792505916.369   0  Release motor     EN high, outputs off
+1792505916.369   ?  This menu         (keys act at once - Ctrl+C sends ABORT)
+1792505916.369 
+1792505916.369 > 

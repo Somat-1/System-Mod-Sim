@@ -8,6 +8,7 @@ forth between them until you stop it.
     python jog_stepper.py                 # find the port, then ask
     python jog_stepper.py --port COM11    # skip the search
     python jog_stepper.py --simulate      # no hardware; try the interface out
+    python jog_stepper.py --current 500   # start with 500 mA RMS coil current
     python jog_stepper.py --a -200 --b 200 --go    # straight into motion
 
 At the prompt, a bare whole number moves that many *microsteps* (at the
@@ -48,6 +49,7 @@ from pathlib import Path
 
 FULL_STEPS_PER_MM = 100
 DEFAULT_RATE_STEPS_S = 70          # 0.7 mm/s, the rigs "MODERATE"
+DEFAULT_CURRENT_MA = 400           # firmware default RMS coil current
 DEFAULT_LIMIT = 0                  # off; set with 'limit <steps>'
 BAUD = 115200
 FIRMWARE_ID = "esp32s3_tmc2209_jog"
@@ -493,7 +495,7 @@ class FakeFirmware:
         self.toward_b = True
         self.rate = DEFAULT_RATE_STEPS_S * 1000
         self.mres = 16
-        self.current = 360
+        self.current = DEFAULT_CURRENT_MA
         self.limit = DEFAULT_LIMIT
         self.enc = 0
         self.calib_end = 0.0
@@ -1549,6 +1551,9 @@ def main():
     ap.add_argument("--b", type=int, help="position B in full steps")
     ap.add_argument("--speed", type=int, default=DEFAULT_RATE_STEPS_S,
                     help=f"full-step rate [steps/s] (default {DEFAULT_RATE_STEPS_S})")
+    ap.add_argument("--current", type=int, metavar="MA",
+                    help=f"RMS coil current [mA], 50-1200 "
+                         f"(firmware default {DEFAULT_CURRENT_MA})")
     ap.add_argument("--limit", type=int, default=DEFAULT_LIMIT,
                     help=f"soft limit +/- about zero [full steps] (default {DEFAULT_LIMIT})")
     ap.add_argument("--go", action="store_true", help="start jogging immediately")
@@ -1578,6 +1583,9 @@ def main():
                     help="permit fetching arduino-cli (~18 MB) into tools/")
     ap.add_argument("--verbose", action="store_true", help="echo the serial traffic")
     args = ap.parse_args()
+
+    if args.current is not None and not 50 <= args.current <= 1200:
+        ap.error("--current must be between 50 and 1200 mA RMS")
 
     # pyserial is only needed to touch real hardware; --simulate must work
     # without it so the interface can be tried on any machine.
@@ -1652,6 +1660,9 @@ def main():
             console.ask(f"LIMIT {args.limit}", "# LIMIT_OK")
         if args.speed != DEFAULT_RATE_STEPS_S:
             console.ask(f"RATE {args.speed * 1000}", "# RATE_OK")
+        if args.current is not None:
+            if console.ask(f"CURRENT {args.current}", "# CURRENT_OK") is None:
+                return 1
         if args.mres:
             if not (1 <= args.mres <= 256 and args.mres & (args.mres - 1) == 0):
                 print("  mres must be a power of two from 1 to 256")

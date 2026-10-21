@@ -1,0 +1,122 @@
+1792505976.195 ESP-ROM:esp32s3-20210327
+1792505976.195 Build:Mar 27 2021
+1792505976.195 rst:0x15 (USB_UART_CHIP_RESET),boot:0x29 (SPI_FAST_FLASH_BOOT)
+1792505976.195 Saved PC:0x40378c26
+1792505976.195 SPIWP:0xee
+1792505976.195 mode:DIO, clock div:1
+1792505976.195 load:0x3fce2820,len:0x10cc
+1792505976.195 load:0x403c8700,len:0xc2c
+1792505976.195 load:0x403cb700,len:0x30c0
+1792505976.195 entry 0x403c88b8
+1792505976.461 # BOOT,fw=iso230_2,config=10e3652ae6f5
+1792505976.461 # PINS,step=7,dir=8,en=9,sw_neg=10,sw_pos=11,home=neg
+1792505976.567 # DRIVER_ID,ioin=0x21000241,version=0x21,expected=0x21
+1792505976.673 # DRIVER,gconf=0x000001C4,chopconf=0x04028055,drv_status=0x80090000,spreadcycle=1,intpol=0,stealth=0,mres=16,irun=9,ihold=9,tpowerdown=0,iholddelay=0,current_ma=360
+1792505976.673 # READY,driver=1,encoder=1
+1792505976.673   lead 2.000 mm  200 steps/rev  1/16  (0.6250 um per microstep)
+1792505976.673   run current 360 mA  ihold x1.00  tpowerdown 0  iholddelay 0  intpol 0
+1792505976.673   v 5.00 mm/s (500 FS/s)  a 40.0 mm/s^2  home seek 2.00 / slow 0.15 mm/s
+1792505976.673   margin 2.0  overrun 3.0  p_nom 5.0 mm  seed 2302  x_ref centre
+1792505976.673   settle 500 ms + record 500 ms   runs 5   warm-up max 30 min   end hold   config 10e3652ae6f5
+1792505976.673 
+1792505976.673 ================================================================
+1792505976.673  ISO 230-2 baseline - positioning accuracy and repeatability
+1792505976.673  driver=1 homed=0   1/16   360 mA   v 5.00 mm/s   config 10e3652ae6f5
+1792505976.673  not homed - run 1 first
+1792505976.673 ================================================================
+1792505976.673   1  Home + warm-up    home, place the targets, warm up (key = stop after cycle)
+1792505976.673   2  ISO sequence      datum, n runs, end reference, park
+1792505976.673   3  Settings          current, velocity, runs, warm-up max
+1792505976.673   4  Show plan         targets, limits, x_ref
+1792505976.673   5  Go to x_ref       fixed-side approach
+1792505976.673   6  Home only         home and place the targets, then wait
+1792505976.673   7  Driver readback   registers and status
+1792505976.673   8  Switch state      read both end switches now
+1792505976.673   0  Release motor     EN high, outputs off
+1792505976.673   ?  This menu         (keys act at once - Ctrl+C sends ABORT)
+1792505976.673 
+1792505976.673 > ?
+1792505976.673 
+1792505976.673 ================================================================
+1792505976.673  ISO 230-2 baseline - positioning accuracy and repeatability
+1792505976.673  driver=1 homed=0   1/16   360 mA   v 5.00 mm/s   config 10e3652ae6f5
+1792505976.673  not homed - run 1 first
+1792505976.673 ================================================================
+1792505976.673   1  Home + warm-up    home, place the targets, warm up (key = stop after cycle)
+1792505976.673   2  ISO sequence      datum, n runs, end reference, park
+1792505976.673   3  Settings          current, velocity, runs, warm-up max
+1792505976.673   4  Show plan         targets, limits, x_ref
+1792505976.673   5  Go to x_ref       fixed-side approach
+1792505976.673   6  Home only         home and place the targets, then wait
+1792505976.673   7  Driver readback   registers and status
+1792505976.673   8  Switch state      read both end switches now
+1792505976.673   0  Release motor     EN high, outputs off
+1792505976.673   ?  This menu         (keys act at once - Ctrl+C sends ABORT)
+1792505976.673 
+1792505976.673 > 
+1792505987.200 1
+1792505987.200 Homing - any key stops it.
+1792505987.200 # EVENT,10937,HOME,state_change,-1,0,-1,0
+1792505987.200 # S,10941,16,0,456,HOME
+1792505987.251 # S,10961,80,0,392,HOME
+1792505987.252 # S,10981,144,0,328,HOME
+1792505987.252 # S,11001,208,0,264,HOME
+1792505987.302 # S,11021,272,0,200,HOME
+1792505987.303 # S,11041,336,0,136,HOME
+1792505987.354 # S,11061,400,0,72,HOME
+1792505987.354 # S,11081,464,0,8,HOME
+1792505987.354 # S,11101,528,0,968,HOME
+1792505987.406 # S,11121,592,0,904,HOME
+1792505987.406 # S,11141,656,0,840,HOME
+1792505987.406 # S,11161,720,0,776,HOME
+1792505987.459 # S,11181,784,0,712,HOME
+1792505987.459 # S,11201,848,0,648,HOME
+1792505987.510 # S,11221,912,0,584,HOME
+1792505987.510 # S,11241,976,0,520,HOME
+1792505987.510 # S,11261,1040,0,456,HOME
+1792505987.564 # S,11281,1104,0,392,HOME
+1792505987.564 # S,11301,1168,0,328,HOME
+1792505987.614 # S,11321,1232,0,264,HOME
+1792505987.614 # S,11341,1296,0,200,HOME
+1792505987.614 # S,11361,1360,0,136,HOME
+1792505987.665 # S,11381,1424,0,72,HOME
+1792505987.665 # S,11401,1488,0,8,HOME
+1792505987.717 # S,11421,1552,0,968,HOME
+1792505987.717 # S,11441,1616,0,904,HOME
+1792505987.718 # S,11461,1680,0,840,HOME
+1792505987.768 # S,11481,1744,0,776,HOME
+1792505987.768 # S,11501,1808,0,712,HOME
+1792505987.768 # S,11521,1872,0,648,HOME
+1792505987.820 # S,11541,1936,0,584,HOME
+1792505987.820 # S,11561,2000,0,520,HOME
+1792505987.871 # S,11581,2064,0,456,HOME
+1792505987.871 # S,11601,2128,0,392,HOME
+1792505987.871 # S,11621,2192,0,328,HOME
+1792505987.925 # S,11641,2256,0,264,HOME
+1792505987.925 # S,11661,2320,0,200,HOME
+1792505987.976 # S,11681,2384,0,136,HOME
+1792505987.976 # S,11701,2448,0,72,HOME
+1792505987.976 # S,11721,2512,0,8,HOME
+1792505988.026 # S,11741,2576,0,968,HOME
+1792505988.026 # S,11761,2640,0,904,HOME
+1792505988.026 # S,11781,2704,0,840,HOME
+1792505988.077 # S,11801,2768,0,776,HOME
+1792505988.077 Homing stopped (key) - not homed.
+1792505988.077 
+1792505988.077 ================================================================
+1792505988.077  ISO 230-2 baseline - positioning accuracy and repeatability
+1792505988.077  driver=1 homed=0   1/16   360 mA   v 5.00 mm/s   config 10e3652ae6f5
+1792505988.077  not homed - run 1 first
+1792505988.077 ================================================================
+1792505988.077   1  Home + warm-up    home, place the targets, warm up (key = stop after cycle)
+1792505988.077   2  ISO sequence      datum, n runs, end reference, park
+1792505988.077   3  Settings          current, velocity, runs, warm-up max
+1792505988.077   4  Show plan         targets, limits, x_ref
+1792505988.077   5  Go to x_ref       fixed-side approach
+1792505988.077   6  Home only         home and place the targets, then wait
+1792505988.077   7  Driver readback   registers and status
+1792505988.077   8  Switch state      read both end switches now
+1792505988.077   0  Release motor     EN high, outputs off
+1792505988.077   ?  This menu         (keys act at once - Ctrl+C sends ABORT)
+1792505988.077 
+1792505988.077 > 
