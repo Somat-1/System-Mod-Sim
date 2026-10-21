@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
-"""Control terminal for the MRES test firmware.
+"""Control terminal for the settling-matrix firmware.
 
-    /usr/bin/python3 scripts/mres_terminal.py [port]
+    python3 scripts/settling_terminal.py [port]
 
-Every key goes to the board the moment it is pressed - no Enter needed. The
-firmware's menus act on single keys, any key pauses the warm-up or stops
-homing and the sequence, and its prompts for numbers echo what you type and
+Every key goes to the board the moment it is pressed - the menu acts on single
+digits, no Enter needed. Prompts that want a word (RUN) echo what you type and
 take Enter.
 
-  Ctrl+C       send ABORT (stops any motion)
+  Ctrl+C       ABORT - sent as the single byte 0x03, which the firmware treats
+               as ABORT wherever it is (a typed "ABORT" would be eaten as menu
+               keys while the matrix is running)
   Ctrl+]       close the terminal
 
 The 50 Hz `# S,...` position samples are not printed - they would scroll over
 everything else - but everything the board sends, samples included, is logged
-to data/terminal_<stamp>.log.
+to data/terminal_<stamp>.log. The analysis reads `# STOP,` lines out of that
+log to find the settled stops, and `# S,` to align the board clock against the
+separately recorded encoder.
 
 The port is opened with DTR and RTS low. On the ESP32-S3's built-in USB serial
 those lines drive reset and the boot strap, and the usual default (both high)
@@ -26,10 +29,8 @@ import datetime as dt
 import glob
 import os
 import sys
-import termios
 import threading
 import time
-import tty
 from pathlib import Path
 
 import serial
@@ -39,12 +40,27 @@ LOG_DIR = Path(__file__).resolve().parent.parent / "data"
 QUIT = b"\x1d"                     # Ctrl+]
 INTERRUPT = b"\x03"                # Ctrl+C
 
+POSIX = os.name != "nt"
+if POSIX:
+    import termios
+    import tty
+else:
+    import msvcrt
+
 
 def find_port() -> str:
-    ports = sorted(glob.glob("/dev/cu.usbmodem*"))
-    if not ports:
-        raise SystemExit("no /dev/cu.usbmodem* port - is the board plugged in?")
-    return ports[0]
+    """The bench has been run from both a Mac and the Windows host."""
+    if POSIX:
+        ports = sorted(glob.glob("/dev/cu.usbmodem*") + glob.glob("/dev/ttyACM*"))
+        if not ports:
+            raise SystemExit("no usbmodem/ttyACM port - is the board plugged in?")
+        return ports[0]
+    from serial.tools import list_ports
+    found = [p.device for p in list_ports.comports()
+             if "USB" in (p.description or "") or p.vid]
+    if not found:
+        raise SystemExit("no USB serial port - is the board plugged in?")
+    return sorted(found)[-1]
 
 
 def open_port(port: str) -> serial.Serial:
@@ -81,13 +97,22 @@ def reader(s: serial.Serial, stop: threading.Event, log) -> None:
         sys.stdout.flush()
 
 
+def read_key(fd: int) -> bytes:
+    if POSIX:
+        return os.read(fd, 1)
+    while True:
+        if msvcrt.kbhit():
+            return msvcrt.getch()
+        time.sleep(0.01)
+
+
 def main() -> int:
     port = sys.argv[1] if len(sys.argv) > 1 else find_port()
     s = open_port(port)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     log_path = LOG_DIR / dt.datetime.now().strftime("terminal_%Y%m%d_%H%M%S.log")
     log = log_path.open("w", encoding="utf-8", buffering=1)
-    print(f"MRES test control terminal - {port}")
+    print(f"Settling-matrix control terminal - {port}")
     print(f"Logging everything (position samples included) to {log_path.name}")
     print("Keys act at once. ? = menu, Ctrl+C = ABORT, Ctrl+] = close.\n")
 
@@ -97,9 +122,9 @@ def main() -> int:
 
     fd = sys.stdin.fileno()
     interactive = os.isatty(fd)
-    saved = termios.tcgetattr(fd) if interactive else None
+    saved = termios.tcgetattr(fd) if (POSIX and interactive) else None
     try:
-        if interactive:
+        if POSIX and interactive:
             # Raw keys in, but keep output processing so "\n" still starts a
             # new line. Ctrl+C arrives as a byte, not a signal, so it can
             # become ABORT.
@@ -108,11 +133,11 @@ def main() -> int:
             attrs[1] |= termios.OPOST | termios.ONLCR
             termios.tcsetattr(fd, termios.TCSANOW, attrs)
         while not stop.is_set():
-            key = os.read(fd, 1)
+            key = read_key(fd)
             if not key or key == QUIT:
                 break
             if key == INTERRUPT:
-                s.write(b"ABORT\n")
+                s.write(INTERRUPT)
                 sys.stdout.write("\n[ABORT sent]\n")
                 sys.stdout.flush()
                 continue

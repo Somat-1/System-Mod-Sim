@@ -1,0 +1,153 @@
+{
+  "mres_set": [
+    16,
+    32,
+    64,
+    256
+  ],
+  "distances": [
+    {
+      "label": "1/16 FS",
+      "u256": 16,
+      "um": 0.625,
+      "microsteps": {
+        "1/16": 1,
+        "1/32": 2,
+        "1/64": 4,
+        "1/256": 16
+      }
+    },
+    {
+      "label": "1/4 FS",
+      "u256": 64,
+      "um": 2.5,
+      "microsteps": {
+        "1/16": 4,
+        "1/32": 8,
+        "1/64": 16,
+        "1/256": 64
+      }
+    },
+    {
+      "label": "1 FS",
+      "u256": 256,
+      "um": 10.0,
+      "microsteps": {
+        "1/16": 16,
+        "1/32": 32,
+        "1/64": 64,
+        "1/256": 256
+      }
+    },
+    {
+      "label": "4 FS",
+      "u256": 1024,
+      "um": 40.0,
+      "microsteps": {
+        "1/16": 64,
+        "1/32": 128,
+        "1/64": 256,
+        "1/256": 1024
+      }
+    },
+    {
+      "label": "16 FS",
+      "u256": 4096,
+      "um": 160.0,
+      "microsteps": {
+        "1/16": 256,
+        "1/32": 512,
+        "1/64": 1024,
+        "1/256": 4096
+      }
+    },
+    {
+      "label": "64 FS",
+      "u256": 16384,
+      "um": 640.0,
+      "microsteps": {
+        "1/16": 1024,
+        "1/32": 2048,
+        "1/64": 4096,
+        "1/256": 16384
+      }
+    },
+    {
+      "label": "5 mm",
+      "u256": 128000,
+      "um": 5000.0,
+      "microsteps": {
+        "1/16": 8000,
+        "1/32": 16000,
+        "1/64": 32000,
+        "1/256": 128000
+      }
+    },
+    {
+      "label": "20 mm",
+      "u256": 512000,
+      "um": 20000.0,
+      "microsteps": {
+        "1/16": 32000,
+        "1/32": 64000,
+        "1/64": 128000,
+        "1/256": 512000
+      }
+    }
+  ],
+  "repeats_per_direction": 4,
+  "seed": 4201,
+  "rows": 344,
+  "measured_displacements": 240,
+  "total_minutes": 31.99,
+  "dwell_s": 3.0,
+  "settle_read_s": 1.0,
+  "speed_fs_s": 78,
+  "pulse_rate_hz": {
+    "1/16": 1248,
+    "1/32": 2496,
+    "1/64": 4992,
+    "1/256": 19968
+  },
+  "driver": {
+    "chopper": "spreadcycle",
+    "en_spreadCycle": 1,
+    "toff": 5,
+    "tbl": 24,
+    "irun_ma": 400,
+    "ihold_multiplier": 1.0,
+    "iholddelay": 0,
+    "tpowerdown": 0,
+    "intpol": 0,
+    "r_sense_ohm": 0.1
+  },
+  "blocks": {
+    "block1": {
+      "mres": 16,
+      "rows": 86,
+      "measured": 60,
+      "minutes": 7.99
+    },
+    "block2": {
+      "mres": 32,
+      "rows": 86,
+      "measured": 60,
+      "minutes": 8.0
+    },
+    "block3": {
+      "mres": 64,
+      "rows": 86,
+      "measured": 60,
+      "minutes": 8.0
+    },
+    "block4": {
+      "mres": 256,
+      "rows": 86,
+      "measured": 60,
+      "minutes": 8.0
+    }
+  },
+  "measures": "displacement = settled_after - settled_before; offset = displacement - commanded. Relative throughout, so no datum or drift correction is required.",
+  "speed_mm_s": 0.78,
+  "checks": []
+}

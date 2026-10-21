@@ -1,166 +1,196 @@
-# Microstep-Resolution Test — Execution Procedure
+# Bench procedure — settling matrix
 
-**Goal:** select the operating MRES (microstep resolution) for the full identification sequence (Steps 0–6), based on measured settling error, repeatability and small-move response of the stage.
-**Driver mode:** SpreadCycle only (StealthChop already excluded).
-**Resolutions tested:** 1/16, 1/32, 1/64, 1/128, 1/256 (1/256 = anchor, run in both sessions).
-**Sensor:** IDS 3010 interferometer.
+**Written for: the operator at the bench.** Read §1 before powering anything.
+The firmware has never been compiled or run; §2 is bring-up, not a formality.
 
-**Design principle:** every move and staircase span is defined in **physical units** (full steps, FS, or mm), never as a fixed microstep count. That way all MRES are compared over identical displacements.
+Total time once bring-up is done: **32 min** of automatic sequence, plus about
+3 min of homing.
 
 ---
 
-## 1. Parameters to fill in before the first session
+## 1. Before power
 
-| Symbol | Meaning | Value |
-|---|---|---|
-| L | screw lead [mm] | ___ |
-| s_FS = L/200 | stage travel per full step [µm] | ___ |
-| δ_MRES = s_FS/MRES | travel per microstep [nm] | 1/16: ___ · 1/32: ___ · 1/64: ___ · 1/128: ___ · 1/256: ___ |
-| R | reversal lost motion from existing data [µm] | ___ |
-| S_fine = max(¼ s_FS, 3R) | B3a span (fine tier) [µm] | ___ |
-| σ_floor | interferometer floor at a 300 ms average (Allan minimum) [nm] | ___ (≈ low single-digit nm) |
-| v | approach velocity [mm/s], **identical for all MRES** | ___ |
-| f_step = v / δ_1/256 | step rate at 1/256 — check against driver/controller limit | ___ |
-| x_start | start position (centre region of travel) | ___ |
-| x_ref | drift reference position | ___ |
+**Set the end-switch pins.** `firmware/settling_test/settling_test.ino` ships
+with placeholders:
 
-**Resolvability check, per MRES:**
-- δ_MRES ≥ 3 σ_floor: single microsteps are resolved directly.
-- δ_MRES < 3 σ_floor: single steps are not resolved. Evaluate B3a statistically (slope and scatter over the staircase), not step by step.
+```c
+constexpr uint8_t SW_NEG_PIN = 10;
+constexpr uint8_t SW_POS_PIN = 11;
+constexpr int SWITCH_ACTIVE_LEVEL = LOW;
+```
 
-> If f_step at 1/256 exceeds what the step generator can deliver, lower v for **all** MRES rather than only for 1/256.
+Wiring assumed: 10T85 microswitch, **COM to common ground, NO to the GPIO**,
+internal pull-up, so a pressed switch reads LOW. This is **not fail-safe** — a
+cut wire reads as clear and the stage will run into the end. Moving both
+switches to their NC contacts and setting `SWITCH_ACTIVE_LEVEL` to `HIGH` makes
+a broken cable stop the stage instead. Worth doing before an unattended 32 min
+run.
 
-## 2. Settings held fixed across all blocks
+**Check the travel.** The plan uses **±20 mm about the centre** of the measured
+travel, and homing holds back a 2 mm margin at each end, so the stage needs
+**at least 44 mm of usable travel**. The firmware checks this before it moves
+and refuses with `# ERR,reason=plan_exceeds_travel` if the plan does not fit.
 
-- SpreadCycle (`en_spreadCycle = 1`), identical TOFF / HSTRT / HEND / TBL.
-- I_RUN, I_HOLD and TPOWERDOWN identical to the intended operating values. Record them.
-  - The hold-current reduction changes motor stiffness and therefore the friction-induced offset. Always take the settled-position window **after** the TPOWERDOWN transition, so the measurement represents the real holding state.
-- `intpol` (MicroPlyer interpolation): pick one setting and keep it for all MRES. Record it.
-- Same physical target region, same approach velocity in mm/s, same acceleration profile.
-- Interferometer environmental compensation ON; log T and p.
+**Uncouple the motor** for the first bring-up (§2). Homing drives toward the
+switches at 2 mm/s and the switch logic has never been exercised.
 
-## 3. Session plan (≤ 60 min each)
+---
 
-| | Block 1 | Block 2 | Block 3 |
-|---|---|---|---|
-| **Session 1** | 1/64 | 1/16 | **1/256 (anchor)** |
-| **Session 2** | 1/128 | **1/256 (anchor)** | 1/32 |
+## 2. Bring-up — first time only, motor uncoupled
 
-- Randomize the MRES order per session (the table is one valid example). The anchor must appear in both sessions.
-- Timing per session: warm-up (~6 min) → 3 blocks (~16.5 min each) → end reference (~2 min), about 57.5 min in total.
-- B4 duration depends on v, because of the 5 mm and 20 mm moves. If a block overruns, reduce the repeats of the **operational-length moves only** (from 4 to 3); keep all short-move conditions intact.
+1. **Compile.** `arduino-cli compile --fqbn esp32:esp32:esp32s3
+   firmware/settling_test`. The sketch needs `TMCStepper`. It has been checked
+   only statically — brace balance, `printf` arity, 64-bit casts — so expect to
+   fix something here.
+2. **Flash and open the terminal:**
+   `python3 scripts/settling_terminal.py` (it finds the port; pass one to
+   override). It logs everything to `data/terminal_<stamp>.log`.
+3. **Read the boot lines.** You want:
+   - `# DRIVER_ID,...,version=0x21,expected=0x21` — UART talks to the TMC2209.
+     Anything else means the UART is wrong, and nothing below is meaningful.
+   - `# SWITCHES,neg=0,pos=0,active_level=low` — both switches read clear with
+     nothing pressed. If either reads 1, the pin or the contact is wrong.
+   - `# READY,driver=1,rows=344,measured=240`.
+4. **Press each switch by hand** and press `6` to read them back. Confirm the
+   right switch reads 1, and that it returns to 0 when released. Getting these
+   swapped sends homing the wrong way at the wrong speed.
+5. **Press `5`** and confirm `spreadcycle=1,intpol=0,stealth=0`. Settling under
+   StealthChop is a different measurement; if `stealth=1`, stop.
+6. **Press `7`.** This is the check that the whole campaign rests on: that the
+   microstep size follows the register. It pulses once and five times at each
+   size and checks `MSCNT` moved by exactly `256/MRES` per pulse. It needs
+   almost no travel (under 4 µm), so it is safe uncoupled.
 
-### Warm-up and checks (start of every session, ~6 min)
-1. Power the driver at I_RUN and run the stage back and forth over ±5 mm at v for ~4 min, until the interferometer reading at x_ref is stable to within the noise floor.
-2. Check interferometer signal quality and alignment; log T and p.
-3. Record x_ref three times (approach from the same side) as the session's drift baseline.
+   ```
+     MRES   per pulse   1 pulse   5 pulses   closes   verdict
+     1/16          16        16         80      yes   OK
+     ...
+   # MRES_CHECK,pass
+   ```
 
-## 4. Block procedure (repeat for each MRES)
+   A `MISMATCH` means the comparison would be meaningless: check
+   `GCONF.mstep_reg_select` is set and `intpol` is off. The matrix runs this
+   automatically and refuses to start if it fails, so do not skip it here —
+   find out now, not at the start of a 32 min run.
 
-### B1 — Configure and align (~1 min)
-1. Move to a **full-step position** (MSCNT at a full-step value) **before** changing MRES. Switching off-grid shifts the microstep reference and causes a position jump.
-2. Write MRES via UART (CHOPCONF.MRES) and read it back to verify.
-3. Wait 2 s, then re-zero the position reference on the interferometer.
-4. Log MRES, MSCNT, T, p and a timestamp as the block header.
+Only once all six pass, couple the motor.
 
-### B2 — Condition (~1.5 min)
-1. Run 3 strokes of ±2 mm at v to erase the friction history.
-2. End with an approach to x_start **from the negative side**, always the same side in every block.
-3. Dwell 2 s.
+---
 
-### B3 — Two-tier staircase (~4.5 min)
-Each sweep has a **fine tier** where pre-sliding happens (at the start, and directly after the reversal), followed by a **coarse tier** in gross sliding.
+## 3. The run
 
-**Forward sweep (+):**
-1. **B3a, fine tier:** single microsteps until S_fine is covered.
-   - Count = S_fine / δ_MRES. At S_fine = ¼ FS this is 4 (1/16), 8 (1/32), 16 (1/64), 32 (1/128), 64 (1/256).
-   - Few points at coarse MRES are expected. That is the finding, not a flaw: coarse settings cannot command smaller moves.
-2. **B3b, coarse tier:** continue in increments of **1/16 FS** (= MRES/16 microsteps per increment: 1 at 1/16 … 16 at 1/256) until the total sweep reaches **4 FS** (one full electrical cycle).
-   - Every MRES therefore samples the electrical cycle at the same 1/16-FS spacing.
+The menu acts on **single keys, no Enter**. `?` reprints it. **Ctrl+C aborts
+from anywhere** — it is sent as a raw byte and the firmware honours it mid-move.
+Ctrl+] closes the terminal without touching the board.
 
-**Reverse sweep (−):** reverse direction immediately and repeat the same pattern. B3a fine tier **first** (this captures the reversal dead zone), then B3b coarse tier back to x_start.
+```
+  1  Home + run matrix    homing, then 344 rows (~32 min)
+  2  Home only
+  3  Run matrix           uses the travel already measured
+  4  Go to centre         the start position, on a full step
+  5  Driver readback
+  6  Switch state
+  7  Verify MRES switching    MSCNT per pulse, no travel
+  0  Release motor        EN high, outputs off
+```
 
-**Timing and recording:**
-- Dwell **0.5 s** after every command. Record the mean position over the **last 300 ms** of each dwell. Longer averaging gains little, because correlated vibration dominates above τ ≈ 0.1 s.
-- **2 repeats** of the forward + reverse pair.
-- Order of magnitude at 1/256: (64 fine + 60 coarse) dwells × 0.5 s ≈ 62 s per sweep, × 2 directions × 2 repeats ≈ 4.1 min.
+### 3.1 Start the encoder recording first
 
-*Purpose:* the achieved increment per commanded microstep (slope), the reversal dead zone (lost motion), periodicity within the electrical cycle, and small-move scatter. **This data is reused for the GMS pre-sliding identification.**
+The board does not see the stage. Start the TwinCAT YT scope recording
+**before** pressing `1`, and stop it after `# RUN_COMPLETE`. A recording that
+starts mid-run loses the block-1 marker and with it the clock alignment.
 
-### B4 — Settling matrix (~7.5 min)
-1. Distances, in physical units, identical for every MRES:
-   - **1/16, 1/4, 1, 4, 16, 64 FS**, plus
-   - **5 mm and 20 mm**, which are operational move lengths. Adjust them to your real use case and check that they stay inside the travel from x_start.
-2. For each move: start at x_start (approached from the fixed side), move by ±D, dwell, record, then return to x_start.
-3. 8 distances × 2 directions × 4 repeats = **64 measured moves**, in **randomized order** (fix the seed per block and log it).
-4. Dwell 2 s at each target, longer than TPOWERDOWN. Record the full trajectory, plus the settled value = mean over the final 500 ms.
-5. Every 20 moves, visit x_ref (fixed-side approach) as a drift check.
+### 3.2 Home
 
-### B5 — Creep / hold (~2 min)
-1. 2 moves per direction with D = 4 FS.
-2. Hold 30 s at the target and record the full trajectory.
+Press `2` (or `1`, which homes then runs). Homing seeks each end at 2 mm/s,
+backs off 2 mm, and touches the switch **three times** at 0.15 mm/s, requiring
+all three triggers within 20 µm:
 
-*Purpose:* post-settle drift (creep) as part of the settling error, and whether it depends on MRES.
+```
+# HOMING,neg,touch=1,pos=-...
+# HOMING,neg,touch=2,pos=-...
+# HOMING,neg,touch=3,pos=-...
+# HOMING,neg,spread=...,tolerance=512
+```
 
-### End of session (~2 min)
-- Visit x_ref 3× (fixed-side approach) and log T and p. The difference from the start baseline is the session drift.
+A spread over tolerance is retried once, then fails. If it fails repeatedly the
+switch is bouncing or the actuator is loose — fix it rather than widening the
+tolerance, because the tolerance is what makes the measured travel trustworthy.
 
-## 5. Data to log (per sample)
+Success prints the travel:
 
-| Field | Notes |
+```
+# HOMED,travel_u256=...,travel_mm=...,lim_neg=...,lim_pos=...
+```
+
+**Check `travel_mm` against the stage's spec.** If it is short, a switch
+triggered early and every limit below it is wrong.
+
+### 3.3 Run
+
+Press `3`. The firmware prints the extent the plan will use and compares it
+against the measured limits:
+
+```
+# PLAN_EXTENT,min_mm=-20.000,max_mm=20.000,limits_mm=-...
+```
+
+Then it asks for confirmation — type `RUN` and Enter. Anything else cancels.
+
+It then re-runs the MRES check from §2 step 6 and prints `# MRES_CHECK,pass`
+before the first row. If that fails the run does not start, and nothing is
+lost — fix the driver configuration and press `3` again.
+
+During the run, expect per row:
+
+```
+# MOVE,<row>,<tag>,target=...,d=...,dir=...,mres=...
+# STOP,<row>,<tag>,d=...,dir=...,measured=1,pos=...,mscnt=...
+```
+
+and `# S,` samples at 50 Hz (logged, not printed — they would scroll over
+everything). Block boundaries are visible as `# MRES,<size>,mscnt=...` followed
+by a marker excursion.
+
+The run ends with one of:
+
+| | |
 |---|---|
-| t | timestamp |
-| MRES | per block |
-| commanded step count | absolute, in microsteps of the current MRES |
-| MSCNT | TMC2209 microstep counter → electrical phase θ_e |
-| x_IFM | interferometer position |
-| T, p | environment |
-| phase / move ID | B1–B5, tier (B3a/B3b), move index, D, direction, repeat, random seed |
+| `# RUN_COMPLETE,pos=0` | all 344 rows done, back at the start |
+| `# RUN_ABORTED,pos=...` | Ctrl+C or `ABORT` |
+| `# RUN_FAILED,pos=...,reason=<n>` | see below |
 
-Store one file per block, named e.g. `S1_B2_MRES16.csv`, with a header holding all fixed settings and the §1 parameters.
+`reason`: 1 abort, 2 switch hit, 3 soft limit, 4 error (off-grid target, pulse
+rate, or an MRES write that would not confirm).
 
-## 6. Analysis
+### 3.4 Afterwards
 
-**Pre-processing:** subtract the drift (linear interpolation between x_ref visits) and convert everything to physical units.
+1. Stop the scope recording; export the CSV into `data/`.
+2. Keep the terminal log — the analysis needs both halves, and the clock
+   alignment needs the `# S,` samples that only the log has.
+3. Press `0` to release the motor.
 
-**Per MRES:**
+---
 
-| Metric | From | Definition |
-|---|---|---|
-| Small-move slope k_fine | B3a | achieved / commanded increment over the fine tier (ideal = 1) |
-| Reversal lost motion | B3a (reverse) | commanded displacement before the stage moves after reversal |
-| Sliding slope k_coarse | B3b | achieved / commanded over the coarse tier (should be ≈ 1) |
-| Electrical-cycle periodicity | B3b | error vs θ_e (from MSCNT): amplitude of the 1st, 2nd and 4th harmonics |
-| Small-move σ | B3a | scatter of the per-step increment (or of the residual about the slope if not resolvable) |
-| Settling bias b(D, dir) | B4 | mean of (x_settled − x_target) |
-| Repeatability σ(D, dir) | B4 | std of the settled positions |
-| Creep | B5 | drift over the 30 s hold |
-| Session consistency | anchor | 1/256 results, session 1 vs session 2 |
+## 4. If it fails mid-run
 
-**Plots:**
-1. b and σ vs D (log axis), one curve per MRES; mark the operational-length moves separately.
-2. Staircase: achieved vs commanded position for each MRES, with the fine tier shaded.
-3. k_fine, k_coarse and reversal lost motion vs MRES.
+Do not restart from row 0 on top of a partial recording. Note the row number
+from the last `# STOP,`, keep the partial data with its log, and start a fresh
+recording for the retry. The blocks are independent — a run that failed in
+block 3 still gives usable 1/16 and 1/32 data, because every measurement is a
+difference within a block.
 
-## 7. Decision rule
+Known failure modes and what they mean:
 
-1. **Validity first:** the two 1/256 anchor runs must agree within their uncertainty. If they don't, session-to-session effects dominate and must be fixed before any MRES comparison is meaningful.
-2. Choose the **coarsest MRES at which σ and |b| stop improving** (no significant gain at the next finer setting), weighted towards the **operational-length moves**, **provided** that:
-   - its microstep size δ is small enough to resolve the planned corrections (δ ≲ target settling error), and
-   - its step rate at v is within limits.
-3. If a finer MRES performs *worse* (higher σ, or k_fine well below 1), its microsteps are below what the motor and friction can resolve. Do not choose it.
-4. Record the chosen MRES, together with all fixed settings, as the configuration for Steps 0–6.
+| line | cause |
+|---|---|
+| `# ERR,reason=mscnt_off_full_step` | an MRES change was attempted off the full-step grid; the plan should prevent this, so this is a bug or a lost step |
+| `# ERR,reason=plan_exceeds_travel` | the stage is shorter than the plan needs; shorten the long distances in `settling_design.py` and regenerate |
+| `# ERR,reason=pulse_rate` | a row asks for more than 20 kHz; the design should prevent it |
+| `# ERR,reason=driver_mode_not_confirmed` | SpreadCycle/intpol/StealthChop not as intended; do not run |
+| `reason=3` (soft limit) | a lost-step accumulation walked the stage out of bounds; the encoder record will show it |
 
-## 8. Checklist
-
-- [ ] Parameters in §1 filled in: lead, R, S_fine, σ_floor; resolvability checked per MRES
-- [ ] Step rate at 1/256 verified
-- [ ] Operational move lengths fit inside the travel from x_start
-- [ ] Fixed settings in §2 written to the driver and logged
-- [ ] Warm-up completed; x_ref stable
-- [ ] MRES changed only at full-step positions
-- [ ] Fixed-side approach used before every B3/B4 start
-- [ ] B3 reverse sweep starts with the fine tier
-- [ ] Random seed logged per block
-- [ ] Anchor (1/256) run in both sessions
-- [ ] End-of-session reference recorded
+A switch hit (`reason=2`) during the matrix should never happen — the plan stays
+2 mm inside the soft limits, which are themselves 2 mm inside the switches. If
+it does, the stage has lost a significant number of steps and the block's data
+is suspect.

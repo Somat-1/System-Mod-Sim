@@ -1,218 +1,205 @@
-# Microstep-resolution test
+# Settling offset against microstep size
 
-Which MRES to run the identification sequence (Steps 0–6) at. The test measures
-the stage's small-move response with the IDS 3010 at 1/16, 1/32, 1/64, 1/128
-and 1/256 in SpreadCycle. The full procedure is in
-[`PROCEDURE.md`](PROCEDURE.md). This folder turns the part of it that is kept
-into a plan.
+**Written for: whoever picks up this folder — the campaign's rationale, what it
+measures, and how the data turns into an answer.**
 
-```
-microstepping/
-├── README.md
-├── PROCEDURE.md                  the execution procedure, as originally written
-├── scripts/
-│   ├── run_mres.py               terminal menu: pick a mode and run it
-│   ├── mres_design.py            the session, defined as data
-│   └── render_mres.py            draws it
-├── sequence/
-│   ├── mres_test_sequence.png    the figure below (600 dpi, 160 mm)
-│   ├── mres_test_sequence.pdf
-│   ├── mres_plan.csv             every row, in order
-│   └── mres_summary.json         §1 parameters, timing, checks
-├── firmware/                     what the runner sketch has to support
-├── data/                         one folder per run, one log per block: B<b>_MRES<m>.log
-└── analysis/                     §6 metrics and plots, once there is data
-```
+## The question
 
-```bash
-python scripts/run_mres.py         # the menu
-```
+The stage is commanded to move a distance. It ends up somewhere. **Does the
+microstep size change how far it actually ends up moving?**
+
+That is the only question here. Not where the stage is relative to a datum, not
+how repeatable it is, not how it gets there. The deliverable is one number per
+(microstep size, distance) cell:
 
 ```
-================================================================
- MRES test - microstep-resolution selection
- part 1 warm-up: not defined yet   |   part 2: 6 blocks, 30.4 min
-================================================================
-  1  Warm-up            part 1: homing to the end switches + warm-up
-  2  Stepping sequence  part 2: x_ref baseline, six MRES blocks, end reference
-  3  Full session       part 1 then part 2
-  4  Single block       B1-B3 at one MRES, for bring-up or a repeat
-  5  Preview            the plan and the exact commands, no hardware
-  6  Simulate           the stepping sequence against a protocol model
-  7  Regenerate         rebuild the plan CSV, summary and figure
-  q  Quit
+displacement = x_settled_after - x_settled_before
+offset       = displacement - commanded
 ```
 
-Any mode can also be started directly, e.g. `--mode stepping`, or
-`--mode block --mres 64`. Add `--simulate` to use the protocol model instead
-of a board.
+Both terms are settled positions a few seconds apart, so **every number in this
+campaign is a difference**. Nothing needs an absolute reference, a datum, or a
+drift correction. That is deliberate, and it is why this campaign is separate
+from `../iso230-2/` — ISO 230-2 measures positioning accuracy against a target
+in machine coordinates, which is a different quantity with different error
+sources.
 
-- **1 and 3** report that part 1 isn't defined yet and return to the menu.
-- **2 and 4** ask for the serial port, check the firmware and set and read back
-  the §2 driver settings. They then wait for a typed `RUN` before anything
-  moves.
-- **Each segment** (reference, each block, end) is uploaded and run as its own
-  plan.
-- **Ctrl+C** sends `ABORT`.
+## Why the earlier microstepping run could not answer it
 
-Each run writes `data/<stamp>_<mode>/` with `session.json` (settings, §1
-parameters, board readback), `plan.csv`, and one log per segment.
+The executed MRES sequence (`terminal_2026102*.log`, now in git history) was
+built around trajectory execution: staircases and ramps, sampled to show *how*
+the stage moves. Block B4 — the settling matrix, the only block that produced a
+settling offset per distance — was dropped from the run. So the recorded data
+shows trajectory shape, not landing error. Hence this rebuild from scratch.
 
-To regenerate the plan and figure by hand:
+## Microstep switching was verified — the identical step sizes were by design
 
-```bash
-python scripts/mres_design.py      # -> mres_plan.csv, mres_summary.json
-python scripts/render_mres.py      # -> the figure
+The earlier plots show **the same physical step size whatever MRES was set**,
+which looks like MRES switching silently failing. It was not. Two separate
+findings, both checkable:
+
+**1. The driver really did change microstep size.** `MSCNT` is the driver's own
+index into the sine table — 1024 entries per electrical period, 256 per full
+step — so it can only land on the grid the driver is actually stepping on. A
+`CHOPCONF` readback proves only that the register holds the code; `MSCNT`
+proves the stepping followed it. Run on the recorded sessions
+(`scripts/verify_mres_switching.py`), every block that executed a plan row
+comes back clean: 99.0–99.9 % of samples on a single coset of the correct
+spacing — 8 counts at 1/32, 4 at 1/64, 2 at 1/128.
+
+The residual 0.1–1 % are the few samples straddling an MRES change, sitting on
+a coset half a microstep away. That matters methodologically: testing the
+**GCD** of `MSCNT` differences makes those few samples halve the apparent
+spacing and report a confident false failure for every size at once. The script
+counts residues instead, which separates "the grid is wrong" from "a few
+samples straddle a phase change".
+
+**2. The identical step sizes come from the old plan, not the driver.** The
+previous design (`mres_design.py`) set
+
+```python
+B3_COARSE_INC = U // 16           # 1/16 FS, the same spacing for every MRES
 ```
 
----
+so the coarse staircase tier commanded **0.625 µm at every MRES**, built from a
+different number of microsteps each time — 2 at 1/32, 4 at 1/64, 8 at 1/128, 16
+at 1/256. Equal physical increments were the intent. Only the fine tier scaled
+with MRES, at one microstep: 0.312 / 0.156 / 0.078 / 0.039 µm. Any plot
+dominated by the coarse tier shows four identical staircases, correctly.
 
-## Scope: what is kept from the procedure
+This also explains an earlier misreading of a block as 1/16 from its ~625 nm
+increments: 625 nm is the coarse-tier increment at *every* size, so it
+identifies nothing.
 
-| Phase | Kept? | Why |
-|---|---|---|
-| B1 configure + re-zero | yes | MRES can't be switched safely without full-step alignment and the re-zero; ~5 s |
-| B2 condition | yes | sets a defined friction state, so B3 doesn't depend on what happened before |
-| B3 two-tier staircase | **in full** | the core of the test |
-| B4 settling matrix | **dropped** | final positions sit on a common grid for every MRES, so B4 could only detect an MRES effect in the approach dynamics; the ISO baseline at the chosen MRES covers the distance range later |
-| B5 creep / hold | **dropped** | depends on friction and hold current, at most weakly on MRES; measured once at the chosen MRES during the friction identification |
+**Carried into this campaign.** Register readback is not enough on its own, so
+the firmware now proves the step size physically before it will run: menu item
+`7`, and automatically ahead of the matrix. It pulses once and five times at
+each size and checks `MSCNT` advanced by exactly `256/MRES` per pulse and
+closed back to its starting phase. A failure refuses the run — comparing
+microstep sizes is meaningless if the sizes are not real. It also catches
+`intpol` being on, which would interpolate every size to 1/256.
 
-The x_ref visits are kept, as a baseline at the start of the stepping part and
-as the end-of-session reference. §6 drift subtraction interpolates between them,
-and with B4 gone there are no other reference visits.
+## Design
 
-PROCEDURE.md is left as written. This table is the record of what departs from it.
+`scripts/settling_design.py` is the campaign. It is the single source of truth;
+the CSV, the summary and the firmware header are all generated from it.
 
-## One session, two parts
-
-The procedure splits the blocks over two sessions because, with B4 and B5,
-each block took ~16 min. Without them, all six blocks fit in **one 30.4 min
-session**. The two anchor runs are kept, now as the first and last block:
-1/256 brackets the other four, and the four between them run in shuffled
-order (seed 7). §7.1's validity check then compares the start of the session
-with the end. If the two 1/256 runs disagree, drift or warm-up over the session
-is large enough to bias the comparison, and that has to be fixed first.
-
-**Part 1, homing and warm-up, is not defined yet.** `warmup()` in
-`mres_design.py` is an empty stub, waiting for the two end switches. It will
-home to both ends, set x_start at the centre of the measured travel, and run
-the ±5 mm warm-up. Its one obligation is to leave the stage **at x_start, on a
-full step**, because part 2 starts from there.
-
-**Part 2, the stepping sequence**, is defined:
-
-| | Segment | What happens | Rows |
-|---|---|---|---|
-| REF | reference | MRES set for the first block, session marker, x_ref ×3 from below | 10 |
-| B1 | configure | at a full step: write MRES, read it back, 2 s settle, IDS marker | 3 |
-| B2 | condition | 3 strokes of ±2 mm, then x_start from below, 2 s | 7 |
-| B3 | staircase | fine tier (single µsteps) + coarse tier (1/16 FS) forward, the same in reverse; 2 repeats, with a fixed-side re-approach between them | 9 |
-| E | end | end marker, x_ref ×3 from below, back to x_start | 9 |
-
-B1–B3 repeat for each of the six blocks. Each segment starts
-and ends at x_start and is one plan upload (19 rows per block, well under the
-firmware's 512).
-
----
-
-## The sequence
-
-![MRES test sequence](sequence/mres_test_sequence.png)
-
-**(a)** The session. Part 1 is a placeholder, and the anchor 1/256 (bold) runs
-first and last.
-**(b)** One 1/256 block end to end. The position axis is symlog, so the ±2 mm
-strokes and the 40 µm staircase fit on one axis, and the time axis is square-root
-scaled so B1 and B2 stay visible next to B3. **(c)** The B3 staircase at every
-MRES over identical displacements. **(d)** Microstep size against the
-interferometer floor, labelled with the number of fine-tier microsteps.
-
-| Block | 1 | 2 | 3 | 4 | 5 | 6 |
-|---|---|---|---|---|---|---|
-| MRES | **1/256** | 1/32 | 1/16 | 1/128 | 1/64 | **1/256** |
-| duration [min] | 7.4 | 3.2 | 2.9 | 5.0 | 3.8 | 7.4 |
-
-Part 2 is 30.4 min, including 0.3 min each for the start and end references.
-B3 takes most of every block. Part 1 has roughly 30 min left in a one-hour
-session.
-
-### §1 parameters, as filled in
-
-| Symbol | Value | Source |
-|---|---|---|
-| L | 2 mm | rig constant, 200 FS per revolution |
-| s_FS | 10 µm | |
-| δ | 625 / 312.5 / 156.25 / 78.125 / 39.06 nm | 1/16 … 1/256 |
-| R | 1.71 µm | ISO 230-2 reversal value, `analysis/stage_results.json` |
-| S_fine | max(2.5, 5.13) → **5.625 µm (9/16 FS)** | rounded up to the 1/16 FS grid |
-| σ_floor | **3 nm — placeholder** | needs the Allan minimum from the IDS |
-| v | 0.7 mm/s (70 FS/s) | the rig's MODERATE, same for every MRES |
-| f_step at 1/256 | 17.9 kHz | under the firmware's 20 kHz ceiling |
-| x_start / x_ref | 0 / −1 mm | x_start to come from homing (part 1) |
-| fixed-side run-up | 0.1 mm, from below | ≫ R |
-
-S_fine is rounded up to a whole number of 1/16 FS steps. That makes the fine
-tier an integer number of microsteps at every MRES (9, 18, 36, 72, 144). The
-coarse tier then continues in 1/16 FS steps without a remainder, 55 increments
-to 4 FS. Because 3R is larger than ¼ FS, the fine tier is longer than the
-procedure's worked example of 64 microsteps at 1/256.
-
-Every position in the plan is an integer number of **u256 = 1/256 FS**. Every
-MRES divides 256, so every target lies on every block's grid and the spans are
-identical by construction. The design rejects an MRES change at any position
-that is not a whole full step.
-
-The furthest excursion is now 2.1 mm (a B2 stroke plus its run-up), so the
-firmware's default ±11 mm soft limit is enough.
-
-### Interferometer synchronisation
-
-The IDS records separately, so the plan carries **separator signatures** in
-the convention used for the Microstepping Test Data v2 runs. Each one is a rapid
-negative leap, a 1 s dwell, a return and a 0.5 s settle, and its amplitude
-says what follows:
-
-| marker | amplitude |
+| | |
 |---|---|
-| session start | 60 FS |
-| block at 1/16, 1/32, 1/64, 1/128, 1/256 | 32, 36, 40, 44, 48 FS |
-| end of session | 56 FS |
+| Microstep sizes | 1/16, 1/32, 1/64, 1/256 |
+| Distances | 1/16 FS, 1/4 FS, 1 FS, 4 FS, 16 FS, 64 FS, 5 mm, 20 mm |
+| Repeats | 4 per direction (2 for 20 mm, travel-capped) |
+| Measured displacements | 240 — 60 per microstep size |
+| Rows | 344 |
+| Duration | 32 min |
+| Speed | 78 FS/s = 0.78 mm/s, **identical for every size** |
+| Dwell at every stop | 3.0 s; settled value = mean of the final 1.0 s |
+| Travel used | ±20 mm about the centre of the stage |
+| Order | shuffled within each block, seed 4201 |
+| Current | 400 mA RMS, SpreadCycle, `intpol` off, no standstill reduction |
 
-The marker in B1 comes before B2, so B2's conditioning wipes out any friction
-history the marker leaves.
+### Distances in microsteps
 
-**B1.3 (re-zero the interferometer)** is done in analysis rather than on the
-instrument. The block's zero is the mean x_IFM over the 2 s settle after the
-MRES write, which is equivalent and means the session doesn't stop for an
-operator action.
+Every distance is a whole number of microsteps at every size — the design
+refuses to emit a plan where it is not. The 1/16 FS distance is **one
+microstep** at 1/16 and sixteen at 1/256, which is the extreme of the
+comparison and the cell most likely to separate the sizes.
 
-Set the IDS acquisition rate to at least 100 Hz. Earlier `IDSdata.txt` logs ran
-at ~88 ms per sample, which gives only three samples in a 300 ms B3 window.
+| distance | µm | 1/16 | 1/32 | 1/64 | 1/256 |
+|---|---:|---:|---:|---:|---:|
+| 1/16 FS | 0.625 | 1 | 2 | 4 | 16 |
+| 1/4 FS | 2.5 | 4 | 8 | 16 | 64 |
+| 1 FS | 10 | 16 | 32 | 64 | 256 |
+| 4 FS | 40 | 64 | 128 | 256 | 1024 |
+| 16 FS | 160 | 256 | 512 | 1024 | 4096 |
+| 64 FS | 640 | 1024 | 2048 | 4096 | 16384 |
+| 5 mm | 5000 | 8000 | 16000 | 32000 | 128000 |
+| 20 mm | 20000 | 32000 | 64000 | 128000 | 512000 |
 
----
+### Three decisions worth knowing about
 
-## State
+**One speed for all four sizes.** Settling depends on approach velocity, so
+letting each size run at its own top speed would compare speeds, not microstep
+sizes. The finest size sets the speed for everything: 1/256 at the firmware's
+20 kHz pulse ceiling gives 78 FS/s. This is **below the 5 mm/s operational
+speed** — a real limitation, stated in the design output every time it runs.
+Dropping 1/256 from the set would allow 312 FS/s. The trade was taken in favour
+of covering 1/256, because the question is about microstep size.
 
-**The plan and the figure are generated and checked.** Every row is continuous
-with the previous one and lies on its block's microstep grid. MRES changes only
-happen at full steps. Each segment starts and ends at x_start.
+**Walks, not returns.** Within each distance the stage walks out n steps and
+back, straddling the centre, rather than returning to a start point between
+moves. That gives a run of same-direction displacements with the reversal
+isolated to the first move of each run (tagged `reversal` in the CSV), instead
+of a reversal contaminating every measurement. Straddling rather than walking
+out one way halves the travel the plan needs — 40 mm instead of 84 mm — and
+changes nothing, because every number is a difference.
 
-**Part 1 is empty** until the end switches are fitted.
+**Conditioning before each block.** Three ±2 mm strokes then an approach to the
+start from below, so every block begins in the same friction state. Without it
+the first few cells of each block carry whatever the stage was left in.
 
-**The runner is checked against its simulator only.** Every mode runs end to
-end against the protocol model: upload acknowledgements, segment logs, the
-x_start check after each segment, and refusal of the undefined part 1. It has
-not talked to a real board.
+### Block structure
 
-**Nothing here can run yet.** The stage-identification sketch
-(`../firmware/stage_identification`) takes targets in whole full steps, does
-single-microstep staircases only, and doesn't report MSCNT. The required
-protocol is in [`firmware/README.md`](firmware/README.md). `run_mres.py`
-speaks that protocol, but no sketch implements it yet, so the hardware modes
-stop at the firmware check.
+Four blocks, one per microstep size, 86 rows / 60 measured / 8.0 min each:
 
-**Before the first session:** measure σ_floor (an Allan deviation of a static
-IDS record) and update `SIGMA_FLOOR_NM`. Confirm the operating I_HOLD and
-TPOWERDOWN; the plan currently holds at run current with TPOWERDOWN 0.
-`check_parameters()` flags any TPOWERDOWN that would end inside a B3 averaging
-window.
+- **M1** — write `CHOPCONF.MRES` at a full step, read it back, log `MSCNT`,
+  then a distinctive marker excursion (32/36/40/48 FS, one per size) so the
+  block boundary is unmistakable in the recording.
+- **M2** — conditioning strokes, then the start position from below.
+- **M3** — the matrix: distances in shuffled order, each walked out and back.
+
+## Files
+
+```
+scripts/settling_design.py      the campaign as code; prints the tables, writes the CSV
+scripts/gen_settling_header.py  CSV -> firmware/settling_test/settling_plan.h
+scripts/settling_terminal.py    host terminal; logs everything to data/
+scripts/verify_mres_switching.py  MSCNT check that the step size followed the register
+sequence/settling_plan.csv      344 rows, one per commanded action
+sequence/settling_summary.json  the numbers above, machine-readable
+firmware/settling_test/         the sketch and its generated plan header
+data/                           terminal logs and the separately recorded encoder
+analysis/                       results (empty until the run happens)
+```
+
+Change the design, rerun `settling_design.py`, then rerun
+`gen_settling_header.py`. The header says it is generated; do not edit it.
+
+## How the data becomes an answer
+
+The board cannot see the stage — the encoder is recorded separately — so the
+firmware's job is to command the moves and mark the recording. Each stop emits,
+at the moment its dwell ends:
+
+```
+# STOP,<row>,<tag>,d=<u256>,dir=<+-1>,measured=<0|1>,pos=<u256>,mscnt=<n>
+```
+
+and position samples stream at 50 Hz as `# S,<ms>,<pos_u256>,<mscnt>,<row>`.
+
+Analysis, once the data exists:
+
+1. **Align clocks.** The export header's FILETIME and the terminal PC's clock
+   disagree — by about 16 s in the previous sessions, two machines with two
+   clocks. Cross-correlate the commanded position from `# S,` against the
+   recorded encoder; the earlier sessions reached r = 0.994 this way. Do not
+   trust the timestamps.
+2. **Cut the blocks by contiguity**, not by microstep size alone. Grouping by
+   size alone spliced separate 1/256 runs together last time. Split on a gap
+   > 120 s or a size change.
+3. **Settled value per stop** = mean of the encoder over the final 1.0 s of
+   each 3.0 s dwell, located from the `# STOP,` line.
+4. **Displacement and offset** per measured row, as above.
+5. **Per cell** (size × distance × direction): mean offset, SD, n.
+6. **The answer**: mean |offset| against distance, one line per microstep size.
+   If the lines lie on top of each other, microstep size does not affect
+   settling at this speed and current, and the coarsest size that resolves the
+   needed increment is the right choice.
+
+Keep the reversal-tagged rows separate in step 5 — they carry backlash and
+should not be averaged with the same-direction moves.
+
+## Status
+
+Designed, generated, **not yet run**. The firmware has never been compiled: no
+toolchain was available where it was written. See `PROCEDURE.md` for bring-up.
