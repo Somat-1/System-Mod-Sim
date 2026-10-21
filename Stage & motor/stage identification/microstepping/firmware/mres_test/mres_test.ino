@@ -98,6 +98,20 @@ constexpr uint8_t  HOME_RETRIES = 1;
 constexpr uint32_t SWITCH_DEBOUNCE_US = 3000;
 constexpr uint16_t HOME_MRES = 16;                     // homing runs at 1/16
 
+// ---- auto run -------------------------------------------------------------
+// On boot: count down, home, centre, then wait for RUN before the plan - for
+// a stage that is already warm. Any key except '?' during the countdown
+// cancels and leaves the menu. Opening the port restarts the board, so keep
+// the terminal open for the whole run: reconnecting starts it again.
+constexpr bool AUTO_RUN_ON_BOOT = true;
+constexpr uint32_t AUTO_RUN_COUNTDOWN_S = 15;
+// What the auto run does after homing: wait at the centre for RUN and then run
+// the plan, or warm up until a key is pressed.
+enum AutoMode : uint8_t { AUTO_SEQUENCE, AUTO_WARMUP };
+constexpr AutoMode AUTO_MODE = AUTO_WARMUP;
+constexpr uint16_t AUTO_WARMUP_SPEED_FS = 400;   // 4 mm/s at 100 FS/mm
+constexpr uint16_t AUTO_WARMUP_CURRENT_MA = 400; // run and hold (ihold x1.0)
+
 // ---- warm-up --------------------------------------------------------------
 constexpr uint16_t WARMUP_SPEED_FS = 70;       // the rig's MODERATE, 0.7 mm/s
 constexpr uint32_t WARMUP_END_DWELL_MS = 200;
@@ -353,6 +367,21 @@ bool mscntOnFullStep(uint32_t mscnt) {
           % MSCNT_FULL_STEP_PERIOD) == 0;
 }
 
+/**
+ * Below 1/256 the TMC2209 only uses table positions in the middle of each
+ * microstep - odd values at 1/128, 8 mod 16 at 1/16 - so MSCNT can never sit
+ * exactly on a full step. Measured 2026-10-20: 384 at 1/256 read 385 the moment
+ * MRES became 1/128. An MRES change is therefore legal within half a microstep
+ * of the coarser of the two resolutions; at 1/256 to 1/256 that is exact.
+ */
+bool mscntNearFullStep(uint32_t mscnt, uint16_t mresA, uint16_t mresB) {
+  uint32_t d = (mscnt + MSCNT_FULL_STEP_PERIOD - MSCNT_FULL_STEP_OFFSET)
+               % MSCNT_FULL_STEP_PERIOD;
+  if (d > MSCNT_FULL_STEP_PERIOD / 2) d = MSCNT_FULL_STEP_PERIOD - d;
+  const uint16_t coarser = mresA < mresB ? mresA : mresB;
+  return d <= (uint32_t)(256 / coarser) / 2;
+}
+
 void applyCurrent(uint16_t ma) {
   driver.rms_current(ma);
   const uint8_t irun = driver.irun();
@@ -375,7 +404,7 @@ bool applyMres(uint16_t value, bool requireFullStep) {
       return false;
     }
     const uint32_t m = readMscnt();
-    if (!mscntOnFullStep(m)) {
+    if (!mscntNearFullStep(m, cfg.mres, value)) {
       Serial.printf("# ERR,reason=mscnt_off_full_step,mscnt=%lu\n",
                     (unsigned long)m);
       return false;
@@ -785,6 +814,7 @@ bool alignToElectricalFullStep() {
 
 void settingsMenu();
 void runSequence();
+void runSequenceNow();
 
 void printWarmupStatus(uint32_t cycles, uint32_t started) {
   Serial.printf("  pos %.4f mm   %lu cycles   %lus   1/%u   %u mA   %u FS/s   "
@@ -946,22 +976,36 @@ void runSequence() {
     Serial.println("Cancelled.");
     return;
   }
+  runSequenceNow();
+}
+
+/** Centre, align, run the compiled-in plan. No confirmation. */
+/** Centre and align 0 to an electrical full step: ready for row 0. */
+bool prepareAtCentre() {
+  abortRequested = false;
+  setKeyStops(true);
+  bool ok = goToCentre();
+  if (!ok)
+    Serial.println(stopReason == STOP_KEY ? "Stopped." : "# ERR,reason=centre_failed");
+  else if (!(ok = alignToElectricalFullStep()))
+    Serial.println(stopReason == STOP_KEY ? "Stopped." : "# ERR,reason=align_failed");
+  setKeyStops(false);
+  return ok;
+}
+
+/** Run the compiled-in plan from 0. Any key stops it. */
+void runPlanFromCentre() {
   Serial.println("Running - any key stops the sequence (the block in progress "
                  "then has to be rerun).");
   abortRequested = false;
   setKeyStops(true);
-  if (!goToCentre()) {
-    setKeyStops(false);
-    Serial.println(stopReason == STOP_KEY ? "Stopped." : "# ERR,reason=centre_failed");
-    return;
-  }
-  if (!alignToElectricalFullStep()) {
-    setKeyStops(false);
-    Serial.println(stopReason == STOP_KEY ? "Stopped." : "# ERR,reason=align_failed");
-    return;
-  }
   runPlan(MRES_PLAN, MRES_PLAN_ROWS, "embedded");
   setKeyStops(false);
+}
+
+/** Centre, align, run the compiled-in plan. No confirmation. */
+void runSequenceNow() {
+  if (prepareAtCentre()) runPlanFromCentre();
 }
 
 // ----------------------------------------------------------- host protocol
@@ -1256,6 +1300,63 @@ void setup() {
                 driverReady ? 1u : 0u, encoderReady ? 1u : 0u, MRES_PLAN_ROWS);
   nextSampleMs = millis();
   printMenu();
+  if (AUTO_RUN_ON_BOOT && driverReady && encoderReady) {
+    autoRun();
+    printMenu();
+  }
+}
+
+/** The boot-time auto run: countdown, home, then the sequence. */
+void autoRun() {
+  Serial.printf("\n# AUTO_RUN,countdown_s=%lu,mode=%s\n"
+                "Auto run: home, then %s. Any key cancels.\n",
+                (unsigned long)AUTO_RUN_COUNTDOWN_S,
+                AUTO_MODE == AUTO_WARMUP ? "warmup" : "sequence",
+                AUTO_MODE == AUTO_WARMUP ? "warm up until a key is pressed"
+                                         : "centre and wait for RUN");
+  for (uint32_t left = AUTO_RUN_COUNTDOWN_S; left > 0; --left) {
+    Serial.printf("  starting in %lu s\n", (unsigned long)left);
+    const uint32_t until = millis() + 1000;
+    while ((int32_t)(millis() - until) < 0) {
+      while (Serial.available()) {
+        const char ch = (char)Serial.read();
+        if (ch == '?' || ch == '\r' || ch == '\n') continue;
+        Serial.println("# AUTO_RUN,cancelled");
+        drainInput();
+        return;
+      }
+      delay(5);
+    }
+  }
+  abortRequested = false;
+  setKeyStops(true);
+  Serial.println("Homing - any key stops it.");
+  const bool ok = homeBothEnds();
+  setKeyStops(false);
+  if (!ok) {
+    Serial.println(stopReason == STOP_KEY ? "# AUTO_RUN,homing_stopped"
+                                          : "# AUTO_RUN,homing_failed");
+    return;
+  }
+  if (AUTO_MODE == AUTO_WARMUP) {
+    applyCurrent(AUTO_WARMUP_CURRENT_MA);
+    cfg.warmupSpeedFs = AUTO_WARMUP_SPEED_FS;
+    Serial.printf("# AUTO_RUN,warmup,speed_fs=%u,current_ma=%u,ihold=%u\n",
+                  cfg.warmupSpeedFs, cfg.currentMa, driver.ihold());
+    runWarmup();
+    return;
+  }
+  if (!prepareAtCentre()) return;
+  Serial.printf("\n# AUTO_RUN,ready,pos=%lld\n", (long long)posU256);
+  Serial.println("Homed and at the centre, on an electrical full step.");
+  for (;;) {
+    const String s = readLine("Type RUN and Enter to start the step sizes "
+                              "(x = cancel to the menu): ", 600000);
+    if (s.equalsIgnoreCase("RUN")) break;
+    if (s.equalsIgnoreCase("x")) { Serial.println("# AUTO_RUN,cancelled"); return; }
+  }
+  runPlanFromCentre();
+  Serial.println("# AUTO_RUN,done");
 }
 
 void loop() {

@@ -229,6 +229,9 @@ def write_header(c, digest: str) -> None:
         f"constexpr uint8_t  CFG_WARMUP_REF_EVERY = {int(c['warmup_ref_every_cycles'])};",
         f"constexpr uint16_t CFG_WARMUP_T_MAX_MIN = {int(c['warmup_t_max_min'])};",
         f"constexpr bool     CFG_END_HOLD = {'true' if c['end_motor_state'] == 'hold' else 'false'};",
+        f"constexpr bool     CFG_AUTO_RUN = {'true' if c.get('auto_run_on_boot') else 'false'};",
+        f"constexpr uint16_t CFG_AUTO_COUNTDOWN_S = {int(c.get('auto_countdown_s', 10))};",
+        f"constexpr uint16_t CFG_AUTO_CENTRE_WAIT_S = {int(c.get('auto_centre_wait_s', 15))};",
         "",
     ]
     HEADER.parent.mkdir(parents=True, exist_ok=True)

@@ -47,7 +47,7 @@ PHASE_NAME = {
 }
 # MRES is a magnitude, so it gets one hue light -> dark (vizstyle SEQUENTIAL).
 MRES_COLOR = dict(zip(md.MRES_TESTED,
-                      ["#9ec5f4", "#6da7ec", "#3987e5", "#184f95", "#0d366b"]))
+                      ["#9ec5f4", "#6da7ec", "#3987e5", "#184f95", "#0d366b"][-len(md.MRES_TESTED):]))
 MUTED = "#6b6a66"
 PART1_W = 2.6                     # drawn width of the undefined part 1 [min]
 

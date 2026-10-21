@@ -58,7 +58,9 @@ ACCEL_FULL_STEPS_S2 = 4000        # firmware trapezoid, 40 mm/s^2
 MAX_PULSE_RATE_HZ = 20_000        # firmware step-generator ceiling
 
 # --- section 1 parameters --------------------------------------------------
-MRES_TESTED = (16, 32, 64, 128, 256)
+# 1/16 is left out of this session (2026-10-20): its coarse microsteps were
+# not a candidate, and dropping it keeps the session to five blocks.
+MRES_TESTED = (32, 64, 128, 256)
 ANCHOR = 256
 
 # Reversal lost motion R. The ISO 230-2 reversal value from the stage

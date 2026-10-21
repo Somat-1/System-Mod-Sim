@@ -14,7 +14,6 @@
     "screw_lead_mm": 2.0,
     "s_fs_um": 10.0,
     "delta_nm": {
-      "1/16": 625.0,
       "1/32": 312.5,
       "1/64": 156.25,
       "1/128": 78.125,
@@ -31,14 +30,12 @@
     "x_ref_mm": -1.0,
     "approach_mm": 0.1,
     "resolvable": {
-      "1/16": true,
       "1/32": true,
       "1/64": true,
       "1/128": true,
       "1/256": true
     },
     "fine_tier_counts": {
-      "1/16": 9,
       "1/32": 18,
       "1/64": 36,
       "1/128": 72,
@@ -63,7 +60,6 @@
   "markers_fs": {
     "session": 60,
     "end": 56,
-    "1/16": 32,
     "1/32": 36,
     "1/64": 40,
     "1/128": 44,
@@ -72,13 +68,12 @@
   "checks": [],
   "order": [
     "1/256",
-    "1/32",
-    "1/16",
     "1/128",
+    "1/32",
     "1/64",
     "1/256"
   ],
-  "stepping_minutes": 30.36,
+  "stepping_minutes": 27.49,
   "segments": {
     "reference": {
       "mres": 256,
@@ -99,26 +94,6 @@
       "minutes": 7.44
     },
     "block2": {
-      "mres": 32,
-      "rows": 19,
-      "phases": {
-        "B1": 0.08,
-        "B2": 0.63,
-        "B3": 2.48
-      },
-      "minutes": 3.18
-    },
-    "block3": {
-      "mres": 16,
-      "rows": 19,
-      "phases": {
-        "B1": 0.07,
-        "B2": 0.63,
-        "B3": 2.17
-      },
-      "minutes": 2.87
-    },
-    "block4": {
       "mres": 128,
       "rows": 19,
       "phases": {
@@ -128,7 +103,17 @@
       },
       "minutes": 5.01
     },
-    "block5": {
+    "block3": {
+      "mres": 32,
+      "rows": 19,
+      "phases": {
+        "B1": 0.08,
+        "B2": 0.63,
+        "B3": 2.48
+      },
+      "minutes": 3.18
+    },
+    "block4": {
       "mres": 64,
       "rows": 19,
       "phases": {
@@ -138,7 +123,7 @@
       },
       "minutes": 3.79
     },
-    "block6": {
+    "block5": {
       "mres": 256,
       "rows": 19,
       "phases": {

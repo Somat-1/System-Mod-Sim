@@ -1,11 +1,11 @@
 {
-  "_comment": "Single source for the ISO 230-2 session. Edit here, then run scripts/iso_design.py: it checks the values, previews the targets and writes firmware/iso230_2/iso_config.h. Reflash after any change.",
+  "_comment": "auto_centre_wait_s 0 = home, centre, then wait at the menu for 2 (ISO sequence). Single source for the ISO 230-2 session. Edit here, then run scripts/iso_design.py: it checks the values, previews the targets and writes firmware/iso230_2/iso_config.h. Reflash after any change.",
 
   "lead_mm": 2.0,
   "steps_per_rev": 200,
   "mres": 16,
 
-  "run_current_ma": 360,
+  "run_current_ma": 400,
   "ihold_multiplier": 1.0,
   "tpowerdown": 0,
   "iholddelay": 0,
@@ -39,5 +39,9 @@
   "warmup_ref_every_cycles": 1,
   "warmup_t_max_min": 30,
 
-  "end_motor_state": "hold"
+  "end_motor_state": "hold",
+
+  "auto_run_on_boot": true,
+  "auto_countdown_s": 10,
+  "auto_centre_wait_s": 0
 }

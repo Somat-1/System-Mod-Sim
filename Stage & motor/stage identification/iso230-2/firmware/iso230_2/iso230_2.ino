@@ -1163,6 +1163,64 @@ void setup() {
   printConfig();
   nextSampleMs = millis();
   printMenu();
+  if (CFG_AUTO_RUN && driverReady) {
+    autoIso();
+    state = ST_IDLE;
+    printMenu();
+  }
+}
+
+/**
+ * Boot-time auto run, for when nobody is at the terminal: home, park at the
+ * centre (x_ref), hold still for CFG_AUTO_CENTRE_WAIT_S so the interferometer
+ * recording can be started, then DATUM -> runs -> END_REF -> PARK. No warm-up:
+ * the stage is expected to be warm. Any key (other than '?') during the
+ * countdown cancels to the menu.
+ */
+void autoIso() {
+  Serial.printf("\n# AUTO_RUN,countdown_s=%u,centre_wait_s=%u\n"
+                "Auto run: home, centre, wait %u s, then the ISO sequence.\n",
+                CFG_AUTO_COUNTDOWN_S, CFG_AUTO_CENTRE_WAIT_S, CFG_AUTO_CENTRE_WAIT_S);
+  for (uint16_t left = CFG_AUTO_COUNTDOWN_S; left > 0; --left) {
+    Serial.printf("  starting in %u s\n", left);
+    const uint32_t until = millis() + 1000;
+    while ((int32_t)(millis() - until) < 0) {
+      while (Serial.available()) {
+        const char ch = (char)Serial.read();
+        if (ch == '?' || ch == '\r' || ch == '\n') continue;
+        Serial.println("# AUTO_RUN,cancelled");
+        drainInput();
+        return;
+      }
+      delay(5);
+    }
+  }
+  if (!homeInteractive()) { Serial.println("# AUTO_RUN,homing_failed"); return; }
+  // home() ends at x_ref, the centre of the soft limits, via the fixed side.
+  state = ST_IDLE;
+  if (CFG_AUTO_CENTRE_WAIT_S == 0) {
+    // Hold at the centre and wait: the sequence is started with 2.
+    Serial.printf("# AUTO_RUN,ready,x_mm=%.4f - holding at the centre; "
+                  "press 2 to start the ISO sequence\n", mmOf(xNow()));
+    return;
+  }
+  event("centre_wait_start");
+  Serial.printf("# AUTO_RUN,at_centre,x_mm=%.4f,wait_s=%u\n", mmOf(xNow()),
+                CFG_AUTO_CENTRE_WAIT_S);
+  for (uint16_t left = CFG_AUTO_CENTRE_WAIT_S; left > 0; --left) {
+    Serial.printf("  at centre - ISO sequence in %u s\n", left);
+    abortRequested = false;
+    const uint32_t until = millis() + 1000;
+    while ((int32_t)(millis() - until) < 0) {
+      serviceTelemetry();
+      pumpSerial();
+      if (abortRequested) { Serial.println("# AUTO_RUN,aborted"); return; }
+      delay(5);
+    }
+  }
+  event("centre_wait_end");
+  runIso();
+  Serial.println("# AUTO_RUN,done");
 }
 
 void loop() {

@@ -1,28 +1,28 @@
 {
-  "config_sha256": "10e3652ae6f51965b58515421a351444f983b4a68f4967cf0cc51fcf80392c44",
-  "rom_mm": 140.0,
+  "config_sha256": "657ba8507e2a177402ceb90aebb42f6f152b7a60b71763d0ff119849906f2dd2",
+  "rom_mm": 122.6969,
   "u256_per_mm": 25600.0,
   "microstep_um": 0.625,
   "soft_limits_mm": [
     2.0,
-    138.0
+    120.6969
   ],
   "span_mm": [
     5.0,
-    135.0
+    117.5
   ],
-  "targets": 27,
-  "interval_mm": 5.0,
-  "offset_max_mm": 1.25,
-  "x_ref_mm": 70.0,
+  "targets": 24,
+  "interval_mm": 4.891304347826087,
+  "offset_max_mm": 1.2228260869565217,
+  "x_ref_mm": 61.35,
   "t_hold_s": 0.0,
   "t_settle_s": 0.5,
   "dwell_s": 1.0,
-  "run_minutes": 2.3995833333333336,
-  "iso_minutes": 12.24291666666667,
-  "measured_stops": 270,
+  "run_minutes": 2.1127499999999997,
+  "iso_minutes": 10.80875,
+  "measured_stops": 240,
   "pulse_rate_hz_at_v": 8000.0,
   "lead_phase_min_gap": 0.0,
-  "lead_phase_max_gap": 0.11550000000000082,
+  "lead_phase_max_gap": 0.2104999999999997,
   "checks": []
 }
