@@ -1,5 +1,5 @@
 {
-  "config_sha256": "694408ce62eeb631e90f80cc6cac463718ec4d2f93fbd895e9ad1e89ec6b4865",
+  "config_sha256": "3b3d933876d2deadb66dc942b125a075fe45e3c481a30ae97b6aba905698ddaf",
   "rom_mm": 122.695,
   "u256_per_mm": 25600.0,
   "microstep_um": 0.625,
