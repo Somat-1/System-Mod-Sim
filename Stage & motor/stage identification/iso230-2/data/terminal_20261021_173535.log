@@ -1,0 +1,226 @@
+1792596935.603 ESP-ROM:esp32s3-20210327
+1792596935.604 Build:Mar 27 2021
+1792596935.604 rst:0x15 (USB_UART_CHIP_RESET),boot:0x8 (SPI_FAST_FLASH_BOOT)
+1792596935.604 Saved PC:0x40378a06
+1792596935.604 SPIWP:0xee
+1792596935.604 mode:DIO, clock div:1
+1792596935.604 load:0x3fce2820,len:0x10cc
+1792596935.604 load:0x403c8700,len:0xc2c
+1792596935.604 load:0x403cb700,len:0x30c0
+1792596935.604 entry 0x403c88b8
+1792596935.865 # BOOT,fw=iso230_2,config=34cd9d58c09d
+1792596935.865 # PINS,step=7,dir=8,en=9,sw_neg=10,sw_pos=11,home=neg
+1792596936.027 # DRIVER_ID,ioin=0x00000000,version=0x00,expected=0x21
+1792596936.402 # ERR,reason=driver_no_reply
+1792596936.402 # ERR,reason=init_failed,motor_disabled
+1792596936.402 # READY,driver=0,encoder=0
+1792596936.402   lead 2.000 mm  200 steps/rev  1/16  (0.6250 um per microstep)
+1792596936.402   run current 400 mA  ihold x1.00  tpowerdown 0  iholddelay 0  intpol 0
+1792596936.402   v 5.00 mm/s (500 FS/s)  a 40.0 mm/s^2  home seek 2.00 / slow 0.15 mm/s
+1792596936.402   margin 2.0  overrun 3.0  p_nom 5.0 mm  seed 2302  x_ref centre
+1792596936.402   settle 500 ms + record 500 ms   runs 5   warm-up max 30 min   end hold   config 34cd9d58c09d
+1792596936.402 
+1792596936.402 ================================================================
+1792596936.402  ISO 230-2 baseline - positioning accuracy and repeatability
+1792596936.402  driver=0 homed=0   1/16   400 mA   v 5.00 mm/s   config 34cd9d58c09d
+1792596936.402  not homed - run 1 first
+1792596936.402 ================================================================
+1792596936.402   1  Home + warm-up    home, place the targets, warm up (key = stop after cycle)
+1792596936.402   2  ISO sequence      datum, n runs, end reference, park
+1792596936.402   3  Settings          current, velocity, runs, warm-up max
+1792596936.402   4  Show plan         targets, limits, x_ref
+1792596936.403   5  Go to x_ref       fixed-side approach
+1792596936.403   6  Home only         home and place the targets, then wait
+1792596936.403   7  Driver readback   registers and status
+1792596936.403   8  Switch state      read both end switches now
+1792596936.403   9  Trajectory test   speed/accel/dwell profiles + home closure checks
+1792596936.403   0  Release motor     EN high, outputs off
+1792596936.403   ?  This menu         (keys act at once - Ctrl+C sends ABORT)
+1792596936.403 
+1792596936.403 > ?
+1792596936.403 
+1792596936.403 ================================================================
+1792596936.403  ISO 230-2 baseline - positioning accuracy and repeatability
+1792596936.403  driver=0 homed=0   1/16   400 mA   v 5.00 mm/s   config 34cd9d58c09d
+1792596936.403  not homed - run 1 first
+1792596936.403 ================================================================
+1792596936.403   1  Home + warm-up    home, place the targets, warm up (key = stop after cycle)
+1792596936.403   2  ISO sequence      datum, n runs, end reference, park
+1792596936.403   3  Settings          current, velocity, runs, warm-up max
+1792596936.403   4  Show plan         targets, limits, x_ref
+1792596936.403   5  Go to x_ref       fixed-side approach
+1792596936.403   6  Home only         home and place the targets, then wait
+1792596936.403   7  Driver readback   registers and status
+1792596936.403   8  Switch state      read both end switches now
+1792596936.403   9  Trajectory test   speed/accel/dwell profiles + home closure checks
+1792596936.403   0  Release motor     EN high, outputs off
+1792596936.403   ?  This menu         (keys act at once - Ctrl+C sends ABORT)
+1792596936.403 
+1792596936.403 > 
+1792596938.248 INIT failed - motion is disabled. See the # ERR lines above.
+1792596938.248 
+1792596938.248 ================================================================
+1792596938.248  ISO 230-2 baseline - positioning accuracy and repeatability
+1792596938.248  driver=0 homed=0   1/16   400 mA   v 5.00 mm/s   config 34cd9d58c09d
+1792596938.248  not homed - run 1 first
+1792596938.248 ================================================================
+1792596938.248   1  Home + warm-up    home, place the targets, warm up (key = stop after cycle)
+1792596938.248   2  ISO sequence      datum, n runs, end reference, park
+1792596938.248   3  Settings          current, velocity, runs, warm-up max
+1792596938.248   4  Show plan         targets, limits, x_ref
+1792596938.248   5  Go to x_ref       fixed-side approach
+1792596938.248   6  Home only         home and place the targets, then wait
+1792596938.248   7  Driver readback   registers and status
+1792596938.248   8  Switch state      read both end switches now
+1792596938.248   9  Trajectory test   speed/accel/dwell profiles + home closure checks
+1792596938.248   0  Release motor     EN high, outputs off
+1792596938.248   ?  This menu         (keys act at once - Ctrl+C sends ABORT)
+1792596938.248 
+1792596938.248 > 
+1792596960.333 INIT failed - motion is disabled. See the # ERR lines above.
+1792596960.334 
+1792596960.334 ================================================================
+1792596960.334  ISO 230-2 baseline - positioning accuracy and repeatability
+1792596960.334  driver=0 homed=0   1/16   400 mA   v 5.00 mm/s   config 34cd9d58c09d
+1792596960.334  not homed - run 1 first
+1792596960.334 ================================================================
+1792596960.334   1  Home + warm-up    home, place the targets, warm up (key = stop after cycle)
+1792596960.334   2  ISO sequence      datum, n runs, end reference, park
+1792596960.334   3  Settings          current, velocity, runs, warm-up max
+1792596960.334   4  Show plan         targets, limits, x_ref
+1792596960.334   5  Go to x_ref       fixed-side approach
+1792596960.334   6  Home only         home and place the targets, then wait
+1792596960.334   7  Driver readback   registers and status
+1792596960.334   8  Switch state      read both end switches now
+1792596960.334   9  Trajectory test   speed/accel/dwell profiles + home closure checks
+1792596960.334   0  Release motor     EN high, outputs off
+1792596960.334   ?  This menu         (keys act at once - Ctrl+C sends ABORT)
+1792596960.334 
+1792596960.334 > 
+1792596961.381 INIT failed - motion is disabled. See the # ERR lines above.
+1792596961.437 
+1792596961.437 
+1792596961.437 ================================================================
+1792596961.437  ISO 230-2 baseline - positioning accuracy and repeatability
+1792596961.437  driver=0 homed=0   1/16   400 mA   v 5.00 mm/s   config 34cd9d58c09d
+1792596961.437  not homed - run 1 first
+1792596961.437 ================================================================
+1792596961.437   1  Home + warm-up    home, place the targets, warm up (key = stop after cycle)
+1792596961.437   2  ISO sequence      datum, n runs, end reference, park
+1792596961.437   3  Settings          current, velocity, runs, warm-up max
+1792596961.437   4  Show plan         targets, limits, x_ref
+1792596961.437   5  Go to x_ref       fixed-side approach
+1792596961.437   6  Home only         home and place the targets, then wait
+1792596961.437   7  Driver readback   registers and status
+1792596961.437   8  Switch state      read both end switches now
+1792596961.437   9  Trajectory test   speed/accel/dwell profiles + home closure checks
+1792596961.437   0  Release motor     EN high, outputs off
+1792596961.437   ?  This menu         (keys act at once - Ctrl+C sends ABORT)
+1792596961.437 
+1792596961.437 > 
+1792596962.015 INIT failed - motion is disabled. See the # ERR lines above.
+1792596962.015 
+1792596962.015 =============================================================
+1792596962.070 ===
+1792596962.070  ISO 230-2 baseline - positioning accuracy and repeatability
+1792596962.070  driver=0 homed=0   1/16   400 mA   v 5.00 mm/s   config 34cd9d58c09d
+1792596962.070  not homed - run 1 first
+1792596962.070 ================================================================
+1792596962.070   1  Home + warm-up    home, place the targets, warm up (key = stop after cycle)
+1792596962.070   2  ISO sequence      datum, n runs, end reference, park
+1792596962.070   3  Settings          current, velocity, runs, warm-up max
+1792596962.070   4  Show plan         targets, limits, x_ref
+1792596962.070   5  Go to x_ref       fixed-side approach
+1792596962.070   6  Home only         home and place the targets, then wait
+1792596962.070   7  Driver readback   registers and status
+1792596962.070   8  Switch state      read both end switches now
+1792596962.070   9  Trajectory test   speed/accel/dwell profiles + home closure checks
+1792596962.070   0  Release motor     EN high, outputs off
+1792596962.070   ?  This menu         (keys act at once - Ctrl+C sends ABORT)
+1792596962.070 
+1792596962.070 > 
+1792596963.877 # ABORT
+1792596964.089 # ABORT
+1792596964.948 # ABORT
+1792596965.216 # ABORT
+1792596965.856 INIT failed - motion is disabled. See the # ERR lines above.
+1792596965.856 
+1792596965.856 ================================================================
+1792596965.856  ISO 230-2 baseline - positioning accuracy and repeatability
+1792596965.856  driver=0 homed=0   1/16   400 mA   v 5.00 mm/s   config 34cd9d58c09d
+1792596965.856  not homed - run 1 first
+1792596965.856 ================================================================
+1792596965.856   1  Home + warm-up    home, place the targets, warm up (key = stop after cycle)
+1792596965.856   2  ISO sequence      datum, n runs, end reference, park
+1792596965.857   3  Settings          current, velocity, runs, warm-up max
+1792596965.857   4  Show plan         targets, limits, x_ref
+1792596965.857   5  Go to x_ref       fixed-side approach
+1792596965.857   6  Home only         home and place the targets, then wait
+1792596965.857   7  Driver readback   registers and status
+1792596965.857   8  Switch state      read both end switches now
+1792596965.857   9  Trajectory test   speed/accel/dwell profiles + home closure checks
+1792596965.857   0  Release motor     EN high, outputs off
+1792596965.857   ?  This menu         (keys act at once - Ctrl+C sends ABORT)
+1792596965.857 
+1792596965.857 > 
+1792596967.091 INIT failed - motion is disabled. See the # ERR lines above.
+1792596967.092 
+1792596967.092 ================================================================
+1792596967.092  ISO 230-2 baseline - positioning accuracy and repeatability
+1792596967.092  driver=0 homed=0   1/16   400 mA   v 5.00 mm/s   config 34cd9d58c09d
+1792596967.092  not homed - run 1 first
+1792596967.092 ================================================================
+1792596967.092   1  Home + warm-up    home, place the targets, warm up (key = stop after cycle)
+1792596967.092   2  ISO sequence      datum, n runs, end reference, park
+1792596967.092   3  Settings          current, velocity, runs, warm-up max
+1792596967.092   4  Show plan         targets, limits, x_ref
+1792596967.092   5  Go to x_ref       fixed-side approach
+1792596967.092   6  Home only         home and place the targets, then wait
+1792596967.092   7  Driver readback   registers and status
+1792596967.092   8  Switch state      read both end switches now
+1792596967.092   9  Trajectory test   speed/accel/dwell profiles + home closure checks
+1792596967.092   0  Release motor     EN high, outputs off
+1792596967.092   ?  This menu         (keys act at once - Ctrl+C sends ABORT)
+1792596967.092 
+1792596967.092 > 
+1792596968.210 INIT failed - motion is disabled. See the # ERR lines above.
+1792596968.210 
+1792596968.210 ================================================================
+1792596968.210  ISO 230-2 baseline - positioning accuracy and repeatability
+1792596968.210  driver=0 homed=0   1/16   400 mA   v 5.00 mm/s   config 34cd9d58c09d
+1792596968.210  not homed - run 1 first
+1792596968.211 ================================================================
+1792596968.211   1  Home + warm-up    home, place the targets, warm up (key = stop after cycle)
+1792596968.211   2  ISO sequence      datum, n runs, end reference, park
+1792596968.211   3  Settings          current, velocity, runs, warm-up max
+1792596968.211   4  Show plan         targets, limits, x_ref
+1792596968.211   5  Go to x_ref       fixed-side approach
+1792596968.211   6  Home only         home and place the targets, then wait
+1792596968.211   7  Driver readback   registers and status
+1792596968.211   8  Switch state      read both end switches now
+1792596968.211   9  Trajectory test   speed/accel/dwell profiles + home closure checks
+1792596968.211   0  Release motor     EN high, outputs off
+1792596968.211   ?  This menu         (keys act at once - Ctrl+C sends ABORT)
+1792596968.211 
+1792596968.211 > 
+1792596970.738 8
+1792596970.738 # SWITCHES,neg=0,pos=0,home=neg
+1792596970.738 
+1792596970.738 ================================================================
+1792596970.738  ISO 230-2 baseline - positioning accuracy and repeatability
+1792596970.738  driver=0 homed=0   1/16   400 mA   v 5.00 mm/s   config 34cd9d58c09d
+1792596970.738  not homed - run 1 first
+1792596970.738 ================================================================
+1792596970.738   1  Home + warm-up    home, place the targets, warm up (key = stop after cycle)
+1792596970.738   2  ISO sequence      datum, n runs, end reference, park
+1792596970.738   3  Settings          current, velocity, runs, warm-up max
+1792596970.738   4  Show plan         targets, limits, x_ref
+1792596970.738   5  Go to x_ref       fixed-side approach
+1792596970.738   6  Home only         home and place the targets, then wait
+1792596970.738   7  Driver readback   registers and status
+1792596970.738   8  Switch state      read both end switches now
+1792596970.738   9  Trajectory test   speed/accel/dwell profiles + home closure checks
+1792596970.738   0  Release motor     EN high, outputs off
+1792596970.738   ?  This menu         (keys act at once - Ctrl+C sends ABORT)
+1792596970.738 
+1792596970.739 > 

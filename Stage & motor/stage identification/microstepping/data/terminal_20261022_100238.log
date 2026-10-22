@@ -1,0 +1,93 @@
+1792656158.911 nter needed)
+1792656158.912 
+1792656158.912 > 
+1792656158.912 # AUTO_RUN,countdown_s=15,mode=warmup
+1792656158.912 Auto run: home, then warm up until a key is pressed. Any key cancels.
+1792656158.912   starting in 15 s
+1792656158.912 ESP-ROM:esp32s3-20210327
+1792656158.912 Build:Mar 27 2021
+1792656158.912 rst:0x15 (USB_UART_CHIP_RESET),boot:0x8 (SPI_FAST_FLASH_BOOT)
+1792656158.912 Saved PC:0x40378c26
+1792656158.912 SPIWP:0xee
+1792656158.912 mode:DIO, clock div:1
+1792656158.912 load:0x3fce2820,len:0x10cc
+1792656158.912 load:0x403c8700,len:0xc2c
+1792656158.912 load:0x403cb700,len:0x30c0
+1792656158.912 entry 0x403c88b8
+1792656159.174 # BOOT,fw=mres_test
+1792656159.175 # PINS,step=7,dir=8,en=9,uart_rx=18,uart_tx=17,enc_a=4,enc_b=5,enc_z=6,sw_neg=10,sw_pos=11
+1792656159.175 # SWITCHES,neg=0,pos=0,active_level=low
+1792656159.280 # DRIVER_ID,ioin=0x21000241,version=0x21,expected=0x21
+1792656159.390 # DRIVER,spreadcycle=1,intpol=0,stealth=0,ihold_mult=1.00,tpowerdown=0,iholddelay=0,mres=16,mscnt=456,irun=9,ihold=9,current_ma=360
+1792656159.390 # READY,driver=1,encoder=1,plan_rows=114
+1792656159.390 
+1792656159.390 ================================================================
+1792656159.390  MRES test firmware - microstep-resolution selection
+1792656159.390  driver=1 encoder=1 homed=0   1/16   360 mA   70 FS/s
+1792656159.390  travel not measured yet - run 1 first
+1792656159.390 ================================================================
+1792656159.390   1  Home              find both end switches, then wait here
+1792656159.390   2  Warm-up           shuttle between the limits; any key pauses
+1792656159.390   3  MRES sequence     centre, then 114 rows (~27 min); any key stops
+1792656159.390   4  Settings          current, speed, MRES, amplitude
+1792656159.390   5  Go to centre      move to x_start on a full step
+1792656159.390   6  Host plan mode    PLAN ADD / PLAN RUN for run_mres.py
+1792656159.390   7  Driver readback   the # DRIVER line
+1792656159.390   8  Switch state      read both end switches now
+1792656159.390   0  Release motor     EN high, outputs off
+1792656159.390   ?  This menu         (keys act at once - no Enter needed)
+1792656159.390 
+1792656159.390 > 
+1792656159.390 # AUTO_RUN,countdown_s=15,mode=warmup
+1792656159.390 Auto run: home, then warm up until a key is pressed. Any key cancels.
+1792656159.390   starting in 15 s
+1792656160.388   starting in 14 s
+1792656161.408   starting in 13 s
+1792656162.364   starting in 12 s
+1792656163.368   starting in 11 s
+1792656164.395   starting in 10 s
+1792656165.409   starting in 9 s
+1792656166.410   starting in 8 s
+1792656167.369   starting in 7 s
+1792656168.385   starting in 6 s
+1792656169.391   starting in 5 s
+1792656170.415   starting in 4 s
+1792656171.167 # AUTO_RUN,cancelled
+1792656171.167 
+1792656171.167 ================================================================
+1792656171.167  MRES test firmware - microstep-resolution selection
+1792656171.167  driver=1 encoder=1 homed=0   1/16   360 mA   70 FS/s
+1792656171.167  travel not measured yet - run 1 first
+1792656171.167 ================================================================
+1792656171.167   1  Home              find both end switches, then wait here
+1792656171.167   2  Warm-up           shuttle between the limits; any key pauses
+1792656171.167   3  MRES sequence     centre, then 114 rows (~27 min); any key stops
+1792656171.167   4  Settings          current, speed, MRES, amplitude
+1792656171.167   5  Go to centre      move to x_start on a full step
+1792656171.167   6  Host plan mode    PLAN ADD / PLAN RUN for run_mres.py
+1792656171.167   7  Driver readback   the # DRIVER line
+1792656171.167   8  Switch state      read both end switches now
+1792656171.167   0  Release motor     EN high, outputs off
+1792656171.167   ?  This menu         (keys act at once - no Enter needed)
+1792656171.167 
+1792656171.167 > 
+1792656173.375 0
+1792656173.375 Outputs off. Travel invalidated - home again before moving.
+1792656173.375 
+1792656173.375 ================================================================
+1792656173.375  MRES test firmware - microstep-resolution selection
+1792656173.375  driver=1 encoder=1 homed=0   1/16   360 mA   70 FS/s
+1792656173.375  travel not measured yet - run 1 first
+1792656173.375 ================================================================
+1792656173.375   1  Home              find both end switches, then wait here
+1792656173.375   2  Warm-up           shuttle between the limits; any key pauses
+1792656173.375   3  MRES sequence     centre, then 114 rows (~27 min); any key stops
+1792656173.375   4  Settings          current, speed, MRES, amplitude
+1792656173.375   5  Go to centre      move to x_start on a full step
+1792656173.375   6  Host plan mode    PLAN ADD / PLAN RUN for run_mres.py
+1792656173.375   7  Driver readback   the # DRIVER line
+1792656173.375   8  Switch state      read both end switches now
+1792656173.375   0  Release motor     EN high, outputs off
+1792656173.375   ?  This menu         (keys act at once - no Enter needed)
+1792656173.375 
+1792656173.375 > 

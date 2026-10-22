@@ -1,0 +1,62 @@
+1792589983.251 ESP-ROM:esp32s3-20210327
+1792589983.251 Build:Mar 27 2021
+1792589983.251 rst:0x15 (USB_UART_CHIP_RESET),boot:0x8 (SPI_FAST_FLASH_BOOT)
+1792589983.251 Saved PC:0x40378a06
+1792589983.251 SPIWP:0xee
+1792589983.251 mode:DIO, clock div:1
+1792589983.251 load:0x3fce2820,len:0x10cc
+1792589983.251 load:0x403c8700,len:0xc2c
+1792589983.251 load:0x403cb700,len:0x30c0
+1792589983.251 entry 0x403c88b8
+1792589983.504 # BOOT,fw=iso230_2,config=34cd9d58c09d
+1792589983.504 # PINS,step=7,dir=8,en=9,sw_neg=10,sw_pos=11,home=neg
+1792589983.609 # DRIVER_ID,ioin=0x21000241,version=0x21,expected=0x21
+1792589983.714 # DRIVER,gconf=0x000001C4,chopconf=0x04028055,drv_status=0x800B0000,spreadcycle=1,intpol=0,stealth=0,mres=16,irun=11,ihold=11,tpowerdown=0,iholddelay=0,current_ma=400
+1792589983.714 # READY,driver=1,encoder=0
+1792589983.714   lead 2.000 mm  200 steps/rev  1/16  (0.6250 um per microstep)
+1792589983.714   run current 400 mA  ihold x1.00  tpowerdown 0  iholddelay 0  intpol 0
+1792589983.714   v 5.00 mm/s (500 FS/s)  a 40.0 mm/s^2  home seek 2.00 / slow 0.15 mm/s
+1792589983.714   margin 2.0  overrun 3.0  p_nom 5.0 mm  seed 2302  x_ref centre
+1792589983.714   settle 500 ms + record 500 ms   runs 5   warm-up max 30 min   end hold   config 34cd9d58c09d
+1792589983.714 
+1792589983.714 ================================================================
+1792589983.714  ISO 230-2 baseline - positioning accuracy and repeatability
+1792589983.714  driver=1 homed=0   1/16   400 mA   v 5.00 mm/s   config 34cd9d58c09d
+1792589983.714  not homed - run 1 first
+1792589983.714 ================================================================
+1792589983.714   1  Home + warm-up    home, place the targets, warm up (key = stop after cycle)
+1792589983.714   2  ISO sequence      datum, n runs, end reference, park
+1792589983.714   3  Settings          current, velocity, runs, warm-up max
+1792589983.714   4  Show plan         targets, limits, x_ref
+1792589983.714   5  Go to x_ref       fixed-side approach
+1792589983.714   6  Home only         home and place the targets, then wait
+1792589983.714   7  Driver readback   registers and status
+1792589983.714   8  Switch state      read both end switches now
+1792589983.714   9  Trajectory test   speed/accel/dwell profiles + home closure checks
+1792589983.714   0  Release motor     EN high, outputs off
+1792589983.714   ?  This menu         (keys act at once - Ctrl+C sends ABORT)
+1792589983.714 
+1792589983.714 > 
+1792589983.714 # AUTO_RUN,countdown_s=10,centre_wait_s=0
+1792589983.714 Auto run: home, centre, wait 0 s, then the ISO sequence.
+1792589983.714   starting in 10 s
+1792589983.714 # AUTO_RUN,cancelled
+1792589983.714 
+1792589983.714 ================================================================
+1792589983.714  ISO 230-2 baseline - positioning accuracy and repeatability
+1792589983.714  driver=1 homed=0   1/16   400 mA   v 5.00 mm/s   config 34cd9d58c09d
+1792589983.714  not homed - run 1 first
+1792589983.714 ================================================================
+1792589983.714   1  Home + warm-up    home, place the targets, warm up (key = stop after cycle)
+1792589983.714   2  ISO sequence      datum, n runs, end reference, park
+1792589983.714   3  Settings          current, velocity, runs, warm-up max
+1792589983.714   4  Show plan         targets, limits, x_ref
+1792589983.714   5  Go to x_ref       fixed-side approach
+1792589983.714   6  Home only         home and place the targets, then wait
+1792589983.715   7  Driver readback   registers and status
+1792589983.715   8  Switch state      read both end switches now
+1792589983.715   9  Trajectory test   speed/accel/dwell profiles + home closure checks
+1792589983.715   0  Release motor     EN high, outputs off
+1792589983.715   ?  This menu         (keys act at once - Ctrl+C sends ABORT)
+1792589983.715 
+1792589983.715 > 
