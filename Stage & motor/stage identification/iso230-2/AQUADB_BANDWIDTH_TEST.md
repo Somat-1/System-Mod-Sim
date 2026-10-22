@@ -114,9 +114,29 @@ For each profile, from the recorded trace:
    allows is a queue running dry, not a stage braking. 40 mm/s² needs 50 ms
    from 2 mm/s, 125 ms from 5, 200 ms from 8.
 
-The existing `analysis/render_diagnostic_report.py` is written against the
-four-profile IsoTest.csv and its `PROFILES` list; point it at the new CSV only
-after updating that list to the three profiles above.
+Run `analysis/aquadb_bandwidth_check.py`, which does all of this from the log
+and the CSV:
+
+```text
+python analysis/aquadb_bandwidth_check.py     --log data/terminal_YYYYMMDD_HHMMSS.log     --csv ../<export>.csv --ceiling 8.333
+```
+
+It takes the profiles and per-move boundaries from the DIAG records rather
+than inferring them, ties the clocks using the export's FILETIME header
+against the terminal's line timestamps, and measures closure settled-to-
+settled between consecutive holds.
+
+Watch the `settled nm` column. It is the worst scatter in the 0.5 s before a
+hold ended; if it is large the queue had not drained by then, so there is no
+settled moment and that row's closure means nothing. Run against the old
+400 ns IsoTest.csv it flags every row for exactly that reason - the backlog
+there was ~12 s against a 10 s hold - and the residual closure error scales
+with speed (1.06 mm at 1 mm/s rising to 3.48 mm at 5 mm/s), which is the
+backlog signature rather than lost counts. On a healthy 120 ns run those
+numbers should collapse to the noise floor.
+
+`analysis/render_diagnostic_report.py` is a separate thing: it documents the
+original four-profile IsoTest result and is hardcoded to those profiles.
 
 ## If it passes
 
