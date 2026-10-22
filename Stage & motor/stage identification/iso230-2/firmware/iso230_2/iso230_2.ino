@@ -1070,7 +1070,14 @@ void runTrajectoryDiagnostic() {
   const uint32_t savedAccel = accelPulsesS2;
   const int64_t low = softMinU256;
   const int64_t pre = snapU256(mmOf(xRefU256) - CFG_REF_PREAPPROACH_MM);
-  const uint8_t conservative = CFG_DIAG_PROFILE_COUNT - 1;
+  // The park at the end must use the gentlest profile, whatever order
+  // the profiles are listed in. Taking the last one silently parks at
+  // whatever speed happens to be last, which is the fastest when the
+  // profiles ascend.
+  uint8_t conservative = 0;
+  for (uint8_t p = 1; p < CFG_DIAG_PROFILE_COUNT; ++p) {
+    if (CFG_DIAG_V_MM_S[p] < CFG_DIAG_V_MM_S[conservative]) conservative = p;
+  }
 
   Serial.printf("\n# DIAG_BEGIN,t_ms=%lu,profiles=%u,cycles=%u,hold_ms=%lu,"
                 "switch_repeats=%u,low_mm=%.6f,pre_mm=%.6f,xref_mm=%.6f,config=%s\n",
@@ -1116,7 +1123,7 @@ void runTrajectoryDiagnostic() {
                   CFG_DIAG_PROFILE_NAME[p], (unsigned long)millis());
   }
 
-  // Park using only the final conservative profile.
+  // Park using only the gentlest profile.
   if (!diagnosticMove(conservative, -1, "park_to_pre", pre) ||
       !diagnosticMove(conservative, -1, "park_to_xref", xRefU256)) {
     accelPulsesS2 = savedAccel; abortAndMaybePark(); return;

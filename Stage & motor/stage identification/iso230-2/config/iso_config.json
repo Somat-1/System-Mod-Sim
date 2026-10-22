@@ -1,5 +1,5 @@
 {
-  "_comment": "ISO profile updated after IsoTest.csv: 2 mm/s avoids the observed 2.5 mm/s IFM/EL5101 recording ceiling; 2 s settling precedes each 0.5 s record window. On boot the firmware counts down, homes, waits 15 s at the centre for acquisition, then starts ISO automatically. Edit here, regenerate iso_config.h, and reflash.",
+  "_comment": "AquadB clock reduced 400 ns -> 120 ns, raising the metrology ceiling from 2.500 to 8.333 mm/s. The diagnostic profiles are now 2, 5 and 8 mm/s at 40 mm/s2 to test whether the EL5101 keeps up at 8.33 MHz; see AQUADB_BANDWIDTH_TEST.md. The ISO profile stays at 2 mm/s until that test passes. On boot the firmware counts down, homes, waits 15 s at the centre for acquisition, then starts ISO automatically. Edit here, regenerate iso_config.h, and reflash.",
 
   "lead_mm": 2.0,
   "steps_per_rev": 200,
@@ -50,9 +50,8 @@
   "diagnostic_cycles_per_profile": 2,
   "diagnostic_hold_s": 10.0,
   "diagnostic_profiles": [
-    {"name": "current",      "v_mm_s": 5.0, "a_mm_s2": 40.0},
-    {"name": "low_accel",    "v_mm_s": 5.0, "a_mm_s2": 10.0},
-    {"name": "low_speed",    "v_mm_s": 2.0, "a_mm_s2": 40.0},
-    {"name": "conservative", "v_mm_s": 1.0, "a_mm_s2": 5.0}
+    {"name": "v2", "v_mm_s": 2.0, "a_mm_s2": 40.0},
+    {"name": "v5", "v_mm_s": 5.0, "a_mm_s2": 40.0},
+    {"name": "v8", "v_mm_s": 8.0, "a_mm_s2": 40.0}
   ]
 }
