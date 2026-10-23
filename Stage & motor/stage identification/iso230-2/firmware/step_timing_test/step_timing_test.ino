@@ -35,8 +35,11 @@
  *   1. Compile with ESP32 Arduino core 3.x (ESP-IDF 5.x) - driver/rmt_tx.h.
  *   2. Flash, open scripts/iso_terminal.py, keep the log.
  *   3. Start the interferometer recording before motion.
- *   4. Press 'h' to home, then 'r' to run. 'd' dumps the buffer again.
- *   5. Expect ~9.5 min. Every record appears after # SEQ_DONE.
+ *   4. Press 'h' to home, then 'r' for the timing sequence, or 'g' for
+ *      home -> warm-up -> continuous shuttle. 'd' dumps the buffer.
+ *   5. The timing sequence takes ~9.5 min; records appear after
+ *      # SEQ_DONE. Warm-up and shuttle run until a key is pressed and
+ *      report a summary instead of per-traverse records.
  *
  * WIRING matches the ISO firmware: STEP 7, DIR 8, EN 9 (active low),
  * TMC UART TX 17 / RX 18, end switches NEG 10 / POS 11 (NO to ground,
@@ -105,6 +108,8 @@ constexpr uint32_t HOLD_MS = 10000;
 constexpr double LOW_MM = 2.0;
 constexpr double PRE_MM = 58.35;
 constexpr double XREF_MM = 61.35;
+constexpr double WARMUP_MM_S = 5.0;     // conditioning speed
+constexpr double SHUTTLE_MM_S = 8.0;    // the endurance speed
 
 // ---- buffered records -----------------------------------------------------
 // Nothing is printed during motion. Each record is 32 bytes; 256 of them
@@ -133,6 +138,10 @@ TMC2209Stepper driver(&TmcSerial, R_SENSE_OHM, DRIVER_ADDRESS);
 
 int64_t posPulses = 0;          // signed, from the homed datum
 bool homed = false, driverReady = false, abortRequested = false;
+bool stopRequested = false;   // any key, during a continuous run
+bool continuousMode = false;  // only then may a key halt a move
+bool recording = true;        // off while shuttling, or the
+                              // record buffer fills in minutes
 bool lastDirPositive = true, dirKnown = false;
 int64_t limNegPulses = 0, limPosPulses = 0;
 
@@ -144,11 +153,26 @@ inline int64_t pulsesOf(double mm) { return (int64_t)llround(mm * PULSES_PER_MM)
 void note(char kind, const char *profile, int8_t cycle, const char *leg,
           uint32_t t0, uint32_t t1, uint32_t pulses,
           double from_mm, double to_mm, double v, double a) {
+  if (!recording) return;
   if (recordCount >= MAX_RECORDS) { ++recordsDropped; return; }
   Record &r = records[recordCount++];
   r.kind = kind; r.profile = profile; r.leg = leg; r.cycle = cycle;
   r.t0_ms = t0; r.t1_ms = t1; r.pulses = pulses;
   r.x_from_mm = from_mm; r.x_to_mm = to_mm; r.v_mm_s = v; r.a_mm_s2 = a;
+}
+
+/* Any key stops a continuous run; Ctrl+C aborts outright. Polled
+ * between chunks, which costs nothing because the RMT queue is
+ * already running ahead of the CPU. */
+bool pollStop() {
+  while (Serial.available()) {
+    const char c = (char)Serial.read();
+    if (c == 3) abortRequested = true;
+    if (c != '\n' && c != '\r') stopRequested = true;
+  }
+  // A stray key must not truncate a move in the timing sequence; it only
+  // halts motion while a continuous run is in progress.
+  return abortRequested || (continuousMode && stopRequested);
 }
 
 bool switchPressed(uint8_t pin) {
@@ -218,7 +242,7 @@ uint32_t emitPulses(uint32_t pulses, bool positive, double v_mm_s,
 
   uint32_t done = 0;
   while (done < pulses) {
-    if (abortRequested) break;
+    if (pollStop()) break;
     // Stop granularity is one chunk; the soft limits leave 2 mm of room.
     if (seeking ? switchAhead(positive) : (switchNeg() || switchPos())) break;
     if (!seeking && homed) {
@@ -438,6 +462,51 @@ void runSequence() {
   dumpRecords();
 }
 
+/* Run end to end between the soft limits until a key is pressed.
+ *
+ * Per-traverse records are suppressed - a soak fills 256 of them in a couple
+ * of minutes - so the result is a summary instead: the achieved speed is
+ * 2 x span / mean cycle time, which is the number that says whether the RMT
+ * generator really sustains the commanded rate.
+ */
+void shuttle(double v_mm_s, const char *label) {
+  if (!homed) { Serial.println("# ERR,not_homed"); return; }
+  stopRequested = false; abortRequested = false; continuousMode = true;
+  const double span = mmOf(limPosPulses - limNegPulses);
+  Serial.printf("# SHUTTLE_BEGIN,%s,v_mm_s=%.2f,span_mm=%.3f\n",
+                label, v_mm_s, span);
+  Serial.println("# press any key to stop (Ctrl+C aborts)");
+
+  moveTo(limNegPulses, v_mm_s, ACCEL_MM_S2, label, -1, "to_start");
+  recording = false;
+  const uint32_t started = millis();
+  uint32_t cycles = 0, fastest = 0xFFFFFFFFUL, slowest = 0;
+  uint64_t total = 0;
+  while (!stopRequested && !abortRequested) {
+    const uint32_t t0 = millis();
+    moveTo(limPosPulses, v_mm_s, ACCEL_MM_S2, label, -1, "fwd");
+    if (stopRequested || abortRequested) break;
+    moveTo(limNegPulses, v_mm_s, ACCEL_MM_S2, label, -1, "rev");
+    if (stopRequested || abortRequested) break;
+    const uint32_t dt = millis() - t0;
+    ++cycles; total += dt;
+    if (dt < fastest) fastest = dt;
+    if (dt > slowest) slowest = dt;
+  }
+  recording = true; continuousMode = false;
+  const uint32_t elapsed = millis() - started;
+  const double mean_s = cycles ? (double)total / cycles / 1000.0 : 0.0;
+  Serial.printf("# SHUTTLE_DONE,%s,cycles=%lu,elapsed_s=%.1f,"
+                "mean_cycle_s=%.3f,fastest_s=%.3f,slowest_s=%.3f,"
+                "achieved_mm_s=%.3f,commanded_mm_s=%.2f,x_mm=%.6f,"
+                "aborted=%u\n",
+                label, (unsigned long)cycles, elapsed / 1000.0, mean_s,
+                cycles ? fastest / 1000.0 : 0.0,
+                cycles ? slowest / 1000.0 : 0.0,
+                mean_s > 0.0 ? 2.0 * span / mean_s : 0.0,
+                v_mm_s, mmOf(posPulses), abortRequested ? 1u : 0u);
+}
+
 // ------------------------------------------------------------------- shell
 
 void menu() {
@@ -445,8 +514,11 @@ void menu() {
   Serial.printf(" driver=%u homed=%u  1/%u  %u mA  RMT %lu Hz\n",
                 driverReady ? 1u : 0u, homed ? 1u : 0u, MRES,
                 RUN_CURRENT_MA, (unsigned long)RMT_HZ);
-  Serial.println(F("  h  home      r  run sequence      d  dump records"));
-  Serial.println(F("  s  switches  0  release motor     Ctrl+C abort"));
+  Serial.println(F("  h  home          r  timing sequence   d  dump records"));
+  Serial.printf (  "  w  warm-up %.0f mm/s  c  shuttle %.0f mm/s    "
+                   "g  home+warm+shuttle\n",
+                WARMUP_MM_S, SHUTTLE_MM_S);
+  Serial.println(F("  s  switches      0  release motor     Ctrl+C abort"));
   Serial.print(F("> "));
 }
 
@@ -482,6 +554,14 @@ void loop() {
   switch (key) {
     case 'h': homeBoth(); break;
     case 'r': runSequence(); break;
+    case 'w': shuttle(WARMUP_MM_S, "warmup"); break;
+    case 'c': shuttle(SHUTTLE_MM_S, "shuttle"); break;
+    case 'g':
+      if (homeBoth()) {
+        shuttle(WARMUP_MM_S, "warmup");
+        if (!abortRequested) shuttle(SHUTTLE_MM_S, "shuttle");
+      }
+      break;
     case 'd': dumpRecords(); break;
     case 's':
       Serial.printf("# SWITCHES,neg=%u,pos=%u\n",
