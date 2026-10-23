@@ -1,0 +1,107 @@
+{
+  "interval_s": [
+    120.0,
+    840.0
+  ],
+  "units": "mV",
+  "rms_definition": "median locally demeaned non-overlapping 1 s RMS",
+  "floor": {
+    "source": "\\\\192.168.2.5\\external\\tomasV\\System-Mod-Sim\\Stage & motor\\noise and drift identification\\data\\2026-10-15_seis_floor\\TvalSeisfloor.csv",
+    "sample_count": 14400000,
+    "fs_hz": 20000.0000000022,
+    "median_rms_mV": [
+      1.353743585261927,
+      1.3389500923356734,
+      2.317739987929363
+    ],
+    "p95_rms_mV": [
+      1.5594275234868729,
+      1.503444580092382,
+      2.5299286979423496
+    ],
+    "median_vector_rms_mV": 3.006127059391785,
+    "drift_slope_mV_per_min": [
+      -8.238166030920693e-06,
+      1.2011883866314229e-05,
+      -3.7366003198839813e-06
+    ],
+    "end_shift_mV": [
+      -0.0012270897626876851,
+      0.0011052161455154404,
+      0.0015605732798576097
+    ],
+    "rms_slope_mV_per_min": [
+      0.018224853923031147,
+      0.009294139413471802,
+      -0.022618210584730927
+    ],
+    "rms_end_shift_mV": [
+      0.24208102770620887,
+      0.15009154593858764,
+      -0.19139367759931547
+    ],
+    "digital_clipping_flag": [
+      false,
+      false,
+      false
+    ],
+    "nonfinite_samples": [
+      0,
+      0,
+      0
+    ],
+    "irregular_dt_count": 0
+  },
+  "table": {
+    "source": "\\\\192.168.2.5\\external\\tomasV\\System-Mod-Sim\\Stage & motor\\noise and drift identification\\data\\2026-10-15_seis\\TvalSeis.csv",
+    "sample_count": 14400000,
+    "fs_hz": 20000.0000000022,
+    "median_rms_mV": [
+      0.21204435375974934,
+      0.25441246325410927,
+      0.36289498877246773
+    ],
+    "p95_rms_mV": [
+      0.336823164652575,
+      0.3858534378507902,
+      0.5595571367645903
+    ],
+    "median_vector_rms_mV": 0.49702396659619097,
+    "drift_slope_mV_per_min": [
+      8.155909422493389e-07,
+      3.463035851820616e-06,
+      -4.631123512334908e-06
+    ],
+    "end_shift_mV": [
+      0.00019802600145339938,
+      -0.0007530823349952704,
+      0.0008690670132636987
+    ],
+    "rms_slope_mV_per_min": [
+      0.001284902055521201,
+      0.0004620132882976247,
+      -0.004133657770134082
+    ],
+    "rms_end_shift_mV": [
+      0.015976427185932313,
+      0.029592066224667368,
+      0.008272811164848737
+    ],
+    "digital_clipping_flag": [
+      false,
+      false,
+      false
+    ],
+    "nonfinite_samples": [
+      0,
+      0,
+      0
+    ],
+    "irregular_dt_count": 0
+  },
+  "table_to_floor_median_rms": [
+    0.15663553723781617,
+    0.19000892169947162,
+    0.1565727780779556
+  ]
+}

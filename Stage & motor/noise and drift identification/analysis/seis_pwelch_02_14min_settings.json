@@ -1,0 +1,26 @@
+{
+  "analysis_interval_s": [
+    120.0,
+    840.0
+  ],
+  "analysis_duration_s": 720.0,
+  "sampling_frequency_hz": 20000.0000000022,
+  "samples_per_channel_per_recording": 14400000,
+  "window": "periodic Hann (DFT-even)",
+  "segment_length_s": 10.0,
+  "segment_length_samples": 200000,
+  "overlap_fraction": 0.5,
+  "overlap_samples": 100000,
+  "hop_s": 4.999999999999449,
+  "segment_count_per_recording": 143,
+  "detrend": "linear, independently per segment and channel",
+  "nfft": 200000,
+  "zero_padding": false,
+  "frequency_resolution_hz": 0.10000000000001101,
+  "nyquist_frequency_hz": 10000.0000000011,
+  "hann_enbw_hz": 0.1500000000000165,
+  "spectrum": "one-sided power spectral density",
+  "scaling": "density (mV^2/Hz)",
+  "averaging": "arithmetic mean of segment periodograms",
+  "post_smoothing": false
+}
