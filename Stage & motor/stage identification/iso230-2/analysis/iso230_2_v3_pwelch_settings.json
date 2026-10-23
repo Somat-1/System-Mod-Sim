@@ -1,0 +1,38 @@
+{
+  "source": "\\\\192.168.2.5\\external\\tomasV\\System-Mod-Sim\\Stage & motor\\stage identification\\ISO230-2_v3.csv",
+  "output": "\\\\192.168.2.5\\external\\tomasV\\System-Mod-Sim\\Stage & motor\\stage identification\\iso230-2\\analysis\\plots\\iso230_2_v3_full_sequence_pwelch.png",
+  "samples": 2321285,
+  "duration_s": 2321.311,
+  "sample_rate_hz": 1000.0,
+  "signal": "relative encoder position",
+  "signal_unit": "um",
+  "window": "hann",
+  "nperseg": 65536,
+  "segment_duration_s": 65.536,
+  "noverlap": 32768,
+  "overlap_percent": 50.0,
+  "detrend": "constant (per segment)",
+  "scaling": "density",
+  "average": "mean",
+  "frequency_resolution_hz": 0.0152587890625,
+  "welch_segment_count": 69,
+  "selected_low_frequency_peaks_hz": [
+    0.18310546875,
+    0.5035400390625,
+    0.8544921875,
+    0.9918212890625,
+    1.312255859375,
+    1.7547607421875
+  ],
+  "harmonic_line_peaks_hz": [
+    50.0030517578125,
+    100.006103515625,
+    150.0091552734375,
+    200.01220703125,
+    250.0152587890625,
+    300.0030517578125,
+    350.006103515625,
+    399.9786376953125,
+    450.01220703125
+  ]
+}

@@ -201,5 +201,8 @@ should not be averaged with the same-direction moves.
 
 ## Status
 
-Designed, generated, **not yet run**. The firmware has never been compiled: no
-toolchain was available where it was written. See `PROCEDURE.md` for bring-up.
+The 344-row matrix was completed on 2026-10-22. The independent encoder export
+and matching controller log are in `data/`; the dedicated analysis, PNG
+figures, machine-readable results, and findings are in
+`analysis/mres_debug/`. See
+`analysis/mres_debug/MRES_DEBUG_RESULTS.md` for the result.
