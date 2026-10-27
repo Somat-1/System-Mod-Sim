@@ -1,0 +1,202 @@
+{
+  "analysis": "ISO 230-2 v3 Step A linear geometric identification",
+  "source": {
+    "aggregate_results": "/Users/tomasvalentinas/Documents/System-Mod-Sim/Stage & motor/stage identification/iso230-2/analysis/iso230_2_v3_results.json",
+    "controller_log": "/Users/tomasvalentinas/Documents/System-Mod-Sim/Stage & motor/stage identification/iso230-2/data/terminal_20261021_183115.log",
+    "raw_scope_csv": null,
+    "limitation": "Raw ISO230-2_v3.csv was not present; drift correction, settling checks and per-run slopes cannot be recomputed."
+  },
+  "convention": {
+    "deviation_sign": "positive means measured stage travel exceeded command",
+    "datum": "single global mean from the existing v3 evaluation",
+    "position": "rounded commanded microstep position"
+  },
+  "dataset": {
+    "targets": 24,
+    "target_min_mm": 5.0,
+    "target_max_mm": 117.5,
+    "span_mm": 112.5,
+    "runs_per_direction": 5
+  },
+  "validity": {
+    "iso_stop_count": 240,
+    "runs": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "directions": [
+      -1,
+      1
+    ],
+    "reference_stop_count": 8,
+    "done": {
+      "runs": 5,
+      "stops": 240,
+      "minutes": 29.9
+    },
+    "abort_or_lost_step_flag": false,
+    "driver": {
+      "intpol": 0,
+      "mres": 16,
+      "irun": 11,
+      "ihold": 11,
+      "tpowerdown": 0,
+      "iholddelay": 0,
+      "current_ma": 400
+    },
+    "targets_on_microstep_grid": true,
+    "record_durations_ms": [
+      500
+    ],
+    "settle_durations_ms": [
+      2000,
+      2001,
+      2002
+    ]
+  },
+  "fit_uncorrected": {
+    "x_center_mm": 61.101276041666665,
+    "intercept_centered_um": 0.17834982138133113,
+    "intercept_at_zero_um": 1.7111760992136604,
+    "slope_um_per_mm": -0.025086649201680376,
+    "slope_ppm": -25.086649201680377,
+    "slope_se_um_per_mm": 0.006613435460610596,
+    "slope_ci95_um_per_mm": 0.013715425688081767,
+    "slope_ci95_ppm": 13.715425688081767,
+    "reduced_chi2": 153.81682191895422
+  },
+  "fit_drift_corrected": null,
+  "ols_crosscheck": {
+    "x_center_mm": 61.101276041666665,
+    "intercept_centered_um": -1.4466953256654163e-10,
+    "intercept_at_zero_um": 1.4768116115138097,
+    "slope_um_per_mm": -0.024169898033739923,
+    "slope_ppm": -24.169898033739923,
+    "slope_se_um_per_mm": 0.0068683558140412515,
+    "slope_ci95_um_per_mm": 0.01424409814352218,
+    "slope_ci95_ppm": 14.24409814352218,
+    "reduced_chi2": null
+  },
+  "robustness": {
+    "direction_fits": {
+      "up": {
+        "x_center_mm": 61.101276041666665,
+        "intercept_centered_um": 0.07766066306323627,
+        "intercept_at_zero_um": 1.7147923208112097,
+        "slope_um_per_mm": -0.02679373924419463,
+        "slope_ppm": -26.79373924419463,
+        "slope_se_um_per_mm": 0.0060360148443320905,
+        "slope_ci95_um_per_mm": 0.01251792862312923,
+        "slope_ci95_ppm": 12.51792862312923,
+        "reduced_chi2": 120.93415966431733
+      },
+      "down": {
+        "x_center_mm": 61.101276041666665,
+        "intercept_centered_um": 0.20962095881475357,
+        "intercept_at_zero_um": 2.321175093863287,
+        "slope_um_per_mm": -0.03455826574896089,
+        "slope_ppm": -34.55826574896089,
+        "slope_se_um_per_mm": 0.005598063231758418,
+        "slope_ci95_um_per_mm": 0.011609672568767554,
+        "slope_ci95_ppm": 11.609672568767554,
+        "reduced_chi2": 84.30161330372901
+      }
+    },
+    "direction_slope_difference_ppm": 7.764526504766261,
+    "leave_one_target_out_slope_um_per_mm": [
+      -0.020673387793867175,
+      -0.027027778932600013,
+      -0.02522509930750767,
+      -0.028068101881382857,
+      -0.02481708402423518,
+      -0.025409442362686812,
+      -0.02459477590762474,
+      -0.0257957554659538,
+      -0.02586426027741238,
+      -0.025269778244187805,
+      -0.02532401608347833,
+      -0.02510592160623672,
+      -0.0251892886060665,
+      -0.02503366864794788,
+      -0.02649971006526054,
+      -0.02606377545170518,
+      -0.025660307441315408,
+      -0.0254788595705386,
+      -0.026657884241467783,
+      -0.025342239794603625,
+      -0.02434428204467574,
+      -0.02261129826733911,
+      -0.021005055866336206,
+      -0.02431211445416519
+    ],
+    "leave_one_target_out_min_um_per_mm": -0.028068101881382857,
+    "leave_one_target_out_max_um_per_mm": -0.020673387793867175,
+    "per_run_fits": null
+  },
+  "power": {
+    "direction_average_share": 0.34261559903548977,
+    "total_budget_share": 0.3341892832308728,
+    "rms_before_um": 1.3668830293196794,
+    "rms_after_um": 1.1082584435667158
+  },
+  "reversal": {
+    "fit": {
+      "x_center_mm": 61.101276041666665,
+      "intercept_centered_um": -0.365780047542546,
+      "intercept_at_zero_um": -0.4673481434226232,
+      "slope_um_per_mm": 0.0016622909120721982,
+      "slope_ppm": 1.6622909120721983,
+      "slope_se_um_per_mm": 0.0020828576229555873,
+      "slope_ci95_um_per_mm": 0.0043195823285261895,
+      "slope_ci95_ppm": 4.31958232852619,
+      "reduced_chi2": 3.814246631604456
+    },
+    "mean_um": -0.36536719779481547,
+    "std_um": 0.36867840481741615,
+    "max_abs_um": 0.9820779998335638
+  },
+  "iso_metrics_measured_um": {
+    "B": 0.9820779998335638,
+    "B_mean": -0.36536719779481547,
+    "R_up": 2.0979360061525454,
+    "R_dn": 1.849988984403074,
+    "R": 2.4268427087746947,
+    "E_up": 6.116275600064114,
+    "E_dn": 6.61140720326614,
+    "E": 6.61140720326614,
+    "M": 6.363841401665127,
+    "A": 7.949452421955131,
+    "s_med": 0.27977675785711087,
+    "s_max": 0.5244840015381363
+  },
+  "iso_metrics_predicted_after_gain_um": {
+    "B": 0.9820779998335638,
+    "B_mean": -0.36536719779481547,
+    "R_up": 2.0979360061525454,
+    "R_dn": 1.849988984403074,
+    "R": 2.4268427087746947,
+    "E_up": 3.9182740119445265,
+    "E_dn": 4.203183468503405,
+    "E": 4.203183468503405,
+    "M": 4.041578467327192,
+    "A": 5.682473991959296,
+    "s_med": 0.27977675785711087,
+    "s_max": 0.5244840015381363
+  },
+  "periodogram_preliminary": {
+    "peak_period_mm": 3.2845084409136045,
+    "peak_frequency_per_mm": 0.30445956160241877,
+    "peak_power": 0.5399368700454865,
+    "interpretation": "screening only; 24 irregular target samples are too sparse for a definitive periodic model"
+  },
+  "physical_attribution": {
+    "thermal_ppm": null,
+    "wavelength_ppm": null,
+    "cosine_ppm": null,
+    "screw_lead_ppm": null,
+    "reason": "temperature, pressure, compensation state, alignment angle and screw accuracy class are unavailable"
+  }
+}
