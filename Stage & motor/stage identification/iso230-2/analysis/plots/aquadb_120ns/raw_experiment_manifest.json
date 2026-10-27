@@ -1,0 +1,41 @@
+{
+  "stage": "raw experiment rendering",
+  "source": "/Users/tomasvalentinas/Documents/System-Mod-Sim/Stage & motor/stage identification/RMT_BW_Test.csv",
+  "controller_log": "/Users/tomasvalentinas/Documents/System-Mod-Sim/Stage & motor/stage identification/iso230-2/data/terminal_20261023_155256.log",
+  "sample_count": 584722,
+  "sample_interval_ms": 1.0,
+  "duration_s": 584.721,
+  "start_time": "vrijdag 23 oktober 2026 15:54:31.533",
+  "end_time": "vrijdag 23 oktober 2026 16:04:16.254",
+  "channel": "Term 5 (EL5101-0011) Axis1.ENC TxPdo 1 Samples Counter value.Counter value",
+  "counter_rollovers": 0,
+  "processing": [
+    "exact UINT32 counter unwrapping",
+    "nominal conversion at 1 count = 1 nm",
+    "constant offset for relative displacement",
+    "101 ms moving mean used only for transfer-boundary detection"
+  ],
+  "profile_blocks": [
+    {
+      "name": "v2",
+      "command_velocity_mm_s": 2.0,
+      "transfer_count": 4,
+      "start_time_s": 219.041,
+      "end_time_s": 368.11
+    },
+    {
+      "name": "v5",
+      "command_velocity_mm_s": 5.0,
+      "transfer_count": 4,
+      "start_time_s": 378.035,
+      "end_time_s": 456.214
+    },
+    {
+      "name": "v8",
+      "command_velocity_mm_s": 8.0,
+      "transfer_count": 4,
+      "start_time_s": 466.138,
+      "end_time_s": 526.925
+    }
+  ]
+}

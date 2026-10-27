@@ -138,59 +138,31 @@ numbers should collapse to the noise floor.
 `analysis/render_diagnostic_report.py` is a separate thing: it documents the
 original four-profile IsoTest result and is hardcoded to those profiles.
 
-## Result — 2026-10-22, 120 ns run
+## Current dataset — 2026-10-23, 120 ns RMT run
 
-The scope export `PLC_Bandwidth_test.csv` contains 874,200 samples at 1 kHz
-(874.199 s). The matching terminal log was not retained, so the twelve long
-transfers were recovered from the scope trace and grouped in the generated
-`v2`, `v5`, `v8` sequence. The first three isolated transfers in each group
-were used; the fourth was excluded because it joins the profile-end homing
-sequence.
+The active source is `RMT_BW_Test.csv`, containing 584,722 EL5101 counter
+samples at 1 kHz (584.721 s). Its matching controller record is
+`data/terminal_20261023_155256.log`. The recording contains four experimental
+transfers at each commanded velocity: `v2`, `v5`, and `v8`. Setup/homing and
+the final 2 mm/s park transfer are retained in the overview but excluded from
+the three experiment blocks.
 
-| profile | transfers | mean recorded span | mean error vs 59.350 mm | capture | samples at 8.333 mm/s ceiling | result |
-|---|---:|---:|---:|---:|---:|---|
-| `v2` | 3 | 59.347722 mm | −2.3 µm | 99.996 % | 0.0 % | pass |
-| `v5` | 3 | 59.347469 mm | −2.5 µm | 99.996 % | 24.2 % | pass |
-| `v8` | 3 | 41.505245 mm | −17.845 mm | 69.933 % | 42.7 % | **fail** |
+Processing has deliberately been reset to the raw-render stage. The current
+figure applies only exact UINT32 counter unwrapping, the nominal 1 nm/count
+conversion, and a constant position offset. No samples are filtered,
+interpolated, or resampled. A 101 ms signed moving mean is used only to locate
+the transfer boundaries; the displayed trajectory remains raw.
 
-The 120 ns setting therefore demonstrates preserved closure through **5 mm/s**
-but not at **8 mm/s**. Saturation alone is not a failure: `v5` reaches the
-instantaneous transmitter ceiling regularly and still preserves the complete
-transfer. At `v8`, however, all three settled spans are short by 17.52–18.25 mm.
-The formal ISO velocity should not be raised above 5 mm/s on the basis of this
-test.
-
-The missing terminal log means emitted STEP counts cannot be audited, and no
-independent stage encoder was recorded. The scope data prove a recorded-
-distance shortfall at `v8`, but cannot on their own distinguish EL5101 count
-loss from mechanical following error. The repeatable shortfall, the expected
-profile timing, and the simultaneous ceiling occupancy are consistent with a
-receiver-bandwidth limitation, but that causal attribution remains an
-inference.
-
-Reproduce the analysis and figures with:
+Render the current figure and provenance manifest with:
 
 ```text
 python analysis/render_aquadb_bandwidth_report.py
 ```
 
-The PNG/PDF figure set and CSV/JSON metrics are written to
+The PNG raw figure and JSON provenance manifest are written to
 `analysis/plots/aquadb_120ns/`.
-
-## Using the result
-
-The result supports raising `v_mm_s` in `config/iso_config.json` from its
-present 2.0 to at most **5.0 mm/s**, followed by regeneration, reflashing, and
-a fresh ISO sequence. A faster ISO run shortens the 25.8 min sequence and
-reduces the thermal drift that is currently the largest systematic in the v3
-dataset (+17 nm/min, common to all targets).
-
-Leave `settle_margin_s` at 2.0 s regardless. That margin is what kept v3 clean
-— the queue always drained at least 1.14 s before a record window opened — and
-it is cheap insurance at any speed.
 
 ## Status
 
-Run and processed on **2026-10-22**. Closure passes at 2 and 5 mm/s and fails
-at 8 mm/s. The demonstrated upper test velocity is therefore **5 mm/s**; the
-8 mm/s profile is not approved for the formal ISO sequence.
+Raw rendering complete. Closure, velocity fidelity, saturation occupancy, and
+the final bandwidth verdict have not yet been recomputed for this dataset.
