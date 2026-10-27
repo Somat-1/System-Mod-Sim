@@ -1,0 +1,57 @@
+1792759148.037 ESP-ROM:esp32s3-20210327
+1792759148.038 Build:Mar 27 2021
+1792759148.038 rst:0x15 (USB_UART_CHIP_RESET),boot:0x8 (SPI_FAST_FLASH_BOOT)
+1792759148.038 Saved PC:0x40378a06
+1792759148.038 SPIWP:0xee
+1792759148.038 mode:DIO, clock div:1
+1792759148.038 load:0x3fce2820,len:0x10cc
+1792759148.038 load:0x403c8700,len:0xc2c
+1792759148.038 load:0x403cb700,len:0x30c0
+1792759148.038 entry 0x403c88b8
+1792759148.301 # BOOT,fw=step_timing_test
+1792759148.301 # PINS,step=7,dir=8,en=9,uart_rx=18,uart_tx=17,sw_neg=10,sw_pos=11
+1792759148.459 # READY,driver=1,rmt=1,um_per_pulse=0.6250
+1792759148.459 
+1792759148.459 --- step-timing identification ---
+1792759148.459  driver=1 homed=0  1/16  400 mA  RMT 1000000 Hz
+1792759148.459   h  home          r  timing sequence   d  dump records
+1792759148.459   w  warm-up 5 mm/s  c  shuttle 8 mm/s    g  home+warm+shuttle
+1792759148.459   s  switches      0  release motor     Ctrl+C abort
+1792759148.459 > ?
+1792759148.459 Unknown key.
+1792759148.459 
+1792759148.459 --- step-timing identification ---
+1792759148.459  driver=1 homed=0  1/16  400 mA  RMT 1000000 Hz
+1792759148.459   h  home          r  timing sequence   d  dump records
+1792759148.459   w  warm-up 5 mm/s  c  shuttle 8 mm/s    g  home+warm+shuttle
+1792759148.459   s  switches      0  release motor     Ctrl+C abort
+1792759148.459 > 
+1792759158.340 h
+1792759158.341 # HOMING,start
+1792759238.328 # HOMED,travel_mm=122.8000,lim_mm=2.000..120.800
+1792759238.328 
+1792759238.328 --- step-timing identification ---
+1792759238.328  driver=1 homed=1  1/16  400 mA  RMT 1000000 Hz
+1792759238.328   h  home          r  timing sequence   d  dump records
+1792759238.328   w  warm-up 5 mm/s  c  shuttle 8 mm/s    g  home+warm+shuttle
+1792759238.328   s  switches      0  release motor     Ctrl+C abort
+1792759238.328 > 
+1792759253.518 g
+1792759253.518 # HOMING,start
+1792759376.894 # HOMED,travel_mm=122.8100,lim_mm=2.000..120.810
+1792759376.895 # SHUTTLE_BEGIN,warmup,v_mm_s=5.00,span_mm=118.810
+1792759376.950 # press any key to stop (Ctrl+C aborts)
+1792759440.130 # SHUTTLE_DONE,warmup,cycles=99712,elapsed_s=63.2,mean_cycle_s=0.001,fastest_s=0.000,slowest_s=0.001,achieved_mm_s=374921.917,commanded_mm_s=5.00,x_mm=122.810000,aborted=0
+1792759440.131 # SHUTTLE_BEGIN,shuttle,v_mm_s=8.00,span_mm=118.810
+1792759440.131 # press any key to stop (Ctrl+C aborts)
+1792759451.056 # SHUTTLE_DONE,shuttle,cycles=17280,elapsed_s=10.9,mean_cycle_s=0.001,fastest_s=0.000,slowest_s=0.001,achieved_mm_s=374983.890,commanded_mm_s=8.00,x_mm=122.810000,aborted=0
+1792759451.056 
+1792759451.056 --- step-timing identification ---
+1792759451.056  driver=1 homed=1  1/16  400 mA  RMT 1000000 Hz
+1792759451.056   h  home          r  timing sequence   d  dump records
+1792759451.056   w  warm-up 5 mm/s  c  shuttle 8 mm/s    g  home+warm+shuttle
+1792759451.056   s  switches      0  release motor     Ctrl+C abort
+1792759451.056 > 
+1792759453.493 w
+1792759453.493 # SHUTTLE_BEGIN,warmup,v_mm_s=5.00,span_mm=118.810
+1792759453.493 # press any key to stop (Ctrl+C aborts)

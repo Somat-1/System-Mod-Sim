@@ -244,11 +244,16 @@ uint32_t emitPulses(uint32_t pulses, bool positive, double v_mm_s,
   while (done < pulses) {
     if (pollStop()) break;
     // Stop granularity is one chunk; the soft limits leave 2 mm of room.
-    if (seeking ? switchAhead(positive) : (switchNeg() || switchPos())) break;
+    // Only the switch in the direction of travel stops a move. Checking both
+    // refused every move off a pressed switch - homing ends on one, so its
+    // back-offs and the first warm-up move never ran.
+    if (switchAhead(positive)) break;
     if (!seeking && homed) {
+      // Block only motion that goes further outside the soft limits: after
+      // homing the stage sits on the positive switch, 2 mm past the limit.
       const int64_t next = posPulses + (positive ? (int64_t)chunk
                                                  : -(int64_t)chunk);
-      if (next > limPosPulses || next < limNegPulses) break;
+      if ((positive && next > limPosPulses) || (!positive && next < limNegPulses)) break;
     }
     const uint32_t n = (uint32_t)min((size_t)(pulses - done), chunk);
     rmt_symbol_word_t *buf = ringBuf[ringIndex];
@@ -560,6 +565,17 @@ void loop() {
       if (homeBoth()) {
         shuttle(WARMUP_MM_S, "warmup");
         if (!abortRequested) shuttle(SHUTTLE_MM_S, "shuttle");
+      }
+      break;
+    case 'a':
+      // Home, centre, hold 10 s (start the recording), then the 2/5/8 mm/s
+      // timing sequence. Ctrl+C aborts at any point.
+      if (homeBoth()) {
+        const int64_t centre = (limNegPulses + limPosPulses) / 2;
+        moveTo(centre, HOME_SEEK_MM_S, ACCEL_MM_S2, "auto", -1, "to_centre");
+        Serial.printf("# AUTO_CENTRE,x_mm=%.4f,wait_s=10\n", mmOf(posPulses));
+        hold(10000, "auto", -1, "centre_wait");
+        if (!abortRequested) runSequence();
       }
       break;
     case 'd': dumpRecords(); break;
