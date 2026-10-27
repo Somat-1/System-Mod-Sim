@@ -11,7 +11,8 @@ in `instructions/G_step_A_linear_processing.md`.
   the existing `iso230-2` project to avoid duplication.
 - `scripts/` — reproducible processing and rendering code.
 - `experimental_scripts/` — hardware-experiment sequence definitions, separated
-  by experiment; E1 is in `e1_spectral_windows/`.
+  by experiment; E1, E2, and E4 are in `e1_spectral_windows/`,
+  `e2_global_map/`, and `e4_stationarity_windows/` respectively.
 - `results/` — machine-readable fit results and per-target table.
 - `rendered/` — A4 portrait PNG summary. No PDF is generated.
 
@@ -34,6 +35,17 @@ The current analysis reads:
 
 - `../iso230-2/analysis/iso230_2_v3_results.json`
 - `../iso230-2/data/terminal_20261021_183115.log`
+
+## Experimental sequences
+
+E1, E2, and E4 are measurement-only workflows. Their generated plans, ESP32-S3
+firmware, terminal loggers, and academic sequence renders are self-contained in
+`experimental_scripts/e1_spectral_windows/` and
+`experimental_scripts/e2_global_map/`, and
+`experimental_scripts/e4_stationarity_windows/`. The supplied E2 design
+specification and the compiled E4 specification are stored as
+`instructions/E2_global_map_procedure.md` and
+`instructions/E4_stationarity_windows_procedure.md`.
 
 The raw `../ISO230-2_v3.csv` capture is absent from the workspace. Therefore,
 the present run exactly reconstructs the per-target weighted fit, direction

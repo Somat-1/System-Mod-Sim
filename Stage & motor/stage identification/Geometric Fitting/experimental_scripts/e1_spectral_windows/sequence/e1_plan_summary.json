@@ -13,7 +13,7 @@
   "end_ref_stops": 3,
   "measurement_reference_stops_total": 8,
   "grid_move_peak_velocity_mm_s": 2.0,
-  "aquadb_velocity_limit_mm_s": 2.5,
+  "aquadb_velocity_limit_mm_s": 8.333333333333334,
   "estimated_nominal_stop_s": 2.61,
   "estimated_sequence_without_operator_pause_min": 31.75966666666621,
   "estimated_recording_with_pilot_budget_min": 33.75966666666621,
@@ -32,7 +32,7 @@
     "estimated_recording_not_above_60_min": true
   },
   "experiment": "E1_spectral_windows",
-  "config_sha256": "6a65e45f081cf05d3d158688511577e15b6465c7d28f20fd0952ecb1a1e1d26a",
+  "config_sha256": "d2858a22c9c3c6e821e39f9361944520eb989ecafe9f0cd8a74d3a1abb7581c2",
   "config": {
     "experiment": "E1_spectral_windows",
     "lead_mm": 2.0,
@@ -83,7 +83,7 @@
     "detection_floor_combined_um": 0.03,
     "not_detected_below_um": 0.1,
     "reference_drift_warning_um": 0.5,
-    "aquadb_clock_ns": 400,
+    "aquadb_clock_ns": 120,
     "rmt_resolution_hz": 1000000,
     "rmt_chunk_pulses": 128,
     "rmt_queue_depth": 4,

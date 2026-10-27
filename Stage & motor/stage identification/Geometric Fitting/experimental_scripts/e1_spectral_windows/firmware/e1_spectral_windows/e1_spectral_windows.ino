@@ -76,6 +76,19 @@ bool switchPressed(uint8_t pin) {
   return digitalRead(pin) == SWITCH_ACTIVE_LEVEL;
 }
 
+/* Only the switch in the direction of travel can stop a move.
+ *
+ * Testing both refuses every move while either is pressed, which leaves no
+ * way to drive clear of one without reflashing. That is the defect found on
+ * the 2/5/8 mm/s run, where it blocked the homing back-offs and the first
+ * warm-up move. These sequences never approach a switch - the directional
+ * soft-limit guard below stops them first - so this only matters for getting
+ * out of a fault, but it costs nothing to get right.
+ */
+bool switchAhead(bool positive) {
+  return switchPressed(positive ? SW_POS_PIN : SW_NEG_PIN);
+}
+
 void setState(State next) {
   state = next;
   Serial.printf("# EVENT,%lu,%s,state_enter,x_usteps=%ld\n",
@@ -147,7 +160,7 @@ uint32_t emitPulses(uint32_t pulses, bool positive) {
   uint32_t queued = 0;
   while (queued < pulses) {
     if (pollAbort()) break;
-    if (switchPressed(SW_NEG_PIN) || switchPressed(SW_POS_PIN)) {
+    if (switchAhead(positive)) {
       unsafeFault = true;
       break;
     }

@@ -35,7 +35,7 @@
   "detection_floor_combined_um": 0.03,
   "not_detected_below_um": 0.1,
   "reference_drift_warning_um": 0.5,
-  "aquadb_clock_ns": 400,
+  "aquadb_clock_ns": 120,
   "rmt_resolution_hz": 1000000,
   "rmt_chunk_pulses": 128,
   "rmt_queue_depth": 4,

@@ -2,7 +2,7 @@
 #pragma once
 #include <stdint.h>
 
-constexpr char CFG_HASH[] = "6a65e45f081c";
+constexpr char CFG_HASH[] = "d2858a22c9c3";
 constexpr double CFG_LEAD_MM = 2.000000;
 constexpr uint16_t CFG_STEPS_PER_REV = 200;
 constexpr uint16_t CFG_MRES = 16;
@@ -28,7 +28,7 @@ constexpr uint8_t CFG_DATUM_VISITS = 3;
 constexpr uint8_t CFG_END_REF_VISITS = 3;
 constexpr uint8_t CFG_MEASUREMENT_PASSES = 1;
 constexpr uint32_t CFG_TIME_LIMIT_MS = 3600000UL;
-constexpr uint16_t CFG_AQUADB_CLOCK_NS = 400;
+constexpr uint16_t CFG_AQUADB_CLOCK_NS = 120;
 constexpr float CFG_EXPECTED_NOISE_UM = 0.500000F;
 constexpr float CFG_REF_DRIFT_WARNING_UM = 0.500000F;
 constexpr uint32_t CFG_RMT_HZ = 1000000UL;
