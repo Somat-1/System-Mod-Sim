@@ -1,0 +1,5 @@
+# derived cache, rebuilt by e1_run.py from the CSV and the log
+e1_run_aligned.npz
+
+# scratch npz written while exploring the run
+_*.npz

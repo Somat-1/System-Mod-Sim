@@ -104,3 +104,38 @@ mean/std/slope/sample-count calculations.
 
 Set `sync_gpio` in `e1_config.json` only after a dedicated line is wired to the
 Beckhoff. Its default is `-1`, so synchronization uses the event clock map.
+
+## Completed-run findings
+
+The publication findings are regenerated from the aligned 1 kHz IDS capture and
+ESP log with:
+
+```bash
+python3 render_e1_findings.py
+```
+
+The analysis removes the Step A gain (`−25.0866 ppm`) and a direction-averaged
+offset per window, folds on absolute commanded screw angle, tests harmonics
+1–8 against a 1% family-wise false-alarm amplitude, and writes:
+
+- `rendered/experimental_findings/e1_findings_figure1_raw_windows.png` — corrected raw evidence;
+- `rendered/experimental_findings/e1_findings_figure2_folded_revolution.png` — folded direction
+  average and reversal;
+- `rendered/experimental_findings/e1_findings_figure3_harmonic_spectrum.png` — amplitude spectrum;
+- `rendered/experimental_findings/e1_findings_table_harmonics.png` — main-text Table 1
+  (harmonics 1–4), including the k = 1 W1/W2 amplitude-ratio contrast;
+- `rendered/experimental_findings/e1_findings_appendix_table_harmonics.png` — full
+  harmonic table (harmonics 1–8) for the appendix;
+- `rendered/experimental_findings/e1_findings_appendix_validity.png` — references, record quality,
+  and harmonic-fit residuals;
+- `analysis/e1_findings_summary.json` and `analysis/e1_harmonics_table.csv` —
+  machine-readable results and method metadata.
+
+Measured observations use markers only; continuous lines denote fitted models
+or reference/acceptance levels. Window colours are consistent throughout.
+The folded figure and amplitude spectrum are the key main-text figures. The
+validity figure remains in the appendix, but panel (d) should be cited in the
+main text: coherent position-dependent structure remains after the order-2
+harmonic fit, so the residual is not white noise. The repeat-phase σ used for
+the false-alarm threshold therefore includes unmodelled slow structure and
+makes the harmonic-selection test conservative.

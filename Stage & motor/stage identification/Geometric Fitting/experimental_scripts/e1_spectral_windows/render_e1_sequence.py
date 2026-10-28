@@ -315,10 +315,17 @@ def main() -> int:
         "savefig.facecolor": "white",
     })
     duration_min = total_s / 60.0
-    fig = plt.figure(figsize=(7.45, 5.25), facecolor="white")
+    fig = plt.figure(figsize=(7.45, 6.2), facecolor="white")
     grid = fig.add_gridspec(
-        2, 1, height_ratios=[0.82, 3.15],
-        left=0.105, right=0.97, top=0.945, bottom=0.115, hspace=0.20,
+        3, 1, height_ratios=[0.78, 3.15, 0.95],
+        left=0.105, right=0.97, top=0.86, bottom=0.10, hspace=0.31,
+    )
+    fig.text(0.105, 0.975, "Experiment E1 — spectral windows", fontsize=16,
+             weight="bold", color="#20262b", va="top")
+    fig.text(
+        0.105, 0.928,
+        "Three local 12 mm windows · fixed electrical phase · bidirectional stop–settle–record",
+        fontsize=8.5, color="#566069", va="top",
     )
     timeline = fig.add_subplot(grid[0])
     timeline.set_xlim(0, duration_min)
@@ -339,22 +346,20 @@ def main() -> int:
                 color="white", weight="bold", clip_on=True,
             )
         elif state == "DATUM":
-            timeline.plot([x + width / 2, x + width / 2], [-0.05, -0.13],
+            timeline.plot([x + width / 2, x + width / 2], [0.35, 0.48],
                           color="#555b60", lw=0.55)
-            timeline.text(x + width / 2 + 0.12, -0.16, short_label,
-                          ha="left", va="top", fontsize=6.2, color="#3f454a")
+            timeline.text(x + width / 2, 0.51, "D", ha="center", va="bottom",
+                          fontsize=6.2, color="#3f454a")
         else:
             timeline.plot([x + width / 2, x + width / 2], [0.35, 0.48],
                           color="#555b60", lw=0.55)
             timeline.text(x + width / 2, 0.51, short_label, ha="center", va="bottom",
                           fontsize=6.2, color="#3f454a")
     timeline.vlines(0, -0.34, 0.34, color=COLORS["INIT"], lw=0.8)
-    timeline.text(0.18, -0.32, "INIT", ha="left", va="center",
-                  fontsize=6.2, color="#3f454a")
     timeline.vlines(duration_min, -0.34, 0.34, color=COLORS["PARK"], lw=0.8)
     timeline.text(duration_min - 0.18, -0.18, "PARK / DONE", ha="right", va="center",
                   fontsize=6.2, color="#3f454a")
-    timeline.set_title("(a) Time-aligned sequence states", loc="left", pad=7)
+    timeline.set_title("(a) Controller-state allocation", loc="left", pad=7)
     timeline.set_yticks([])
     timeline.tick_params(axis="x", bottom=False, labelbottom=False)
     timeline.spines[["left", "right", "top", "bottom"]].set_visible(False)
@@ -390,10 +395,17 @@ def main() -> int:
 
     ax.axvline(duration_min, color="#777d82", lw=0.65, ls=(0, (2, 2)))
 
-    metrics = f"Measurement duration: {duration_min:.1f} min"
-    ax.text(0.018, 0.972, metrics, transform=ax.transAxes,
-            ha="left", va="top", fontsize=7,
-            color="#33383d", linespacing=1.35,
+    metrics = (
+        f"windows  3 × 12 mm\n"
+        f"targets  101 per window\n"
+        f"analysis stops  {summary['window_measurement_stops']}\n"
+        f"pilot stops  {summary['pilot_stops']}\n"
+        f"reference records  {summary['measurement_reference_stops_total']}\n"
+        f"nominal duration  {duration_min:.1f} min"
+    )
+    ax.text(0.985, 0.972, metrics, transform=ax.transAxes,
+            ha="right", va="top", fontsize=7.3,
+            color="#33383d", linespacing=1.32,
             bbox=dict(boxstyle="square,pad=0.45", facecolor="white",
                       edgecolor="#aeb3b7", linewidth=0.6))
 
@@ -420,12 +432,41 @@ def main() -> int:
     ax.set_xticklabels([str(value) for value in range(0, 31, 5)] +
                        [f"{duration_min:.1f}"])
     ax.set_ylim(0, 123)
-    ax.set_xlabel("elapsed recording time [min]")
     ax.set_ylabel("commanded position [mm]")
-    ax.set_title("(b) Commanded trajectory", loc="left", pad=6)
+    ax.set_title("(b) Complete commanded trajectory", loc="left", pad=6)
     ax.grid(axis="x", color="#e0e2e4", lw=0.5)
     ax.grid(axis="y", visible=False)
     ax.spines[["top", "right"]].set_visible(False)
+
+    budget_ax = fig.add_subplot(grid[2], sharex=timeline)
+    recorded_stops = (
+        summary["window_measurement_stops"] + summary["pilot_stops"]
+        + summary["measurement_reference_stops_total"]
+    )
+    settle_s = recorded_stops * config["settle_s"]
+    record_s = recorded_stops * config["record_s"]
+    operator_s = config["pilot_pause_budget_s"]
+    motion_s = total_s - settle_s - record_s - operator_s
+    budget = [
+        ("motion + transits", motion_s, "#6d7d88"),
+        ("settle windows", settle_s, "#c49a54"),
+        ("record windows", record_s, "#6d4c91"),
+        ("pilot gate", operator_s, COLORS["PILOT"]),
+    ]
+    left = 0.0
+    for label, seconds, color in budget:
+        width = seconds / 60.0
+        budget_ax.barh(0, width, left=left, height=0.48, color=color,
+                       edgecolor="white")
+        if width >= 1.75:
+            budget_ax.text(left + width / 2.0, 0,
+                           f"{label}\n{width:.1f} min", ha="center", va="center",
+                           fontsize=6.4, color="white", weight="bold")
+        left += width
+    budget_ax.set(yticks=[], xlabel="elapsed experiment time [min]",
+                  ylim=(-0.42, 0.42), xlim=(0, duration_min))
+    budget_ax.set_title("(c) Recording-time budget", loc="left", pad=6)
+    budget_ax.spines[["left", "right", "top"]].set_visible(False)
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUTPUT, dpi=320, facecolor="white")
