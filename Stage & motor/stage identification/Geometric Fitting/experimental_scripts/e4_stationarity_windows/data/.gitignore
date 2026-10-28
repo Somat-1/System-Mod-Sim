@@ -1,0 +1,3 @@
+# derived caches and scratch npz, rebuilt from the CSV
+_*.npz
+*_run_aligned.npz
