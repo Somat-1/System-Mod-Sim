@@ -66,7 +66,9 @@ arduino-cli compile \
 ```
 
 Run `python3 e4_terminal.py [port]`. Commands are `p` to arm at x_ref, `r` to
-run, `s` for status, `t` for the target summary, `0` to release the motor and
+run, `h` to home both ends (the step_timing_test routine: datum at the negative
+switch), check the travel holds the soft limits, centre at x_ref from 58.35 mm
+and arm in place of `p`, `g` for `h` then `r`, `s` for status, `t` for the target summary, `0` to release the motor and
 invalidate the coordinate, Ctrl+C to request a controlled abort, and Ctrl+] to
 close the terminal. Raw timestamped logs are written under `data/`.
 
@@ -75,4 +77,44 @@ responsible for stop means/std/slopes/sample counts, saturation and settling
 flags, reference drift correction, environmental validity, harmonic fits, and
 the final stationarity verdict. The full procedure is preserved at
 `../../instructions/E4_stationarity_windows_procedure.md`.
+
+## Completed-run processing
+
+The completed 27 October 2026 run is processed reproducibly from:
+
+- `data/E4_Experimental_Run.csv` — the 1 kHz TwinCAT/IDS capture;
+- `data/e4_terminal_20261027_155838.log` — controller events and stop windows;
+- `e4_run.py` — scope/log clock alignment and stage-coordinate reconstruction;
+- `render_e4_findings.py` — validity checks, E4 and E1 harmonic refits, complex
+  profile-model selection, tables, and publication figures.
+
+Because the local Homebrew Python 3.14 installation needs its matching Expat
+library at runtime, regenerate all findings from this directory with:
+
+```bash
+DYLD_LIBRARY_PATH=/opt/homebrew/opt/expat/lib \
+  /opt/homebrew/bin/python3 render_e4_findings.py
+```
+
+Generated data products are under `analysis/`:
+
+- `e4_validity_table.csv` — acquisition and step-count checks;
+- `e4_t1_window_harmonics.csv` — E4 and consistently refitted E1 windows;
+- `e4_t2_profile_models.csv` — P0–P3 comparison by χ² and BIC;
+- `e4_findings_summary.json` — machine-readable conclusions and conventions.
+
+The raw-window evidence figure and four appendix figures are written as 320 dpi
+PNG files under `rendered/experimental_findings/`. The three presentation-ready
+results figures are grouped under `rendered/presentation/`:
+
+- `e4_figure1_geometry_fold.png` — geometry fold, windows told apart by line style;
+- `e4_figure1_geometry_fold.gif` — the same fold animated: the highlight steps
+  through the seven windows from motor end to support bearing (~17 s loop);
+- `e4_figure2_harmonic_profile.png` — k = 1/2 amplitude and phase profiles;
+- `e4_figure3_reversal.png` — reversal profile and direct co-variation test.
+
+The processing currently places the motor end at 0.000 mm and the support
+bearing at 122.770 mm, inferred from the logged homed travel. These two physical
+locations must be confirmed on the stage before their labels or physical
+profile-model parameters are treated as final.
 

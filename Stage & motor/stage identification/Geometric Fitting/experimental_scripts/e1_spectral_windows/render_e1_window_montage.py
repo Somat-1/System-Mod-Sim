@@ -6,7 +6,7 @@ on a 0.12 mm grid - so the three windows can be compared directly. The
 pre-approach and the overrun run off the top and bottom of each panel by
 construction: they are outside the window, which is the point of them.
 
-Writes rendered/e1_window_montage.{png,pdf}.
+Writes rendered/e1_window_montage.png.
 """
 from pathlib import Path
 import os
@@ -114,8 +114,7 @@ def main():
                  fontsize=12.5, y=0.995)
     fig.tight_layout(rect=(0, 0, 1, 0.945))
     OUT.mkdir(exist_ok=True)
-    for ext in ("png", "pdf"):
-        fig.savefig(OUT / f"e1_window_montage.{ext}", dpi=200)
+    fig.savefig(OUT / "e1_window_montage.png", dpi=200)
     print("wrote", OUT / "e1_window_montage.png")
 
 

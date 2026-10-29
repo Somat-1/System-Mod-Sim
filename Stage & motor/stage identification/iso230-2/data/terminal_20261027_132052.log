@@ -1,0 +1,110 @@
+1793103652.942 ESP-ROM:esp32s3-20210327
+1793103652.942 Build:Mar 27 2021
+1793103652.942 rst:0x15 (USB_UART_CHIP_RESET),boot:0x8 (SPI_FAST_FLASH_BOOT)
+1793103652.942 Saved PC:0x40378a66
+1793103652.942 SPIWP:0xee
+1793103652.942 mode:DIO, clock div:1
+1793103652.942 load:0x3fce2820,len:0x10cc
+1793103652.943 load:0x403c8700,len:0xc2c
+1793103652.943 load:0x403cb700,len:0x30b0
+1793103652.943 entry 0x403c88b8
+1793103653.206 # BOOT,fw=step_timing_test
+1793103653.206 # PINS,step=7,dir=8,en=9,uart_rx=18,uart_tx=17,sw_neg=10,sw_pos=11
+1793103653.371 # READY,driver=1,rmt=1,um_per_pulse=0.6250
+1793103653.371 
+1793103653.371 --- step-timing identification ---
+1793103653.371  driver=1 homed=0  1/16  400 mA  RMT 1000000 Hz
+1793103653.371   h  home          r  timing sequence   d  dump records
+1793103653.371   w  warm-up 5 mm/s  c  shuttle 8 mm/s    g  home+warm+shuttle
+1793103653.371   s  switches      0  release motor     Ctrl+C abort
+1793103654.913 ## sent h
+1793103654.968 > h
+1793103654.968 # HOMING,start
+1793103919.729 # HOMED,travel_mm=122.7700,lim_mm=2.000..120.770
+1793103920.232 ## sent w
+1793103920.233 
+1793103920.233 --- step-timing identification ---
+1793103920.234  driver=1 homed=1  1/16  400 mA  RMT 1000000 Hz
+1793103920.234   h  home          r  timing sequence   d  dump records
+1793103920.234   w  warm-up 5 mm/s  c  shuttle 8 mm/s    g  home+warm+shuttle
+1793103920.234   s  switches      0  release motor     Ctrl+C abort
+1793103920.284 > w
+1793103920.285 # SHUTTLE_BEGIN,warmup,v_mm_s=5.00,span_mm=118.770
+1793103920.285 # press any key to stop (Ctrl+C aborts)
+1793105671.982 ## sent b'x'
+1793105672.084 # SHUTTLE_DONE,warmup,cycles=36,elapsed_s=1727.6,mean_cycle_s=47.741,fastest_s=47.741,slowest_s=47.742,achieved_mm_s=4.976,commanded_mm_s=5.00,x_mm=46.450000,aborted=0
+1793105672.084 
+1793105672.084 --- step-timing identification ---
+1793105672.084  driver=1 homed=1  1/16  400 mA  RMT 1000000 Hz
+1793105672.084   h  home          r  timing sequence   d  dump records
+1793105672.084   w  warm-up 5 mm/s  c  shuttle 8 mm/s    g  home+warm+shuttle
+1793105672.084   s  switches      0  release motor     Ctrl+C abort
+1793105706.164 ## sent b'r'
+1793105706.215 > r
+1793105706.215 # SEQ_BEGIN,t_ms=2053257,profiles=3,cycles=2,hold_ms=10000,low_mm=2.000,pre_mm=58.350,xref_mm=61.350,rmt_hz=1000000,chunk=128,buffered=1
+1793105706.215 # SEQ_NOTE,no output during motion; records follow SEQ_DONE
+1793106076.030 # SEQ_DONE,t_ms=2423127,elapsed_ms=369870,x_mm=61.350000,aborted=0
+1793106076.031 # DUMP_BEGIN,records=43,dropped=0
+1793106076.031 # MARK,v2,-1,profile_start,t_ms=2053258,x_mm=46.450000
+1793106076.031 # MOVE,v2,1,to_low,t0=2053258,t1=2075525,elapsed_ms=22267,pulses=71040,x_from_mm=46.450000,x_to_mm=2.050000,v_mm_s=2.000,a_mm_s2=40.000
+1793106076.031 # MOVE,v2,1,low_to_pre,t0=2075525,t1=2103776,elapsed_ms=28251,pulses=90080,x_from_mm=2.050000,x_to_mm=58.350000,v_mm_s=2.000,a_mm_s2=40.000
+1793106076.032 # MOVE,v2,1,pre_to_xref,t0=2103776,t1=2105322,elapsed_ms=1546,pulses=4800,x_from_mm=58.350000,x_to_mm=61.350000,v_mm_s=2.000,a_mm_s2=40.000
+1793106076.032 # HOLD,v2,1,xref,t0=2105322,t1=2115323,elapsed_ms=10001,x_mm=61.350000
+1793106076.032 # MOVE,v2,1,xref_to_low,t0=2115323,t1=2145046,elapsed_ms=29723,pulses=94848,x_from_mm=61.350000,x_to_mm=2.070000,v_mm_s=2.000,a_mm_s2=40.000
+1793106076.032 # HOLD,v2,1,low,t0=2145046,t1=2155046,elapsed_ms=10000,x_mm=2.070000
+1793106076.032 # MOVE,v2,2,to_low,t0=2155046,t1=2155046,elapsed_ms=0,pulses=0,x_from_mm=2.070000,x_to_mm=2.070000,v_mm_s=2.000,a_mm_s2=40.000
+1793106076.032 # MOVE,v2,2,low_to_pre,t0=2155046,t1=2183287,elapsed_ms=28241,pulses=90048,x_from_mm=2.070000,x_to_mm=58.350000,v_mm_s=2.000,a_mm_s2=40.000
+1793106076.032 # MOVE,v2,2,pre_to_xref,t0=2183287,t1=2184833,elapsed_ms=1546,pulses=4800,x_from_mm=58.350000,x_to_mm=61.350000,v_mm_s=2.000,a_mm_s2=40.000
+1793106076.032 # HOLD,v2,2,xref,t0=2184833,t1=2194834,elapsed_ms=10001,x_mm=61.350000
+1793106076.032 # MOVE,v2,2,xref_to_low,t0=2194834,t1=2224557,elapsed_ms=29723,pulses=94848,x_from_mm=61.350000,x_to_mm=2.070000,v_mm_s=2.000,a_mm_s2=40.000
+1793106076.032 # HOLD,v2,2,low,t0=2224557,t1=2234557,elapsed_ms=10000,x_mm=2.070000
+1793106076.032 # MARK,v2,-1,profile_end,t_ms=2234557,x_mm=2.070000
+1793106076.032 # MARK,v5,-1,profile_start,t_ms=2234557,x_mm=2.070000
+1793106076.032 # MOVE,v5,1,to_low,t0=2234557,t1=2234557,elapsed_ms=0,pulses=0,x_from_mm=2.070000,x_to_mm=2.070000,v_mm_s=5.000,a_mm_s2=40.000
+1793106076.032 # MOVE,v5,1,low_to_pre,t0=2234557,t1=2245944,elapsed_ms=11387,pulses=90048,x_from_mm=2.070000,x_to_mm=58.350000,v_mm_s=5.000,a_mm_s2=40.000
+1793106076.032 # MOVE,v5,1,pre_to_xref,t0=2245944,t1=2246663,elapsed_ms=719,pulses=4800,x_from_mm=58.350000,x_to_mm=61.350000,v_mm_s=5.000,a_mm_s2=40.000
+1793106076.032 # HOLD,v5,1,xref,t0=2246663,t1=2256664,elapsed_ms=10001,x_mm=61.350000
+1793106076.032 # MOVE,v5,1,xref_to_low,t0=2256664,t1=2268610,elapsed_ms=11946,pulses=94848,x_from_mm=61.350000,x_to_mm=2.070000,v_mm_s=5.000,a_mm_s2=40.000
+1793106076.032 # HOLD,v5,1,low,t0=2268611,t1=2278612,elapsed_ms=10001,x_mm=2.070000
+1793106076.032 # MOVE,v5,2,to_low,t0=2278612,t1=2278612,elapsed_ms=0,pulses=0,x_from_mm=2.070000,x_to_mm=2.070000,v_mm_s=5.000,a_mm_s2=40.000
+1793106076.032 # MOVE,v5,2,low_to_pre,t0=2278612,t1=2289999,elapsed_ms=11387,pulses=90048,x_from_mm=2.070000,x_to_mm=58.350000,v_mm_s=5.000,a_mm_s2=40.000
+1793106076.032 # MOVE,v5,2,pre_to_xref,t0=2289999,t1=2290718,elapsed_ms=719,pulses=4800,x_from_mm=58.350000,x_to_mm=61.350000,v_mm_s=5.000,a_mm_s2=40.000
+1793106076.032 # HOLD,v5,2,xref,t0=2290718,t1=2300719,elapsed_ms=10001,x_mm=61.350000
+1793106076.032 # MOVE,v5,2,xref_to_low,t0=2300719,t1=2312665,elapsed_ms=11946,pulses=94848,x_from_mm=61.350000,x_to_mm=2.070000,v_mm_s=5.000,a_mm_s2=40.000
+1793106076.032 # HOLD,v5,2,low,t0=2312666,t1=2322667,elapsed_ms=10001,x_mm=2.070000
+1793106076.032 # MARK,v5,-1,profile_end,t_ms=2322667,x_mm=2.070000
+1793106076.032 # MARK,v8,-1,profile_start,t_ms=2322667,x_mm=2.070000
+1793106076.032 # MOVE,v8,1,to_low,t0=2322667,t1=2322667,elapsed_ms=0,pulses=0,x_from_mm=2.070000,x_to_mm=2.070000,v_mm_s=8.000,a_mm_s2=40.000
+1793106076.032 # MOVE,v8,1,low_to_pre,t0=2322667,t1=2329897,elapsed_ms=7230,pulses=90048,x_from_mm=2.070000,x_to_mm=58.350000,v_mm_s=8.000,a_mm_s2=40.000
+1793106076.032 # MOVE,v8,1,pre_to_xref,t0=2329897,t1=2330465,elapsed_ms=568,pulses=4800,x_from_mm=58.350000,x_to_mm=61.350000,v_mm_s=8.000,a_mm_s2=40.000
+1793106076.032 # HOLD,v8,1,xref,t0=2330465,t1=2340465,elapsed_ms=10000,x_mm=61.350000
+1793106076.032 # MOVE,v8,1,xref_to_low,t0=2340465,t1=2348024,elapsed_ms=7559,pulses=94848,x_from_mm=61.350000,x_to_mm=2.070000,v_mm_s=8.000,a_mm_s2=40.000
+1793106076.032 # HOLD,v8,1,low,t0=2348024,t1=2358025,elapsed_ms=10001,x_mm=2.070000
+1793106076.032 # MOVE,v8,2,to_low,t0=2358025,t1=2358025,elapsed_ms=0,pulses=0,x_from_mm=2.070000,x_to_mm=2.070000,v_mm_s=8.000,a_mm_s2=40.000
+1793106076.032 # MOVE,v8,2,low_to_pre,t0=2358025,t1=2365255,elapsed_ms=7230,pulses=90048,x_from_mm=2.070000,x_to_mm=58.350000,v_mm_s=8.000,a_mm_s2=40.000
+1793106076.085 # MOVE,v8,2,pre_to_xref,t0=2365255,t1=2365823,elapsed_ms=568,pulses=4800,x_from_mm=58.350000,x_to_mm=61.350000,v_mm_s=8.000,a_mm_s2=40.000
+1793106076.085 # HOLD,v8,2,xref,t0=2365823,t1=2375823,elapsed_ms=10000,x_mm=61.350000
+1793106076.086 # MOVE,v8,2,xref_to_low,t0=2375823,t1=2383382,elapsed_ms=7559,pulses=94848,x_from_mm=61.350000,x_to_mm=2.070000,v_mm_s=8.000,a_mm_s2=40.000
+1793106076.086 # HOLD,v8,2,low,t0=2383382,t1=2393383,elapsed_ms=10001,x_mm=2.070000
+1793106076.086 # MARK,v8,-1,profile_end,t_ms=2393383,x_mm=2.070000
+1793106076.086 # MOVE,park,-1,park_to_xref,t0=2393383,t1=2423127,elapsed_ms=29744,pulses=94848,x_from_mm=2.070000,x_to_mm=61.350000,v_mm_s=2.000,a_mm_s2=40.000
+1793106076.086 # DUMP_END
+1793106076.086 
+1793106076.086 --- step-timing identification ---
+1793106076.086  driver=1 homed=1  1/16  400 mA  RMT 1000000 Hz
+1793106076.086   h  home          r  timing sequence   d  dump records
+1793106076.086   w  warm-up 5 mm/s  c  shuttle 8 mm/s    g  home+warm+shuttle
+1793106076.086   s  switches      0  release motor     Ctrl+C abort
+1793106519.463 ## sent b'w'
+1793106519.522 > w
+1793106519.522 # SHUTTLE_BEGIN,warmup,v_mm_s=5.00,span_mm=118.770
+1793106519.522 # press any key to stop (Ctrl+C aborts)
+1793106909.039 ## sent b'x'
+1793106909.150 # SHUTTLE_DONE,warmup,cycles=7,elapsed_s=377.7,mean_cycle_s=47.665,fastest_s=47.665,slowest_s=47.666,achieved_mm_s=4.984,commanded_mm_s=5.00,x_mm=20.070000,aborted=0
+1793106909.150 
+1793106909.150 --- step-timing identification ---
+1793106909.150  driver=1 homed=1  1/16  400 mA  RMT 1000000 Hz
+1793106909.150   h  home          r  timing sequence   d  dump records
+1793106909.150   w  warm-up 5 mm/s  c  shuttle 8 mm/s    g  home+warm+shuttle
+1793106909.150   s  switches      0  release motor     Ctrl+C abort
+1793106911.078 ## closing

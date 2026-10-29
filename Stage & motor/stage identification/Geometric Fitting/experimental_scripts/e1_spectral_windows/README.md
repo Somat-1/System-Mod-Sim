@@ -84,6 +84,10 @@ Firmware commands:
   x_ref;
 - `r` — execute INIT → DATUM → PILOT → operator gate → W1 → REF → W2 → REF →
   W3 → END_REF → PARK;
+- `h` — home both ends (the step_timing_test routine: datum at the negative
+  switch), check the travel holds the soft limits, centre at x_ref from
+  58.35 mm and arm; replaces the manual `p` precondition;
+- `g` — `h`, then `r` with the pilot gate continuing by itself;
 - `c` / `a` — continue or abort at the pilot gate;
 - `s` — status; `t` — target summary; `0` — release the motor and invalidate
   the coordinate; Ctrl+C — abort.

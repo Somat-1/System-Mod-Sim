@@ -11,7 +11,7 @@ phase bins give every part of one revolution five or more visits at different
 places along the travel, so a periodic screw term separates from whatever else
 varies with position.
 
-Writes rendered/e2_global_map_preview.{png,pdf}.
+Writes rendered/e2_global_map_preview.png.
 """
 from pathlib import Path
 import os
@@ -129,8 +129,7 @@ def main():
              fontsize=8, color=INK2)
     fig.tight_layout(rect=(0, 0.025, 1, 1))
     OUT.mkdir(exist_ok=True)
-    for ext in ("png", "pdf"):
-        fig.savefig(OUT / f"e2_global_map_preview.{ext}", dpi=200)
+    fig.savefig(OUT / "e2_global_map_preview.png", dpi=200)
     print("wrote", OUT / "e2_global_map_preview.png")
     print(f"gain {slope * 1000:+.2f} ppm; pk-pk {np.ptp(avg):.3f} um; "
           f"after gain RMS {rest.std():.3f} um; fold swing {amp:.3f} um")

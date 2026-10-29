@@ -10,8 +10,8 @@ E0/
 ├── TABLES.md              T1 slope variants · T2 ISO metrics · T3 power share
 │                          T4 validity · T5 periodic screening
 └── rendered/
-    ├── F1_deviation_residual_reversal.{png,pdf}
-    └── F2_metric_improvement.{png,pdf}
+    ├── F1_deviation_residual_reversal.png
+    └── F2_metric_improvement.png
 ```
 
 ## Regenerate

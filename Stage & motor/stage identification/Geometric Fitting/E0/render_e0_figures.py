@@ -11,8 +11,8 @@ Figure 2 is the improvement chart's first bar: the ISO metrics before and after
 a position-only gain correction.
 
 Reads  ../results/per_target_statistics.csv and ../results/step_a_results.json.
-Writes rendered/F1_deviation_residual_reversal.{png,pdf}
-       rendered/F2_metric_improvement.{png,pdf}
+Writes rendered/F1_deviation_residual_reversal.png
+       rendered/F2_metric_improvement.png
 """
 from pathlib import Path
 import csv
@@ -161,7 +161,6 @@ def figure1(d, res, out):
 
     out.mkdir(parents=True, exist_ok=True)
     fig.savefig(out / "F1_deviation_residual_reversal.png")
-    fig.savefig(out / "F1_deviation_residual_reversal.pdf")
     plt.close(fig)
 
 
@@ -199,7 +198,6 @@ def figure2(res, out):
 
     out.mkdir(parents=True, exist_ok=True)
     fig.savefig(out / "F2_metric_improvement.png")
-    fig.savefig(out / "F2_metric_improvement.pdf")
     plt.close(fig)
 
 

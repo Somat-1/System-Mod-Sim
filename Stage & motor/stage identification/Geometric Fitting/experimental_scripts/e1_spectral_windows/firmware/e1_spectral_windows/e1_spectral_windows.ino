@@ -46,11 +46,11 @@ rmt_symbol_word_t rmtBuffers[CFG_RMT_RING][CFG_RMT_CHUNK];
 size_t rmtBufferIndex = 0;
 
 enum State : uint8_t {
-  ST_IDLE, ST_INIT, ST_DATUM, ST_PILOT, ST_W1, ST_REF, ST_W2, ST_W3,
+  ST_IDLE, ST_HOME, ST_INIT, ST_DATUM, ST_PILOT, ST_W1, ST_REF, ST_W2, ST_W3,
   ST_END_REF, ST_PARK, ST_DONE, ST_ABORT
 };
 const char *STATE_NAME[] = {
-  "IDLE", "INIT", "DATUM", "PILOT", "W1", "REF", "W2", "W3",
+  "IDLE", "HOME", "INIT", "DATUM", "PILOT", "W1", "REF", "W2", "W3",
   "END_REF", "PARK", "DONE", "ABORT"
 };
 
@@ -62,6 +62,7 @@ bool positionArmed = false;
 bool abortRequested = false;
 bool unsafeFault = false;
 bool running = false;
+bool autoRun = false;  // 'g': operator gates continue by themselves
 bool timeLimited = false;
 bool lastDirPositive = true;
 bool directionKnown = false;
@@ -149,10 +150,13 @@ void setDirection(bool positive) {
   directionKnown = true;
 }
 
-uint32_t emitPulses(uint32_t pulses, bool positive) {
+uint32_t emitPulses(uint32_t pulses, bool positive,
+                    double vMmS = CFG_V_MM_S,
+                    uint32_t chunk = CFG_RMT_CHUNK,
+                    bool seeking = false) {
   if (!pulses) return 0;
   setDirection(positive);
-  const double vMax = CFG_V_MM_S * USTEP_PER_MM;
+  const double vMax = vMmS * USTEP_PER_MM;
   const double accel = CFG_A_MM_S2 * USTEP_PER_MM;
   uint32_t nAccel = (uint32_t)(vMax * vMax / (2.0 * accel));
   if (2 * nAccel > pulses) nAccel = pulses / 2;
@@ -160,17 +164,19 @@ uint32_t emitPulses(uint32_t pulses, bool positive) {
   uint32_t queued = 0;
   while (queued < pulses) {
     if (pollAbort()) break;
+    // Homing seeks the switch on purpose; anywhere else it is a fault.
     if (switchAhead(positive)) {
-      unsafeFault = true;
+      if (!seeking) unsafeFault = true;
       break;
     }
     const int32_t next = positionU +
-        (positive ? (int32_t)CFG_RMT_CHUNK : -(int32_t)CFG_RMT_CHUNK);
-    if ((positive && next > CFG_SOFT_MAX_U) || (!positive && next < CFG_SOFT_MIN_U)) {
+        (positive ? (int32_t)chunk : -(int32_t)chunk);
+    if (!seeking &&
+        ((positive && next > CFG_SOFT_MAX_U) || (!positive && next < CFG_SOFT_MIN_U))) {
       unsafeFault = true;
       break;
     }
-    const uint32_t count = min((uint32_t)CFG_RMT_CHUNK, pulses - queued);
+    const uint32_t count = min(chunk, pulses - queued);
     rmt_symbol_word_t *buffer = rmtBuffers[rmtBufferIndex];
     rmtBufferIndex = (rmtBufferIndex + 1) % CFG_RMT_RING;
     for (uint32_t k = 0; k < count; ++k) {
@@ -221,6 +227,84 @@ bool moveTo(int32_t targetU, const char *label, uint32_t *tStart = nullptr,
                   (unsigned long)wanted, (unsigned long)emitted);
     return false;
   }
+  return true;
+}
+
+/* Homing, as in the step_timing_test routine that homes the stage before the
+ * warm-up: seek each switch at 2 mm/s, then three 0.15 mm/s touches that must
+ * agree within 0.02 mm. The datum is the negative switch's trigger, which is
+ * the frame the generated targets and soft limits are expressed in.
+ */
+constexpr double HOME_SEEK_MM_S = 2.0;
+constexpr double HOME_SLOW_MM_S = 0.15;
+constexpr double HOME_BACKOFF_MM = 2.0;
+constexpr uint8_t HOME_TOUCHES = 3;
+constexpr double HOME_TOL_MM = 0.02;
+constexpr double HOME_MAX_TRAVEL_MM = 200.0;
+constexpr double END_MARGIN_MM = 2.0;
+constexpr uint32_t HOME_CHUNK = 16;  // finer stop granularity on a switch
+
+inline int32_t ustepsOf(double mm) { return (int32_t)llround(mm * USTEP_PER_MM); }
+
+// A relative homing move: the switch ahead ends it, the soft limits do not.
+void jog(double mm, double vMmS) {
+  const int32_t delta = ustepsOf(mm);
+  emitPulses((uint32_t)(delta >= 0 ? delta : -delta), delta >= 0, vMmS,
+             HOME_CHUNK, true);
+}
+
+bool homeEnd(bool positive, int32_t *trigger) {
+  const double sign = positive ? 1.0 : -1.0;
+  if (switchAhead(positive)) jog(-sign * HOME_BACKOFF_MM, HOME_SLOW_MM_S);
+  jog(sign * HOME_MAX_TRAVEL_MM, HOME_SEEK_MM_S);
+  if (abortRequested || !switchAhead(positive)) return false;
+  int32_t lo = 0, hi = 0;
+  for (uint8_t t = 0; t < HOME_TOUCHES; ++t) {
+    jog(-sign * HOME_BACKOFF_MM, HOME_SLOW_MM_S);
+    jog(sign * 3.0 * HOME_BACKOFF_MM, HOME_SLOW_MM_S);
+    if (abortRequested || !switchAhead(positive)) return false;
+    if (t == 0 || positionU < lo) lo = positionU;
+    if (t == 0 || positionU > hi) hi = positionU;
+  }
+  Serial.printf("# HOME_END,%s,spread_mm=%.4f\n", positive ? "pos" : "neg",
+                mmOf(hi - lo));
+  if (mmOf(hi - lo) > HOME_TOL_MM) return false;
+  *trigger = positive ? lo : hi;
+  return true;
+}
+
+/* Home both ends, check the travel holds the soft limits, then centre at x_ref
+ * from below - the same approach as every reference visit. Leaves the
+ * coordinate armed, replacing the manual 'p' precondition. */
+bool homeAndCentre() {
+  positionArmed = false;
+  abortRequested = unsafeFault = false;
+  setState(ST_HOME);
+  digitalWrite(EN_PIN, LOW);
+  int32_t negT = 0, posT = 0;
+  if (!homeEnd(false, &negT)) {
+    Serial.println("# ERR,reason=home_neg");
+    return false;
+  }
+  jog(HOME_BACKOFF_MM, HOME_SLOW_MM_S);
+  if (!homeEnd(true, &posT)) {
+    Serial.println("# ERR,reason=home_pos");
+    return false;
+  }
+  positionU -= negT;
+  const int32_t travel = posT - negT;
+  Serial.printf("# HOMED,travel_mm=%.4f,soft_mm=%.3f..%.3f\n", mmOf(travel),
+                mmOf(CFG_SOFT_MIN_U), mmOf(CFG_SOFT_MAX_U));
+  if (CFG_SOFT_MIN_U < ustepsOf(END_MARGIN_MM) ||
+      CFG_SOFT_MAX_U > travel - ustepsOf(END_MARGIN_MM)) {
+    Serial.println("# ERR,reason=travel_short_for_soft_limits");
+    return false;
+  }
+  positionArmed = true;
+  if (!moveTo(CFG_REF_PRE_U, "centre_pre") || !moveTo(CFG_XREF_U, "centre_xref"))
+    return false;
+  Serial.printf("# CENTRED,x_usteps=%ld,x_mm=%.6f\n", (long)positionU,
+                mmOf(positionU));
   return true;
 }
 
@@ -350,6 +434,10 @@ bool runPilot() {
 
   Serial.println("# PILOT_PAUSE,stage_at_xref=1");
   Serial.println("Check ringing, window quality, 0.12 mm steps, localization, signal, and projected time.");
+  if (autoRun) {
+    Serial.printf("# PILOT_DECISION,%lu,auto_continue\n", (unsigned long)millis());
+    return true;
+  }
   Serial.println("Press c to continue, a or Ctrl+C to abort.");
   for (;;) {
     if (!Serial.available()) { delay(5); continue; }
@@ -529,6 +617,8 @@ void printMenu() {
   Serial.println("p  accept precondition and arm at x_ref");
   Serial.println("r  run E1 measurement    t  print target summary");
   Serial.println("s  status                0  release motor");
+  Serial.println("h  home both ends, centre at x_ref and arm");
+  Serial.println("g  home, centre, then run without operator gates");
   Serial.println("Ctrl+C aborts; pilot gate requires c or a");
   Serial.print("> ");
 }
@@ -581,6 +671,14 @@ void loop() {
       }
       break;
     case 'r': runE1(); break;
+    case 'h': homeAndCentre(); break;
+    case 'g':
+      if (homeAndCentre()) {
+        autoRun = true;
+        runE1();
+        autoRun = false;
+      }
+      break;
     case 's':
       Serial.printf("# STATUS,state=%s,armed=%u,x_usteps=%ld,x_mm=%.6f,"
                     "neg=%u,pos=%u,driver_ok=%u\n",

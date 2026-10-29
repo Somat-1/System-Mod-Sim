@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Load the E2 run and tie it to the plan, using the capture alone.
 
-No board log arrived with this capture, so nothing here depends on the ESP's
-clock or its stop records. The holds are found in the trace, matched to the
-planned stop sequence by position and order, and the record window inside each
-hold is anchored to that hold's own measured start and end - the firmware's
-2.0 s settle and 0.5 s record, but with the edges taken from the data.
+The alignment is deliberately independent of the ESP log: holds are found in
+the trace, matched to the planned stop sequence by position and order, and the
+record window inside each hold is anchored to that hold's own measured start
+and end—the firmware's 2.0 s settle and 0.5 s record, but with edges taken
+from the data. The serial log is available and is checked separately by the
+findings analysis for completion, step phase and reference MSCNT consistency.
 
 That last point is deliberate. The ISO 230-2 v3 evaluation took its window
 edges from the board timestamps, which put the last 38 ms of every window on

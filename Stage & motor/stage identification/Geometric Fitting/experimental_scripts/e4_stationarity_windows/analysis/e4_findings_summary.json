@@ -1,0 +1,421 @@
+{
+  "experiment": "E4_stationarity_windows",
+  "source_stops": 726,
+  "analysis_stops": 714,
+  "scope_samples": 2523348,
+  "alignment_fit_mad_um": 1.4075000000026705,
+  "esp_clock_rate_ppm": -42.00000000000022,
+  "endpoint_assumptions": {
+    "motor_end_mm": 0.0,
+    "support_bearing_mm": 122.77,
+    "status": "inferred from homed travel; mechanically confirm"
+  },
+  "drift": {
+    "datum_um": 0.5200060743616083,
+    "datum_to_end_um": 0.46181418327032964,
+    "spread_um": 0.6973353944346172
+  },
+  "validity": [
+    {
+      "check": "analysis stop count",
+      "value": 714,
+      "criterion": 714,
+      "pass": true
+    },
+    {
+      "check": "paired targets",
+      "value": 357,
+      "criterion": 357,
+      "pass": true
+    },
+    {
+      "check": "record std",
+      "value": 1.0,
+      "criterion": "report pass fraction; limit 0.5 um",
+      "pass": true
+    },
+    {
+      "check": "record slope effect",
+      "value": 1.0,
+      "criterion": "report pass fraction; limit 0.25 um",
+      "pass": true
+    },
+    {
+      "check": "saturated record samples",
+      "value": 0,
+      "criterion": 0,
+      "pass": true
+    },
+    {
+      "check": "reference MSCNT consistency",
+      "value": [
+        264,
+        264,
+        264,
+        264,
+        264,
+        264,
+        264,
+        264,
+        264,
+        264,
+        264,
+        264
+      ],
+      "criterion": "all reference visits identical",
+      "pass": true
+    },
+    {
+      "check": "reference drift warning",
+      "value": 0.46181418327032964,
+      "criterion": "abs <= 0.5 um",
+      "pass": true
+    },
+    {
+      "check": "environment",
+      "value": "snapshot requested; no values logged",
+      "criterion": "report availability",
+      "pass": null
+    }
+  ],
+  "profile_models": {
+    "1": {
+      "chosen": "P3 quadratic spline",
+      "models": {
+        "P0 constant": {
+          "harmonic": 1,
+          "model": "P0 constant",
+          "parameter_count": 2,
+          "chi2": 594.3997752165473,
+          "bic": 600.3912397636552,
+          "chosen": false,
+          "parameters_json": "[{\"real_um\": -0.9162134466813474, \"imag_um\": 1.3338273082758356}]"
+        },
+        "P1 linear": {
+          "harmonic": 1,
+          "model": "P1 linear",
+          "parameter_count": 4,
+          "chi2": 502.20790436055677,
+          "bic": 514.1908334547727,
+          "chosen": false,
+          "parameters_json": "[{\"real_um\": -0.9182859342805881, \"imag_um\": 1.3249830176969146}, {\"real_um\": -0.0012610342954177541, \"imag_um\": -0.004864413514353315}]"
+        },
+        "P2 decay": {
+          "harmonic": 1,
+          "model": "P2 decay",
+          "parameter_count": 5,
+          "chi2": 449.3760368669922,
+          "bic": 464.35469823476217,
+          "chosen": false,
+          "parameters_json": "[{\"real_um\": -0.8484350463880356, \"imag_um\": 1.2230404492391094}, {\"real_um\": -1.1233604904728753, \"imag_um\": 1.816399273096854}]",
+          "lambda_mm": 7.768591957986607,
+          "lambda_sigma_mm": 2.9834408085464488,
+          "C0_amplitude_um": 2.135707168799655,
+          "Cinf_amplitude_um": 1.488512669887116,
+          "phase_offset_deg": -3.0145115147549095
+        },
+        "P3 quadratic spline": {
+          "harmonic": 1,
+          "model": "P3 quadratic spline",
+          "parameter_count": 8,
+          "chi2": 124.67263276520322,
+          "bic": 148.63849095363514,
+          "chosen": true,
+          "parameters_json": "[{\"real_um\": -1.2387869529218771, \"imag_um\": 1.7168790510862824}, {\"real_um\": 0.38526025955718557, \"imag_um\": 0.8541819813735853}, {\"real_um\": -1.6150621266120133, \"imag_um\": 1.6122646204564934}, {\"real_um\": -0.9761736861107199, \"imag_um\": 0.9816832344107171}]"
+        }
+      }
+    },
+    "2": {
+      "chosen": "P3 quadratic spline",
+      "models": {
+        "P0 constant": {
+          "harmonic": 2,
+          "model": "P0 constant",
+          "parameter_count": 2,
+          "chi2": 246.0733199947944,
+          "bic": 252.06478454190238,
+          "chosen": false,
+          "parameters_json": "[{\"real_um\": -0.14220533006246674, \"imag_um\": 0.38937030731563077}]"
+        },
+        "P1 linear": {
+          "harmonic": 2,
+          "model": "P1 linear",
+          "parameter_count": 4,
+          "chi2": 117.67869346099916,
+          "bic": 129.66162255521513,
+          "chosen": false,
+          "parameters_json": "[{\"real_um\": -0.14932589934005505, \"imag_um\": 0.3828196163024091}, {\"real_um\": -0.004332610754859627, \"imag_um\": -0.003814878981633739}]"
+        },
+        "P2 decay": {
+          "harmonic": 2,
+          "model": "P2 decay",
+          "parameter_count": 5,
+          "chi2": 117.70115679782076,
+          "bic": 132.67981816559072,
+          "chosen": false,
+          "parameters_json": "[{\"real_um\": -4.497868908932131, \"imag_um\": -3.3848994043418164}, {\"real_um\": 4.619157558356022, \"imag_um\": 4.002292559605791}]",
+          "lambda_mm": 999.9999996420319,
+          "lambda_sigma_mm": 6215.654553689534,
+          "C0_amplitude_um": 6.111870604127139,
+          "Cinf_amplitude_um": 5.629242284664243,
+          "phase_offset_deg": -176.05605930658913
+        },
+        "P3 quadratic spline": {
+          "harmonic": 2,
+          "model": "P3 quadratic spline",
+          "parameter_count": 8,
+          "chi2": 26.39065597052722,
+          "bic": 50.35651415895914,
+          "chosen": true,
+          "parameters_json": "[{\"real_um\": 0.12679833709243188, \"imag_um\": 0.57794424907162}, {\"real_um\": -0.026847045156360234, \"imag_um\": 0.09680923349592913}, {\"real_um\": -0.43792571493792876, \"imag_um\": 0.8230341342261654}, {\"real_um\": -0.20750589011670834, \"imag_um\": -0.13108432734859202}]"
+        }
+      }
+    },
+    "3": {
+      "chosen": "P1 linear",
+      "models": {
+        "P0 constant": {
+          "harmonic": 3,
+          "model": "P0 constant",
+          "parameter_count": 2,
+          "chi2": 45.65678484482601,
+          "bic": 51.64824939193399,
+          "chosen": false,
+          "parameters_json": "[{\"real_um\": -0.015121395222933102, \"imag_um\": -0.06287952203876153}]"
+        },
+        "P1 linear": {
+          "harmonic": 3,
+          "model": "P1 linear",
+          "parameter_count": 4,
+          "chi2": 17.990688767939343,
+          "bic": 29.973617862155308,
+          "chosen": true,
+          "parameters_json": "[{\"real_um\": -0.012581397646564687, \"imag_um\": -0.06660979594097}, {\"real_um\": 0.0015454973314185235, \"imag_um\": -0.0021969134121180667}]"
+        },
+        "P2 decay": {
+          "harmonic": 3,
+          "model": "P2 decay",
+          "parameter_count": 5,
+          "chi2": 18.393241119777635,
+          "bic": 33.37190248754759,
+          "chosen": false,
+          "parameters_json": "[{\"real_um\": 1.5238802184069566, \"imag_um\": -2.235729822949604}, {\"real_um\": -1.6321028488641935, \"imag_um\": 2.30416821531991}]",
+          "lambda_mm": 999.9999999999989,
+          "lambda_sigma_mm": 13487.276574898147,
+          "C0_amplitude_um": 2.823641420889196,
+          "Cinf_amplitude_um": 2.705678983412168,
+          "phase_offset_deg": -178.9675173550858
+        },
+        "P3 quadratic spline": {
+          "harmonic": 3,
+          "model": "P3 quadratic spline",
+          "parameter_count": 8,
+          "chi2": 9.118694430383922,
+          "bic": 33.08455261881585,
+          "chosen": false,
+          "parameters_json": "[{\"real_um\": -0.08348095041391439, \"imag_um\": -0.00047198806354121977}, {\"real_um\": -0.051132955830359046, \"imag_um\": 0.020614041278039896}, {\"real_um\": 0.002468235456070386, \"imag_um\": -0.03191147897500328}, {\"real_um\": 0.0888854261735425, \"imag_um\": -0.2795686936026772}]"
+        }
+      }
+    },
+    "4": {
+      "chosen": "P1 linear",
+      "models": {
+        "P0 constant": {
+          "harmonic": 4,
+          "model": "P0 constant",
+          "parameter_count": 2,
+          "chi2": 19.45967180735577,
+          "bic": 25.451136354463753,
+          "chosen": false,
+          "parameters_json": "[{\"real_um\": -0.1438459538695562, \"imag_um\": 0.07786612544467837}]"
+        },
+        "P1 linear": {
+          "harmonic": 4,
+          "model": "P1 linear",
+          "parameter_count": 4,
+          "chi2": 4.260629759976713,
+          "bic": 16.243558854192678,
+          "chosen": true,
+          "parameters_json": "[{\"real_um\": -0.14349728725511574, \"imag_um\": 0.0745039646216021}, {\"real_um\": 0.00021215111667266366, \"imag_um\": -0.0019879378728664696}]"
+        },
+        "P2 decay": {
+          "harmonic": 4,
+          "model": "P2 decay",
+          "parameter_count": 5,
+          "chi2": 4.193533122024859,
+          "bic": 19.172194489794812,
+          "chosen": false,
+          "parameters_json": "[{\"real_um\": -0.09908711444935542, \"imag_um\": -0.35939921419292215}, {\"real_um\": -0.05786709590302128, \"imag_um\": 0.5651929370197623}]",
+          "lambda_mm": 220.08658088038607,
+          "lambda_sigma_mm": 899.2149786898278,
+          "C0_amplitude_um": 0.568147566082329,
+          "Cinf_amplitude_um": 0.37280833066388097,
+          "phase_offset_deg": -158.74051689541122
+        },
+        "P3 quadratic spline": {
+          "harmonic": 4,
+          "model": "P3 quadratic spline",
+          "parameter_count": 8,
+          "chi2": 3.236259839365939,
+          "bic": 27.202118027797866,
+          "chosen": false,
+          "parameters_json": "[{\"real_um\": -0.1605522284947937, \"imag_um\": 0.17716702492175837}, {\"real_um\": -0.09389819082220613, \"imag_um\": 0.14154075241402647}, {\"real_um\": -0.19728416026758577, \"imag_um\": -0.0029307424686855245}, {\"real_um\": -0.10357506725081465, \"imag_um\": -0.009626206520874534}]"
+        }
+      }
+    }
+  },
+  "phase_continuity": {
+    "1": {
+      "maximum_adjacent_jump_deg": 18.852855264635096,
+      "smooth_under_90_deg": true
+    },
+    "2": {
+      "maximum_adjacent_jump_deg": 62.678411876362674,
+      "smooth_under_90_deg": true
+    }
+  },
+  "higher_harmonic_screen": {
+    "3": {
+      "detections_at_or_above_3sigma": [
+        {
+          "source": "E1",
+          "window": "W3",
+          "x_centre_mm": 110.0,
+          "significance": 4.360275602407791
+        },
+        {
+          "source": "E4",
+          "window": "W6",
+          "x_centre_mm": 95.00000000000001,
+          "significance": 4.720369748561807
+        }
+      ],
+      "include_in_model_c": true
+    },
+    "4": {
+      "detections_at_or_above_3sigma": [
+        {
+          "source": "E1",
+          "window": "W1",
+          "x_centre_mm": 12.0,
+          "significance": 4.330787477102129
+        },
+        {
+          "source": "E4",
+          "window": "W1",
+          "x_centre_mm": 10.0,
+          "significance": 4.811209660716988
+        },
+        {
+          "source": "E4",
+          "window": "W4",
+          "x_centre_mm": 61.00000000000001,
+          "significance": 3.679590151539933
+        },
+        {
+          "source": "E4",
+          "window": "W5",
+          "x_centre_mm": 78.00000000000001,
+          "significance": 3.1969532944095587
+        },
+        {
+          "source": "E4",
+          "window": "W6",
+          "x_centre_mm": 95.00000000000001,
+          "significance": 3.7594597959864635
+        }
+      ],
+      "include_in_model_c": true
+    }
+  },
+  "reversal_geometry_exploratory": {
+    "per_window": {
+      "W1": {
+        "mean_um": -1.5068555436550788,
+        "mean_sigma_um": 0.05635159871089092,
+        "amplitude_um": 0.6087257547258154,
+        "amplitude_sigma_um": 0.08207420830970866,
+        "phase_deg": 59.97149880293051,
+        "derivative_correlation_r": -0.6240666766147328
+      },
+      "W2": {
+        "mean_um": -1.5602351288292173,
+        "mean_sigma_um": 0.045704442125455935,
+        "amplitude_um": 0.21307259212294838,
+        "amplitude_sigma_um": 0.06440203148198512,
+        "phase_deg": 19.08995668733321,
+        "derivative_correlation_r": -0.44129613404288276
+      },
+      "W3": {
+        "mean_um": -1.5976338540564843,
+        "mean_sigma_um": 0.028948829326529573,
+        "amplitude_um": 0.28913062815475504,
+        "amplitude_sigma_um": 0.040656480007622016,
+        "phase_deg": 12.21014687027767,
+        "derivative_correlation_r": -0.9035855608285187
+      },
+      "W4": {
+        "mean_um": -1.7454716402540873,
+        "mean_sigma_um": 0.04172707603354491,
+        "amplitude_um": 0.23087432036693536,
+        "amplitude_sigma_um": 0.06004380284508937,
+        "phase_deg": 45.55405291490293,
+        "derivative_correlation_r": -0.2787145702519368
+      },
+      "W5": {
+        "mean_um": -1.5549270185371042,
+        "mean_sigma_um": 0.055540235989320716,
+        "amplitude_um": 0.12858850811724656,
+        "amplitude_sigma_um": 0.08071578190693095,
+        "phase_deg": 122.85093220561211,
+        "derivative_correlation_r": 0.2534143814397204
+      },
+      "W6": {
+        "mean_um": -2.009808626334825,
+        "mean_sigma_um": 0.03769705378510455,
+        "amplitude_um": 0.19882444769445587,
+        "amplitude_sigma_um": 0.05341810390335795,
+        "phase_deg": 27.49768410495214,
+        "derivative_correlation_r": -0.23309409153929345
+      },
+      "W7": {
+        "mean_um": -1.6774176391469298,
+        "mean_sigma_um": 0.04520751517250235,
+        "amplitude_um": 0.4135378383168774,
+        "amplitude_sigma_um": 0.06362713455456197,
+        "phase_deg": 16.944129360602556,
+        "derivative_correlation_r": -0.5615081181354944
+      }
+    },
+    "A_B1_vs_A1_pearson_r": 0.20509998034242527,
+    "interpretation": "exploratory; require a consistent sign across windows"
+  },
+  "model_c_recommendation": {
+    "k1": {
+      "model": "P3 quadratic spline",
+      "term": "Re[C_1(x) exp(i 1 theta)]",
+      "status": "core"
+    },
+    "k2": {
+      "model": "P3 quadratic spline",
+      "term": "Re[C_2(x) exp(i 2 theta)]",
+      "status": "core"
+    },
+    "k3": {
+      "model": "P1 linear",
+      "term": "Re[C_3(x) exp(i 3 theta)]",
+      "status": "retain: at least one E1/E4 window is >=3 sigma"
+    },
+    "k4": {
+      "model": "P1 linear",
+      "term": "Re[C_4(x) exp(i 4 theta)]",
+      "status": "retain: at least one E1/E4 window is >=3 sigma"
+    }
+  },
+  "convention": {
+    "deviation_sign": "positive means measured travel exceeds command",
+    "theta": "2 pi (commanded microsteps mod 3200) / 3200",
+    "phase": "e = A cos(k theta + phi)",
+    "drift": "linear interpolation through fixed-position reference visits"
+  }
+}

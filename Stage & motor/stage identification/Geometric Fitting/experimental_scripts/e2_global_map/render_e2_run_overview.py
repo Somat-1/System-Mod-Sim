@@ -7,9 +7,10 @@ That is left in: it is what the raw file contains, and it is the only part of
 the run that approaches the switches.
 
 State bands come from the plan, placed at the times of the measured holds they
-were matched to - there is no board log for this run.
+were matched to. This scope-derived alignment is intentionally independent of
+the available controller log.
 
-Writes rendered/e2_run_overview.{png,pdf}.
+Writes rendered/e2_run_overview.png.
 """
 from pathlib import Path
 import os
@@ -154,14 +155,14 @@ def main():
     ax_v.set_xlim(0, tm[-1])
 
     fig.text(0.012, 0.012,
-             "No board log accompanied this capture: the datum "
+             "The datum "
              f"({run.datum_mm:.4f} mm) and every window edge come from the "
-             "trace, with the plan supplying only the order of the stops.",
+             "trace, with the plan supplying stop order; the serial log is "
+             "cross-checked separately in the findings analysis.",
              fontsize=8, color=INK2)
     fig.tight_layout(rect=(0, 0.025, 1, 1))
     OUT.mkdir(exist_ok=True)
-    for ext in ("png", "pdf"):
-        fig.savefig(OUT / f"e2_run_overview.{ext}", dpi=200)
+    fig.savefig(OUT / "e2_run_overview.png", dpi=200)
     print("wrote", OUT / "e2_run_overview.png")
 
 

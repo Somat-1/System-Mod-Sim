@@ -10,7 +10,7 @@ is irregular by design, from 0.04 mm to 0.56 mm, and a move shorter than
 v^2/a = 0.1 mm never reaches the commanded 2 mm/s: it is a triangle whose peak
 is sqrt(a*d). Those moves sit on that curve, not below the command by accident.
 
-Writes rendered/e2_command_consistency.{png,pdf}.
+Writes rendered/e2_command_consistency.png.
 """
 from pathlib import Path
 import os
@@ -163,8 +163,7 @@ def main():
              "trace; dwell 2504 ms against 2500 commanded; no sample at the "
              "AquadB ceiling during the measurement.", fontsize=8, color=INK2)
     OUT.mkdir(exist_ok=True)
-    for ext in ("png", "pdf"):
-        fig.savefig(OUT / f"e2_command_consistency.{ext}", dpi=200)
+    fig.savefig(OUT / "e2_command_consistency.png", dpi=200)
     print("wrote", OUT / "e2_command_consistency.png")
 
 

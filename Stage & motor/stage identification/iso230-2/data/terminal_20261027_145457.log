@@ -1,0 +1,42 @@
+1793109297.892 ESP-ROM:esp32s3-20210327
+1793109297.892 Build:Mar 27 2021
+1793109297.892 rst:0x15 (USB_UART_CHIP_RESET),boot:0x8 (SPI_FAST_FLASH_BOOT)
+1793109297.892 Saved PC:0x40378a66
+1793109297.892 SPIWP:0xee
+1793109297.892 mode:DIO, clock div:1
+1793109297.892 load:0x3fce2820,len:0x10cc
+1793109297.892 load:0x403c8700,len:0xc2c
+1793109297.892 load:0x403cb700,len:0x30b0
+1793109297.892 entry 0x403c88b8
+1793109298.151 # BOOT,fw=step_timing_test
+1793109298.151 # PINS,step=7,dir=8,en=9,uart_rx=18,uart_tx=17,sw_neg=10,sw_pos=11
+1793109298.312 # READY,driver=1,rmt=1,um_per_pulse=0.6250
+1793109298.312 
+1793109298.312 --- step-timing identification ---
+1793109298.312  driver=1 homed=0  1/16  400 mA  RMT 1000000 Hz
+1793109298.312   h  home          r  timing sequence   d  dump records
+1793109298.312   w  warm-up 5 mm/s  c  shuttle 8 mm/s    g  home+warm+shuttle
+1793109298.312   s  switches      0  release motor     Ctrl+C abort
+1793109299.878 ## sent h
+1793109299.930 > h
+1793109299.930 # HOMING,start
+1793109564.604 # HOMED,travel_mm=122.7700,lim_mm=2.000..120.770
+1793109565.108 ## sent w
+1793109565.108 
+1793109565.108 --- step-timing identification ---
+1793109565.108  driver=1 homed=1  1/16  400 mA  RMT 1000000 Hz
+1793109565.108   h  home          r  timing sequence   d  dump records
+1793109565.108   w  warm-up 5 mm/s  c  shuttle 8 mm/s    g  home+warm+shuttle
+1793109565.108   s  switches      0  release motor     Ctrl+C abort
+1793109565.167 > w
+1793109565.167 # SHUTTLE_BEGIN,warmup,v_mm_s=5.00,span_mm=118.770
+1793109565.167 # press any key to stop (Ctrl+C aborts)
+1793110392.825 ## sent b'x'
+1793110392.936 # SHUTTLE_DONE,warmup,cycles=16,elapsed_s=803.6,mean_cycle_s=47.741,fastest_s=47.741,slowest_s=47.742,achieved_mm_s=4.976,commanded_mm_s=5.00,x_mm=42.130000,aborted=0
+1793110392.936 
+1793110392.936 --- step-timing identification ---
+1793110392.936  driver=1 homed=1  1/16  400 mA  RMT 1000000 Hz
+1793110392.936   h  home          r  timing sequence   d  dump records
+1793110392.936   w  warm-up 5 mm/s  c  shuttle 8 mm/s    g  home+warm+shuttle
+1793110392.936   s  switches      0  release motor     Ctrl+C abort
+1793110394.873 ## closing

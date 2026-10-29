@@ -7,7 +7,7 @@ that preceded the measurement, so the first minutes are the approach to x_ref
 rather than part of the sequence - that is left in deliberately, since it is
 what the raw file contains.
 
-Writes rendered/e1_run_overview.{png,pdf}.
+Writes rendered/e1_run_overview.png.
 """
 from pathlib import Path
 import os
@@ -184,8 +184,7 @@ def main():
              fontsize=8, color=INK2)
     fig.tight_layout(rect=(0, 0.025, 1, 1))
     OUT.mkdir(exist_ok=True)
-    for ext in ("png", "pdf"):
-        fig.savefig(OUT / f"e1_run_overview.{ext}", dpi=200)
+    fig.savefig(OUT / "e1_run_overview.png", dpi=200)
     print("wrote", OUT / "e1_run_overview.png")
 
 

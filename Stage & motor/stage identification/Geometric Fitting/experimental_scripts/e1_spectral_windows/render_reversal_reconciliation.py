@@ -14,7 +14,7 @@ fit built on it survives: -24.17 ppm becomes -24.10 ppm. B, R, E and A do not.
 
 Needs the raw ISO capture at stage identification/ISO230-2_v3.csv.
 
-Writes rendered/reversal_reconciliation.{png,pdf}.
+Writes rendered/reversal_reconciliation.png.
 """
 from pathlib import Path
 import os
@@ -206,8 +206,7 @@ def main():
              "B, R, E and A do not.", fontsize=8, color=INK2)
     fig.tight_layout(rect=(0, 0.028, 1, 1))
     OUT.mkdir(exist_ok=True)
-    for ext in ("png", "pdf"):
-        fig.savefig(OUT / f"reversal_reconciliation.{ext}", dpi=200)
+    fig.savefig(OUT / "reversal_reconciliation.png", dpi=200)
     print("wrote", OUT / "reversal_reconciliation.png")
     print(f"published {B0.mean():+.3f}  tail dropped {Bc.mean():+.3f}  "
           f"E1 {e1B.mean():+.3f} um")

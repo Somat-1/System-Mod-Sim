@@ -18,7 +18,7 @@ ISO windowing defect contributed - so where the window sits does not decide B.
 
 Needs the raw captures; results are cached in data/_window_independence.npz.
 
-Writes rendered/reversal_window_independence.{png,pdf}.
+Writes rendered/reversal_window_independence.png.
 """
 from pathlib import Path
 import csv
@@ -252,8 +252,7 @@ def render(res):
                  x=0.010, ha="left", fontsize=11.5, color=INK)
     fig.tight_layout(rect=(0, 0, 1, 0.93))
     OUT.mkdir(parents=True, exist_ok=True)
-    for ext in ("png", "pdf"):
-        fig.savefig(OUT / f"reversal_window_independence.{ext}", dpi=220)
+    fig.savefig(OUT / "reversal_window_independence.png", dpi=220)
     print(f"wrote {OUT / 'reversal_window_independence.png'}")
 
 

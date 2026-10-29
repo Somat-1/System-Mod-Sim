@@ -1,0 +1,3 @@
+# The config is hashed byte-for-byte into the generated firmware header,
+# so its line endings must not differ between Windows and macOS checkouts.
+*_config.json text eol=lf

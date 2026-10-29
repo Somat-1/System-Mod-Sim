@@ -80,6 +80,10 @@ Then run `python3 e2_terminal.py [port]`. Commands are:
 
 - `p` — confirm the precondition and arm the coordinate at x_ref;
 - `r` — execute INIT → DATUM → UP → TURN_REF → DOWN → END_REF → PARK;
+- `h` — home both ends (the step_timing_test routine: datum at the negative
+  switch), check the travel holds the soft limits, centre at x_ref from
+  58.35 mm and arm; replaces the manual `p` precondition;
+- `g` — `h`, then `r`;
 - `s` — status; `t` — target summary; `0` — release the motor and invalidate
   the coordinate; Ctrl+C — request abort; Ctrl+] — close the terminal.
 
@@ -108,3 +112,33 @@ are repeated inline because repetition would break the mirrored timing.
 Before model-B fitting, require at least 95% valid stops, paired directions for
 at least 95% of targets, no watchdog abort, consistent reference visits,
 recording time at or below 60 minutes, and air-temperature change below 0.5 K.
+
+## Findings analysis
+
+The original renders in `rendered/` remain acquisition and target-design
+diagnostics. In particular, `e2_global_map_preview.png` is intentionally an
+uncorrected first look and is not the final geometric model.
+
+Run the completed E2 analysis with:
+
+```bash
+DYLD_LIBRARY_PATH=/opt/homebrew/opt/expat/lib \
+  /opt/homebrew/bin/python3 render_e2_findings.py
+```
+
+The script applies the D0/D1/D2 drift variants, compares stationary model
+M_B with varying-coefficient model M_C by blocked cross-validation, performs
+Huber and residual checks, and validates the selected map against the E1/E4
+windows and E0 ISO targets. It writes:
+
+- `analysis/` — preprocessed paired targets, the complete model-selection
+  grid, E1/E4 and E0 validation tables, the sliding reversal profile, validity
+  checks, and `e2_findings_summary.json`;
+- `rendered/presentation/` — the principal E2 findings figures: 1a map and fit
+  quality, 1b slow error and residual, 2 harmonic profile, 3 validation,
+  4 reversal; the model settings (D2, M_C with H = 4, K_s = 2, K_C = 1) are
+  recorded in `analysis/e2_findings_summary.json`;
+- `rendered/experimental_findings/` — validity, model-selection, residual,
+  beat-test, drift-sensitivity, and motor-phase appendices.
+
+All renderers produce PNG only; no PDF figures are generated.

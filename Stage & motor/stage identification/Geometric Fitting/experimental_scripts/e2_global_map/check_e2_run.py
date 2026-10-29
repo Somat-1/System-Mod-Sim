@@ -4,9 +4,9 @@
 The question this answers is narrow: did the stage do what the plan said, and
 is the capture good enough to fit a global map to. No model is fitted here.
 
-No board log came with this capture, so the driver settings, the config hash
-and the firmware's own completion summary cannot be checked. Everything below
-is read out of the trace and compared against the plan.
+This diagnostic intentionally reads the scope trace and plan only. The serial
+log's driver settings, config hash, completion summary and reference MSCNT are
+checked by ``render_e2_findings.py``.
 """
 from __future__ import annotations
 
@@ -136,9 +136,9 @@ def main():
     print(f"  50 bins, measured counts min {counts.min()}, max {counts.max()}, "
           f"empty {int((counts == 0).sum())}")
 
-    print("\nnot checkable without the board log")
-    print("  driver register readback, config hash, commanded settings,")
-    print("  the firmware SUMMARY line, and which stops it considered recorded")
+    print("\nserial cross-check")
+    print("  this trace-only diagnostic does not parse the controller log;")
+    print("  render_e2_findings.py checks settings, SUMMARY and reference MSCNT")
 
 
 if __name__ == "__main__":

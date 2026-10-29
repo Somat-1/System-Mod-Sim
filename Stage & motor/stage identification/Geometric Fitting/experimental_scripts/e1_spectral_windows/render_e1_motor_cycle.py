@@ -17,7 +17,7 @@ The same spacing deliberately does not divide the 2 mm screw lead. 0.12 mm is
 after 50 of them - the screw is swept while the motor is frozen. That is the
 whole design in one sentence, and panel (d) is the picture of it.
 
-Writes rendered/e1_motor_cycle_rejection.{png,pdf}.
+Writes rendered/e1_motor_cycle_rejection.png.
 """
 from pathlib import Path
 import csv
