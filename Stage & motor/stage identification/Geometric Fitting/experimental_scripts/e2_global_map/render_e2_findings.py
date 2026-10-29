@@ -11,6 +11,7 @@ from __future__ import annotations
 import csv
 import json
 import math
+import os
 from pathlib import Path
 import re
 import sys
@@ -34,8 +35,18 @@ OUT = HERE / "rendered" / "experimental_findings"
 PRESENTATION = HERE / "rendered" / "presentation"
 CONFIG = HERE / "e2_config.json"
 LOG = HERE / "data" / "e2_terminal_20261027_151332.log"
-STEP_A = HERE.parents[1] / "results" / "step_a_results.json"
-ISO_RESULTS = HERE.parents[2] / "iso230-2" / "analysis" / "iso230_2_v3_results.json"
+# The v3 session is read through its corrected evaluation. The original
+# iso230_2_v3_results.json placed each averaging window with a fitted clock
+# whose stop detector ran late, so every window closed ~38 ms into the next
+# move; that biases xbar_up and xbar_dn by -+0.62 um and nothing else. The
+# direction average is untouched, but the reversal, R, E and A that this
+# script validates against are not. Both paths stay overridable so the old
+# inputs can still be reproduced for comparison.
+STEP_A = Path(os.environ.get(
+    "E2_STEP_A", HERE.parents[1] / "results_v3_corrected" / "step_a_results.json"))
+ISO_RESULTS = Path(os.environ.get(
+    "E2_ISO_RESULTS",
+    HERE.parents[2] / "iso230-2" / "analysis" / "iso230_2_v3_results_blind.json"))
 E1_DIR = HERE.parent / "e1_spectral_windows"
 E4_DIR = HERE.parent / "e4_stationarity_windows"
 for directory in (E1_DIR, E4_DIR):
@@ -45,6 +56,12 @@ import e1_run  # noqa: E402
 import e4_run  # noqa: E402
 import render_e4_findings as e4f  # noqa: E402
 
+CV_OFFSETS = (0.0, 0.2, 0.4, 0.6, 0.8)   # block-edge shifts, in block widths
+CV_MIN_TEST = 5                          # a shifted end block can be narrow
+PEN_KNOTS = 8                            # deliberately rich; lambda does the work
+PEN_ORDER = 2                            # second differences between neighbours
+PEN_LAMBDAS = (1e-2, 3.2e-2, 1e-1, 3.2e-1, 1.0, 3.2, 1e1, 3.2e1, 1e2)
+CV_END_FACTOR = 5.0                      # held-out end block, over interior CV
 MOTOR_END_MM = 0.0
 SUPPORT_BEARING_MM = 122.770
 STD_LIMIT_UM = 0.5
@@ -256,25 +273,70 @@ def prepare_design(x: np.ndarray, theta: np.ndarray, harmonics: int,
     return np.column_stack(columns), state
 
 
+def coefficient_penalty(state: dict, width: int) -> np.ndarray:
+    """Second-difference penalty on each varying-coefficient spline block.
+
+    Only the C1 and C2 coefficient curves are penalised. The offset, gain,
+    slow trend and the stationary higher harmonics are left alone, so the
+    penalty controls how fast the screw harmonics are allowed to change along
+    the travel and nothing else.
+    """
+    blocks = []
+    for k in (1, 2):
+        if f"C{k}" not in state["groups"]:
+            continue
+        for part in state["groups"][f"C{k}"]:
+            count = part.stop - part.start
+            if count <= PEN_ORDER:
+                continue
+            differences = np.eye(count)
+            for _ in range(PEN_ORDER):
+                differences = np.diff(differences, axis=0)
+            block = np.zeros((differences.shape[0], width))
+            block[:, part] = differences
+            blocks.append(block)
+    return np.vstack(blocks) if blocks else np.zeros((0, width))
+
+
 def fit_linear(x: np.ndarray, theta: np.ndarray, y: np.ndarray, harmonics: int,
                slow_knots: int, coefficient_knots: int | None,
-               domain: tuple[float, float], robust: bool = False) -> dict:
+               domain: tuple[float, float], robust: bool = False,
+               penalty: float | None = None) -> dict:
     design, state = prepare_design(x, theta, harmonics, slow_knots,
                                    coefficient_knots, domain)
-    beta, _, _, _ = np.linalg.lstsq(design, y, rcond=None)
+    if penalty is None:
+        beta, _, _, _ = np.linalg.lstsq(design, y, rcond=None)
+        normal_inverse = np.linalg.pinv(design.T @ design)
+        edf = float(design.shape[1])
+    else:
+        roughness = coefficient_penalty(state, design.shape[1])
+        augmented = np.vstack([design, math.sqrt(penalty) * roughness])
+        beta, _, _, _ = np.linalg.lstsq(
+            augmented, np.r_[y, np.zeros(roughness.shape[0])], rcond=None)
+        normal_inverse = np.linalg.inv(design.T @ design
+                                       + penalty * (roughness.T @ roughness))
+        edf = float(np.trace(design @ normal_inverse @ design.T))
     residual = y - design @ beta
-    dof = max(y.size - design.shape[1], 1)
+    dof = max(y.size - edf, 1.0)
     variance = float(residual @ residual / dof)
-    covariance = variance * np.linalg.pinv(design.T @ design)
+    covariance = variance * normal_inverse
     result = {"beta": beta, "cov": covariance, "residual": residual,
               "sigma": math.sqrt(variance), "rms": float(np.sqrt(np.mean(residual**2))),
               "bic": float(y.size * np.log(np.mean(residual**2)) +
-                           design.shape[1] * np.log(y.size)),
-              "p": design.shape[1], "state": state, "design": design}
-    scaled = design / np.maximum(np.linalg.norm(design, axis=0), 1e-12)
+                           edf * np.log(y.size)),
+              "p": design.shape[1], "edf": edf, "lambda": penalty,
+              "state": state, "design": design}
+    # Conditioning of the system actually solved: with a penalty that is the
+    # augmented matrix, which is the whole point of adding one.
+    solved = design if penalty is None else augmented
+    scaled = solved / np.maximum(np.linalg.norm(solved, axis=0), 1e-12)
     result["condition_scaled"] = float(np.linalg.cond(scaled))
     if robust:
-        huber = least_squares(lambda values: design @ values - y, beta,
+        rows = (design if penalty is None
+                else np.vstack([design, math.sqrt(penalty) * roughness]))
+        target = (y if penalty is None
+                  else np.r_[y, np.zeros(roughness.shape[0])])
+        huber = least_squares(lambda values: rows @ values - target, beta,
                               loss="huber", f_scale=2 * result["sigma"])
         movement = np.abs(huber.x - beta) / np.maximum(np.sqrt(np.diag(covariance)), 1e-12)
         result["huber_beta"] = huber.x
@@ -334,48 +396,113 @@ def harmonic_profile(model: dict, grid: np.ndarray, k: int) -> dict:
             "phase_sigma": np.asarray(phase_sigma)}
 
 
+def cv_assignments(x: np.ndarray, domain: tuple[float, float]
+                   ) -> list[np.ndarray]:
+    """Blocked 10-fold assignments, repeated with the block edges shifted.
+
+    A single set of contiguous blocks gives only eight interior scores, and
+    their spread sets the standard error the one-SE rule compares against.
+    With eight scores that error is large enough (~0.044 um) to admit models
+    well away from the CV optimum - it was what let K_C = 1 through, a model
+    that is worst of its family on every other measure. Sliding the edges and
+    pooling the folds scores the same data under five different partitions, so
+    a target that sat at a block boundary in one partition sits inside a block
+    in another. The estimate is the same quantity, measured more precisely:
+    the standard error drops to ~0.013 um and the rule can discriminate.
+    """
+    width = (domain[1] - domain[0]) / 10.0
+    out = []
+    for offset in CV_OFFSETS:
+        edges = np.linspace(domain[0], domain[1], 11) + offset * width
+        out.append(np.clip(np.digitize(x, edges[1:-1]), 0, 9))
+    return out
+
+
 def blocked_cv(data: dict) -> tuple[list[dict], dict, dict]:
     x, theta, y = data["x"], data["theta"], data["D2"]["ybar"]
     domain = (float(x.min()), float(x.max()))
-    edges = np.linspace(domain[0], domain[1], 11)
-    fold = np.clip(np.digitize(x, edges[1:-1]), 0, 9)
+    folds = cv_assignments(x, domain)
     rows = []
-    candidates = [(h, ks, None) for h in (2, 3, 4) for ks in range(9)]
-    candidates += [(h, ks, kc) for h in (2, 3, 4) for ks in range(9)
-                   for kc in range(1, 6)]
-    for h, ks, kc in candidates:
-        full = fit_linear(x, theta, y, h, ks, kc, domain)
-        fold_rmse = []
-        for held in range(10):
-            train = fold != held; test = ~train
-            trial = fit_linear(x[train], theta[train], y[train], h, ks, kc, domain)
-            fold_rmse.append(float(np.sqrt(np.mean(
-                (y[test] - predict(trial, x[test], theta[test]))**2))))
-        interior = np.asarray(fold_rmse[1:9])
-        rows.append({"model": "M_B" if kc is None else "M_C", "H": h,
-                     "K_s": ks, "K_C": "stationary" if kc is None else kc,
-                     "parameters": full["p"], "residual_rms_um": full["rms"],
+    # M_B: stationary harmonics. M_C_fixed: varying coefficients on a fixed
+    # knot grid, kept as the diagnostic that shows what K_C costs and buys.
+    # M_C: the selectable varying-coefficient family - one deliberately rich
+    # basis, with lambda rather than the knot count doing the regularising.
+    candidates = [("M_B", h, ks, None, None) for h in (2, 3, 4) for ks in range(9)]
+    candidates += [("M_C_fixed", h, ks, kc, None) for h in (2, 3, 4)
+                   for ks in range(9) for kc in range(1, 6)]
+    candidates += [("M_C", h, ks, PEN_KNOTS, lam) for h in (2, 3, 4)
+                   for ks in range(9) for lam in PEN_LAMBDAS]
+    for kind, h, ks, kc, lam in candidates:
+        full = fit_linear(x, theta, y, h, ks, kc, domain, penalty=lam)
+        scored, interior_rmse, low, high = [], [], [], []
+        for fold in folds:
+            for held in range(10):
+                train = fold != held; test = ~train
+                if test.sum() < CV_MIN_TEST:
+                    continue
+                trial = fit_linear(x[train], theta[train], y[train], h, ks, kc,
+                                   domain, penalty=lam)
+                value = float(np.sqrt(np.mean(
+                    (y[test] - predict(trial, x[test], theta[test]))**2)))
+                scored.append(value)
+                if held == 0:
+                    low.append(value)
+                elif held == 9:
+                    high.append(value)
+                else:
+                    interior_rmse.append(value)
+        interior = np.asarray(interior_rmse)
+        rows.append({"model": kind, "H": h, "K_s": ks,
+                     "K_C": "stationary" if kc is None else kc,
+                     "lambda": "" if lam is None else lam,
+                     "parameters": full["p"],
+                     "effective_parameters": round(full["edf"], 2),
+                     "residual_rms_um": full["rms"],
                      "BIC": full["bic"], "CV_RMSE_um": float(interior.mean()),
                      "CV_SE_um": float(interior.std(ddof=1) / np.sqrt(interior.size)),
-                     "end_low_RMSE_um": fold_rmse[0],
-                     "end_high_RMSE_um": fold_rmse[-1],
-                     "fold_RMSE_json": json.dumps(fold_rmse)})
+                     "CV_folds_scored": int(interior.size),
+                     "end_low_RMSE_um": float(np.mean(low)),
+                     "end_high_RMSE_um": float(np.mean(high)),
+                     "fold_RMSE_json": json.dumps(scored)})
 
     def one_se(kind: str) -> dict:
+        """Cheapest stable model within one standard error of the best CV.
+
+        Cost is the effective parameter count, so a penalised fit is compared
+        with a fixed-knot one on the flexibility it actually uses rather than
+        on how many columns its basis happens to have.
+
+        The stability guard is not decoration. Interior folds never ask a
+        model to predict beyond its training support, so they cannot see a
+        basis whose edge coefficients are only weakly determined - and the
+        penalty here covers the C1/C2 coefficient curves, not the slow trend,
+        so a large K_s buys flexibility that the interior score does not
+        charge for. The two held-out end blocks do ask exactly that question.
+        Models that fail it miss by orders of magnitude, not by a little:
+        among the candidates here the passes sit near 3x the interior score
+        and the failures run from 60x to 20000x, so the cut is not delicate.
+        """
         subset = [row for row in rows if row["model"] == kind]
         best = min(subset, key=lambda row: row["CV_RMSE_um"])
         eligible = [row for row in subset
                     if row["CV_RMSE_um"] <= best["CV_RMSE_um"] + best["CV_SE_um"]]
-        return min(eligible, key=lambda row: (row["parameters"], row["CV_RMSE_um"]))
+        stable = [row for row in eligible
+                  if max(row["end_low_RMSE_um"], row["end_high_RMSE_um"])
+                  <= CV_END_FACTOR * row["CV_RMSE_um"]]
+        return min(stable or eligible,
+                   key=lambda row: (row["effective_parameters"],
+                                    row["CV_RMSE_um"]))
 
     return rows, one_se("M_B"), one_se("M_C")
 
 
 def fit_selected(data: dict, row: dict, variant: str = "D2", robust: bool = True) -> dict:
     kc = None if row["K_C"] == "stationary" else int(row["K_C"])
+    lam = float(row["lambda"]) if row.get("lambda", "") != "" else None
     return fit_linear(data["x"], data["theta"], data[variant]["ybar"],
                       int(row["H"]), int(row["K_s"]), kc,
-                      (float(data["x"].min()), float(data["x"].max())), robust=robust)
+                      (float(data["x"].min()), float(data["x"].max())),
+                      robust=robust, penalty=lam)
 
 
 def slow_coefficient_correlation(model: dict) -> float:
@@ -638,7 +765,7 @@ def figure_f1(data: dict, model: dict) -> None:
                   transform=ax_a.get_xaxis_transform(), ha="center", va="top",
                   fontsize=7, color=INK2)
     ax_a.fill_between(grid, slow_part - envelope, slow_part + envelope, facecolor="#c9ced2",
-                      edgecolor="#aab1b6", lw=.5, alpha=.45, zorder=1)
+                      edgecolor="#aab1b6", lw=.5, alpha=.85, zorder=1)
     ax_a.plot(x, y, "o", ms=1.7, mfc="#5d656b", mec="none", zorder=2)
     ax_a.plot(grid, slow_part, color=INK, lw=1.7, zorder=3)
     ax_a.set_ylabel(r"direction-averaged deviation $\bar y$ [µm]")
@@ -648,8 +775,9 @@ def figure_f1(data: dict, model: dict) -> None:
     ax_a.tick_params(which="minor", length=0)
     ax_a.set_xlabel("commanded position x [mm]")
     _f1_title(ax_a, "(a)", "Full travel", raised=True)
-    _f1_legend(ax_a, [matplotlib.patches.Patch(facecolor="#c9ced2", edgecolor="#aab1b6", alpha=.45,
-                                               label=r"slow part $\pm(|C_1|+|C_2|)$"),
+    _f1_legend(ax_a, [matplotlib.patches.Patch(facecolor="#c9ced2", edgecolor="#aab1b6", alpha=.85,
+                                               label="Cumulative error (slow part) ± 1st & 2nd "
+                                                     "Harmonics Envelope"),
                       Line2D([], [], marker="o", ls="", ms=2.6, mfc="#5d656b", mec="none",
                              label=f"{x.size} targets"),
                       Line2D([], [], color=INK, lw=1.7, label="slow part (gain + trend)")],
@@ -754,30 +882,35 @@ def window_marker(ax, x, y, yerr, source):
 def figure_f2(sliding: list[dict], model: dict, windows1: dict, windows4: dict) -> None:
     sx = np.asarray([row["x"] for row in sliding])
     grid = np.linspace(model["state"]["domain"][0], model["state"]["domain"][1], 600)
+    # The model profile is drawn only where the sliding fit also has centres, so
+    # the two curves are compared over one span. The full grid is still carried
+    # for the phase reference and for unwrapping windows that sit outside it.
+    drawn = np.linspace(sx.min(), sx.max(), 600)
     fig, axes = plt.subplots(2, 2, figsize=(7.8, 6.1), sharex=True)
     fig.subplots_adjust(left=.085, right=.98, top=.865, bottom=.14,
                         hspace=.20, wspace=.24)
     for column, k in enumerate((1, 2)):
         mc = harmonic_profile(model, grid, k)
+        mcd = harmonic_profile(model, drawn, k)
         slide_amp = np.asarray([row[f"A{k}"] for row in sliding])
         slide_amp_sigma = np.asarray([row[f"A{k}_sigma"] for row in sliding])
         slide_phase = np.unwrap(np.asarray([row[f"phi{k}"] for row in sliding]))
         slide_phase_sigma = np.asarray([row[f"phi{k}_sigma"] for row in sliding])
         reference = phase_reference(mc)
-        model_shift = -np.degrees(mc["phase"] - reference) / k
+        model_shift = -np.degrees(mcd["phase"] - reference) / k
         slide_phase = np.asarray([nearest_unwrap(p, np.interp(x, grid, mc["phase"]))
                                   for p, x in zip(slide_phase, sx)])
         slide_shift = -np.degrees(slide_phase - reference) / k
-        rows = ((slide_amp, 2*slide_amp_sigma, mc["amplitude"], 2*mc["amplitude_sigma"]),
+        rows = ((slide_amp, 2*slide_amp_sigma, mcd["amplitude"], 2*mcd["amplitude_sigma"]),
                 (slide_shift, 2*np.degrees(slide_phase_sigma)/k,
-                 model_shift, 2*np.degrees(mc["phase_sigma"])/k))
+                 model_shift, 2*np.degrees(mcd["phase_sigma"])/k))
         for row, (s_val, s_err, m_val, m_err) in enumerate(rows):
             ax = axes[row, column]
             ax.fill_between(sx, s_val - s_err, s_val + s_err, facecolor=BAND,
                             lw=0, zorder=1)
-            ax.fill_between(grid, m_val - m_err, m_val + m_err, facecolor="none",
+            ax.fill_between(drawn, m_val - m_err, m_val + m_err, facecolor="none",
                             edgecolor=HATCH_EDGE, hatch="//////", lw=0, zorder=2)
-            ax.plot(grid, m_val, color=INK2, lw=1.0, ls=(0, (5, 2.5)), zorder=3)
+            ax.plot(drawn, m_val, color=INK2, lw=1.0, ls=(0, (5, 2.5)), zorder=3)
             ax.plot(sx, s_val, color=INK, lw=1.35, zorder=4)
         axes[1, column].axhline(0, color=MID, lw=.55, zorder=0)
         for source, windows in (("E4", windows4), ("E1", windows1)):
@@ -803,7 +936,7 @@ def figure_f2(sliding: list[dict], model: dict, windows1: dict, windows4: dict) 
     handles = [
         Line2D([], [], color=INK, lw=1.35, label="E2 sliding fit"),
         matplotlib.patches.Patch(facecolor=BAND, label="±2σ"),
-        Line2D([], [], color=INK2, lw=1.0, ls=(0, (5, 2.5)), label=r"$M_C$ profile"),
+        Line2D([], [], color=INK2, lw=1.0, ls=(0, (5, 2.5)), label="Fitted Global Model"),
         matplotlib.patches.Patch(facecolor="white", edgecolor=HATCH_EDGE, hatch="//////",
                                  lw=0, label="±2σ"),
         Line2D([], [], marker="o", ls="", ms=4.4, mfc=INK, mec=INK, label="E4 window"),
@@ -983,14 +1116,20 @@ def appendix_cv(rows: list[dict], chosen_b: dict, chosen_c: dict) -> None:
     fig, axes = plt.subplots(1, 3, figsize=(9.0, 3.55))
     fig.subplots_adjust(left=.07, right=.98, top=.88, bottom=.31, wspace=.31)
     kc_values = ["stationary", 1, 2, 3, 4, 5]
-    best_kc = [min((r for r in rows if r["K_C"] == kc), key=lambda r: r["CV_RMSE_um"])
-               for kc in kc_values]
+    best_kc = [min((r for r in rows if r["K_C"] == kc and r["model"] != "M_C"),
+                   key=lambda r: r["CV_RMSE_um"]) for kc in kc_values]
     axes[0].errorbar(range(6), [r["CV_RMSE_um"] for r in best_kc],
                      yerr=[r["CV_SE_um"] for r in best_kc], fmt="o-", color=BLUE,
-                     lw=1, ms=4, capsize=2)
-    axes[0].set_xticks(range(6), ["stationary", "1", "2", "3", "4", "5"], rotation=35)
+                     lw=1, ms=4, capsize=2, label="fixed knots")
+    axes[0].errorbar([6], [chosen_c["CV_RMSE_um"]], yerr=[chosen_c["CV_SE_um"]],
+                     fmt="D", color=GREEN, ms=5, capsize=2,
+                     label=rf"penalised, $\lambda$={float(chosen_c['lambda']):.2g}")
+    axes[0].set_xticks(range(7),
+                       ["stationary", "1", "2", "3", "4", "5", "penalised"],
+                       rotation=35)
     axes[0].set(xlabel=r"coefficient knots $K_C$", ylabel="interior CV-RMSE [µm]")
     panel_title(axes[0], "a", "Varying-coefficient flexibility")
+    axes[0].legend(frameon=False, fontsize=6.6, loc="upper right")
     for kind, colour in (("M_B", GREY), ("M_C", BLUE)):
         values = []
         for ks in range(9):
@@ -1009,9 +1148,15 @@ def appendix_cv(rows: list[dict], chosen_b: dict, chosen_c: dict) -> None:
     panel_title(axes[2], "c", "Harmonic order")
     for ax in axes: finish_axis(ax)
     fig.text(.07, .045,
-             "Appendix A2. Blocked 10-fold CV; only eight interpolation folds are scored.\n"
+             "Appendix A2. Blocked 10-fold CV repeated over five shifted sets of "
+             "block edges; only interpolation folds are scored.\n"
+             rf"M_C carries a rich $K_C$={PEN_KNOTS} basis with a second-difference "
+             r"penalty, so $\lambda$ sets the flexibility; (b) and (c) are that "
+             "penalised family.\n"
              f"One-SE choices: M_B H={chosen_b['H']}, Ks={chosen_b['K_s']}; "
-             f"M_C H={chosen_c['H']}, Ks={chosen_c['K_s']}, Kc={chosen_c['K_C']}.",
+             f"M_C H={chosen_c['H']}, Ks={chosen_c['K_s']}, "
+             rf"$\lambda$={float(chosen_c['lambda']):.2g} "
+             f"({chosen_c['effective_parameters']:.0f} effective parameters).",
              fontsize=7.1, color=INK2, linespacing=1.25)
     save(fig, "e2_appendix_model_selection", OUT)
 
@@ -1293,7 +1438,11 @@ def main() -> int:
                             "V2_M_C_better": v2_pass,
                             "selected": "M_C" if choose_mc else "M_B"},
         "selected_model": {"H": selected_row["H"], "K_s": selected_row["K_s"],
-                           "K_C": selected_row["K_C"], "residual_rms_um": selected["rms"],
+                           "K_C": selected_row["K_C"],
+                           "lambda": selected_row.get("lambda", ""),
+                           "effective_parameters": selected_row["effective_parameters"],
+                           "parameters": selected_row["parameters"],
+                           "residual_rms_um": selected["rms"],
                            "condition_number_scaled": selected["condition_scaled"],
                            "max_abs_slow_vs_C_column_correlation": slow_coefficient_correlation(selected),
                            "huber_coefficients_over_1sigma": selected["huber_over_sigma_count"],
@@ -1326,7 +1475,9 @@ def main() -> int:
     print(f"M_B one-SE: H={chosen_b_row['H']}, Ks={chosen_b_row['K_s']}, "
           f"CV={chosen_b_row['CV_RMSE_um']:.3f} um")
     print(f"M_C one-SE: H={chosen_c_row['H']}, Ks={chosen_c_row['K_s']}, "
-          f"Kc={chosen_c_row['K_C']}, CV={chosen_c_row['CV_RMSE_um']:.3f} um")
+          f"Kc={chosen_c_row['K_C']}, lambda={chosen_c_row['lambda']}, "
+          f"edf={chosen_c_row['effective_parameters']:.1f}, "
+          f"CV={chosen_c_row['CV_RMSE_um']:.3f} um")
     print(f"selected {'M_C' if choose_mc else 'M_B'}; residual rms {selected['rms']:.3f} um; "
           f"gain {selected['beta'][1]*1000:+.2f} ppm")
     print(f"ISO prediction E {iso['raw']['E']:.2f} -> {iso['G_plus_reversal']['E']:.2f} um; "

@@ -146,7 +146,9 @@ def render_overview(c: dict, summary: dict, segments: list, blocks: list, total:
            f"analysis stops  {summary['analysis_stops']}\n"
            f"reference records  {summary['reference_stops']}\n"
            f"nominal duration  {total_min:.1f} min")
-    ax.text(0.985, 0.97, box, transform=ax.transAxes, ha="right", va="top",
+    # Top left: the trajectory climbs to the right, so the far corner is where
+    # W6, W7 and the return to the datum run.
+    ax.text(0.015, 0.97, box, transform=ax.transAxes, ha="left", va="top",
             fontsize=7.4, linespacing=1.35,
             bbox=dict(boxstyle="square,pad=0.48", fc="white", ec="#aeb4b9", lw=0.7))
 

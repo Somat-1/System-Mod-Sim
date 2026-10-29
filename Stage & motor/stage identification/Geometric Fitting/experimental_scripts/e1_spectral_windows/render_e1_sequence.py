@@ -403,8 +403,10 @@ def main() -> int:
         f"reference records  {summary['measurement_reference_stops_total']}\n"
         f"nominal duration  {duration_min:.1f} min"
     )
-    ax.text(0.985, 0.972, metrics, transform=ax.transAxes,
-            ha="right", va="top", fontsize=7.3,
+    # Top left: the only corner the trajectory leaves free - W3 climbs to
+    # 112 mm on the right, and the return to the datum crosses the far corner.
+    ax.text(0.015, 0.972, metrics, transform=ax.transAxes,
+            ha="left", va="top", fontsize=7.3,
             color="#33383d", linespacing=1.32,
             bbox=dict(boxstyle="square,pad=0.45", facecolor="white",
                       edgecolor="#aeb3b7", linewidth=0.6))

@@ -80,6 +80,14 @@ def line(fit, x):
         x - fit["x_center_mm"])
 
 
+def frame(ax, lo, hi, below=0.0, above=0.0):
+    """Set the y-limits so a strip of the given height - as a fraction of the
+    final axis range - stays clear below and above the data, for a legend or a
+    note to sit in without covering a marker, a line or a band."""
+    rng = (hi - lo) / (1.0 - below - above)
+    ax.set_ylim(lo - below * rng, hi + above * rng)
+
+
 def figure1(d, res, out):
     fit = res["fit_uncorrected"]
     rev = res["reversal"]["fit"]
@@ -116,6 +124,12 @@ def figure1(d, res, out):
                  size=10, loc="left")
     ax.legend(frameon=False, fontsize=8.0, ncol=3, loc="lower left",
               handletextpad=0.5, columnspacing=1.3)
+    frame(ax,
+          float(np.min([d["xbar_up_um"] - 2 * d["s_up_um"],
+                        d["xbar_dn_um"] - 2 * d["s_dn_um"], d["ybar_um"]])),
+          float(np.max([d["xbar_up_um"] + 2 * d["s_up_um"],
+                        d["xbar_dn_um"] + 2 * d["s_dn_um"], d["ybar_um"]])),
+          below=0.21, above=0.04)
 
     # (b) what the gain leaves behind ---------------------------------------
     bx.axhline(0, color=INK2, lw=1.0, zorder=1)
@@ -127,10 +141,12 @@ def figure1(d, res, out):
     bx.axhspan(-rms, rms, color=INK3, alpha=0.12, lw=0,
                label=f"±rms  {rms:.3f} µm")
     bx.set_ylabel("residual $r_i$ (µm)")
-    bx.set_title(f"(b)  Residual after the gain — structured, not noise "
-                 f"($\\chi^2_\\nu$ = {fit['reduced_chi2']:.0f})",
+    bx.set_title("(b)  Residual after the gain — structured, not noise",
                  size=10, loc="left")
     bx.legend(frameon=False, fontsize=8.0, ncol=2, loc="lower left")
+    frame(bx, float(np.min(d["residual_um"] - 2 * d["sigma_ybar"])),
+          float(np.max(d["residual_um"] + 2 * d["sigma_ybar"])),
+          below=0.14, above=0.04)
 
     # (c) the reversal, for the friction hand-off ---------------------------
     cx.axhline(0, color=INK3, lw=0.7, zorder=0)
@@ -144,15 +160,15 @@ def figure1(d, res, out):
                   f"{rev['slope_ci95_ppm']:.2f} ppm")
     cx.set_ylabel("$B_i$ = forward − reverse (µm)")
     cx.set_xlabel("commanded position (mm)")
-    cx.set_title("(c)  Reversal: small, no trend along the travel",
-                 size=10, loc="left")
+    cx.set_title("(c)  Reversal", size=10, loc="left")
     cx.legend(frameon=False, fontsize=8.0, ncol=3, loc="upper left")
-    lo = float(np.min(d["B_um"] - 2 * d["sigma_B"]))
-    cx.set_ylim(bottom=lo - 0.42)
-    cx.annotate(f"$B_i$ < 0: the stage lags the command in the direction "
-                f"of travel.", (0.995, 0.022), xycoords="axes fraction",
-                ha="right", va="bottom", size=8.0, color=INK2)
-    cx.set_ylim(top=float(np.max(d["B_um"] + 2 * d["sigma_B"])) + 0.72)
+    cx.annotate("$B_i$ < 0: the stage lags the command in the "
+                "direction of travel.", (0.995, 0.022),
+                xycoords="axes fraction", ha="right", va="bottom",
+                size=8.0, color=INK2)
+    frame(cx, float(np.min(d["B_um"] - 2 * d["sigma_B"])),
+          float(np.max(d["B_um"] + 2 * d["sigma_B"])),
+          below=0.09, above=0.13)
 
     cx.set_xlim(0, 122)
     for a in (ax, bx, cx):

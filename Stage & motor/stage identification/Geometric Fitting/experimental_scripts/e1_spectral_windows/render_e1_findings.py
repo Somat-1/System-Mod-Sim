@@ -311,7 +311,7 @@ def fit_curve(data: dict, key: str, harmonics: int,
     return harmonic_columns(np.radians(degrees), harmonics) @ fit["beta"]
 
 
-def figure_folded(windows: dict, harmonics: int, reversal: dict) -> None:
+def figure_folded(windows: dict, harmonics: int) -> None:
     fig, axes = plt.subplots(2, 1, figsize=(7.2, 6.4), sharex=True)
     fig.subplots_adjust(left=0.115, right=0.975, top=0.895, bottom=0.17,
                         hspace=0.24)
@@ -345,11 +345,6 @@ def figure_folded(windows: dict, harmonics: int, reversal: dict) -> None:
     axes[1].set_ylabel(r"reversal $B=e_{\uparrow}-e_{\downarrow}$ [µm]")
     axes[1].set_xlabel("absolute screw angle θ [deg]")
     axes[1].set_title("(b) Reversal on the same absolute screw reference", loc="left", pad=5)
-    axes[1].text(0.99, 0.05,
-                 f"periodic-variation test: F({reversal['df_num']}, {reversal['df_den']}) = "
-                 f"{reversal['f']:.2f}, p = {reversal['p']:.2g}",
-                 transform=axes[1].transAxes, ha="right", va="bottom", fontsize=7.1,
-                 color=INK2, bbox=dict(fc="white", ec="#b9bec2", lw=0.55, pad=3))
     fig.text(0.115, 0.030,
              "Absolute angle is computed from commanded microsteps modulo 3200. Markers are measurements; solid lines "
              "are least-squares harmonic fits.\nStep A gain and per-window offsets are removed only from ȳ; reversal B "
@@ -636,7 +631,7 @@ def main() -> int:
     reversal = reversal_test(windows, chosen_h)
 
     figure_raw(windows, float(step_a["slope_ppm"]))
-    figure_folded(windows, chosen_h, reversal)
+    figure_folded(windows, chosen_h)
     figure_spectrum(spectra, threshold, significant, repeat_sigma)
     table_rows, nonstationarity = render_table(spectra, threshold, significant, chosen_h,
                                                stationary, reversal)
