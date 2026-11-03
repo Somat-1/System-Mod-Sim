@@ -21,7 +21,6 @@ from matplotlib.collections import LineCollection
 ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "rendered"
 OVERVIEW = OUT / "e3_global_map_sequence.png"
-DETAIL = OUT / "e3_target_design_and_steps.png"
 
 COL = {
     "INIT": "#69747c", "DATUM": "#73578f", "UP": "#1b6f8a", "TURN_REF": "#a16a2d",
@@ -39,9 +38,7 @@ def load():
     summary = json.loads((ROOT / "sequence/e3_plan_summary.json").read_text(encoding="utf-8"))
     with (ROOT / "sequence/e3_measurement_plan.csv").open(newline="", encoding="utf-8") as fh:
         plan = list(csv.DictReader(fh))
-    with (ROOT / "sequence/e3_targets_seeded_grid64.csv").open(newline="", encoding="utf-8") as fh:
-        targets = list(csv.DictReader(fh))
-    return config, summary, plan, targets
+    return config, summary, plan
 
 
 def move_time(distance_mm: float, c: dict) -> float:
@@ -280,97 +277,8 @@ def render_overview(c, summary, segments, blocks, stops, total) -> None:
     plt.close(fig)
 
 
-def render_detail(c, summary, targets) -> None:
-    x = np.array([float(row["target_mm"]) for row in targets])
-    u = np.array([int(row["target_usteps"]) for row in targets])
-    phase = np.array([int(row["screw_phase_bin"]) for row in targets])
-    gaps = np.diff(u) // 64
-
-    fig, axes = plt.subplots(2, 2, figsize=(8.27, 7.25))
-    fig.subplots_adjust(left=0.09, right=0.965, top=0.845, bottom=0.145,
-                        hspace=0.52, wspace=0.27)
-    fig.text(0.09, 0.975, "E3 target design and step-size anatomy", fontsize=16,
-             weight="bold", color="#20262b", va="top")
-    fig.text(0.09, 0.936,
-             "One target drawn per 0.295 mm stratum, snapped to the 64-µstep grid: "
-             "the irregular step is the design, not an artefact",
-             fontsize=8.6, color="#566069", va="top")
-
-    ax = axes[0, 0]
-    ax.hlines(0, c["soft_min_mm"], c["soft_max_mm"], color="#8d979e", lw=1.0)
-    ax.vlines(x, -0.13, 0.13, color=COL["UP"], lw=0.3, alpha=0.85)
-    small = x[:-1][gaps <= 2]
-    ax.vlines(small, -0.26, -0.15, color=COL["small"], lw=0.9)
-    ax.text(61.0, -0.40, f"{len(small)} steps of ≤ 0.08 mm, spread over the whole travel",
-            ha="center", fontsize=7, color=COL["small"])
-    ax.plot(c["x_ref_mm"], 0.30, marker="D", ms=4.2, color=COL["DATUM"])
-    ax.text(c["x_ref_mm"] + 2.0, 0.30, r"$x_{ref}$", va="center", fontsize=7,
-            color=COL["DATUM"])
-    ax.set(xlim=(0, 122), ylim=(-0.5, 0.45), yticks=[], xlabel="commanded position [mm]")
-    ax.set_title("(a) 400 targets across the full travel", loc="left", pad=7)
-    ax.spines[["left", "right", "top"]].set_visible(False)
-
-    ax = axes[0, 1]
-    bins = np.arange(0.5, gaps.max() + 1.5)
-    counts, _, patches = ax.hist(gaps, bins=bins, color=COL["UP"], edgecolor="white",
-                                 linewidth=0.7)
-    for patch, edge in zip(patches, bins[:-1]):
-        if edge < 2.5:
-            patch.set_facecolor(COL["small"])
-    ax.axvline(7.375, color="#4b5257", lw=0.9, ls=(0, (3, 2)))
-    ax.text(7.65, counts.max() * 1.03, "stratum width 7.4 gp = 0.295 mm",
-            fontsize=6.8, color="#4b5257")
-    ticks = [1, 2, 4, 6, 8, 10, 12, 14]
-    ax.set_xticks(ticks)
-    ax.set_xticklabels([f"{g}\n{g * 0.04:.2f}" for g in ticks])
-    ax.set(xlabel="step between consecutive targets  [grid points · mm]",
-           ylabel="count")
-    ax.set_title("(b) Every step is a whole number of electrical cycles",
-                 loc="left", pad=7)
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.grid(axis="y", color=COL["grid"], lw=0.5)
-
-    ax = axes[1, 0]
-    ax.scatter(x[:-1], gaps * 0.04, s=5, color=COL["UP"], alpha=0.75, linewidths=0)
-    ax.scatter(x[:-1][gaps <= 2], gaps[gaps <= 2] * 0.04, s=14, color=COL["small"],
-               linewidths=0, zorder=3)
-    ax.axhline(summary["spacing_mean_mm"], color="#4b5257", lw=0.9, ls=(0, (3, 2)))
-    ax.text(3.0, summary["spacing_mean_mm"] + 0.015,
-            f"mean {summary['spacing_mean_mm']:.3f} mm", fontsize=6.8, color="#4b5257")
-    ax.set(xlim=(0, 122), ylim=(0, 0.60), xlabel="commanded position [mm]",
-           ylabel="step to the next target [mm]")
-    ax.set_title("(c) Step size carries no trend along the travel", loc="left", pad=7)
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.grid(color=COL["grid"], lw=0.5)
-
-    ax = axes[1, 1]
-    counts = np.bincount(phase, minlength=50)
-    ax.bar(np.arange(50), counts, width=0.86, color=COL["UP"], edgecolor="white",
-           linewidth=0.5)
-    ax.axhline(summary["phase_count_min"], color=COL["small"], lw=0.9, ls=(0, (3, 2)))
-    ax.text(0.015, 0.965,
-            f"floor {summary['phase_count_min']} targets per bin, "
-            f"ceiling {summary['phase_count_max']}", transform=ax.transAxes,
-            va="top", fontsize=6.8, color=COL["small"])
-    ax.set(xlim=(-1, 50), xlabel="screw-phase bin over one 2 mm revolution",
-           ylabel="targets")
-    ax.set_title("(d) Every screw phase sampled, none left empty", loc="left", pad=7)
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.grid(axis="y", color=COL["grid"], lw=0.5)
-
-    fig.text(0.09, 0.042,
-             "Targets lie on the 64-µstep grid so the motor's microstep error is a constant offset "
-             "shared by all of them. Within that constraint the\nstratified draw decorrelates "
-             "position from screw phase; the resulting 0.04–0.56 mm steps give the spline both "
-             "short- and long-range leverage.",
-             fontsize=7.1, color="#5b6268", linespacing=1.45)
-    OUT.mkdir(parents=True, exist_ok=True)
-    fig.savefig(DETAIL, dpi=320)
-    plt.close(fig)
-
-
 def main() -> int:
-    config, summary, plan, targets = load()
+    config, summary, plan = load()
     style()
     segments, blocks, stops, total = schedule(plan, config)
     if abs(total / 60.0 - summary["estimated_recording_min"]) > 1e-6:
@@ -378,9 +286,7 @@ def main() -> int:
     if len(stops) != summary["analysis_stops"] + summary["reference_stops"]:
         raise RuntimeError("render replay recovered the wrong number of recorded stops")
     render_overview(config, summary, segments, blocks, stops, total)
-    render_detail(config, summary, targets)
     print(f"wrote {OVERVIEW.relative_to(ROOT)}")
-    print(f"wrote {DETAIL.relative_to(ROOT)}")
     return 0
 
 
