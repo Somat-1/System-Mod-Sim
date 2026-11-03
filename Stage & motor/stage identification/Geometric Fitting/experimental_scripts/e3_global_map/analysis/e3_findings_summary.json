@@ -113,7 +113,7 @@
     ]
   },
   "frozen_E2_prediction_on_E3": {
-    "model_sha256_prefix": "5bd8b2519a32",
+    "model_sha256_prefix": "98ebd4d24c77",
     "targets_in_domain": 399,
     "targets_outside_domain": 1,
     "measured_rms_um": 1.4888520111575707,

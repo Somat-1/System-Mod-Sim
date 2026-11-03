@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Freeze the E2-only geometric model for E5.
+"""Freeze the E2-only H=2 geometric model required by E5 procedure v2.
 
-Refits exactly the model E2 selected (render_e2_findings: M_C, H = 4, K_s = 2,
-K_C = 8, lambda = 1, drift variant D2) on the E2 capture, together with the
-D2 reversal fit, and writes every number the standalone evaluator needs to
-model/geom_model_E2_frozen.json. The file is written only after
+The E3 result fixes the harmonic order at H=2, but no E3 observations enter
+the fit.  Within the E2 M_C, H=2 candidates, the minimum E2 cross-validation
+row fixes K_s, K_C and lambda once before E5.  The D2 reversal fit remains the
+E2 value.  Every number needed by the standalone evaluator is written to
+model/geom_model_E5.json.  The file is written only after
 e5_geometry.FrozenModel reproduces the E2 predict() on a dense (x, theta)
 grid to 1e-9 um, so E5 never depends on the E2 pipeline again.
 
@@ -34,15 +35,25 @@ sys.path.insert(0, str(HERE))
 from e5_geometry import MODEL_FILE, FrozenModel, theta_of  # noqa: E402
 
 VARIANT = "D2"
+CV_SEED = 5315
 
 
 def selected_row() -> dict:
-    """The M_C row E2 selected, read back from its own model-selection table."""
+    """Select the minimum-CV E2-only candidate after fixing M_C and H=2."""
     summary = json.loads((E2_DIR / "analysis" / "e2_findings_summary.json").read_text())
-    chosen = summary["model_selection"]["M_C_one_se"]
-    assert summary["model_selection"]["selected"] == "M_C", "E2 did not select M_C"
-    return {"H": chosen["H"], "K_s": chosen["K_s"], "K_C": chosen["K_C"],
-            "lambda": chosen["lambda"]}, summary
+    with (E2_DIR / "analysis" / "e2_model_selection.csv").open(
+            newline="", encoding="utf-8") as fh:
+        candidates = [r for r in csv.DictReader(fh)
+                      if r["model"] == "M_C" and int(r["H"]) == 2]
+    if not candidates:
+        raise RuntimeError("E2 model-selection table contains no M_C, H=2 candidates")
+    chosen = min(candidates, key=lambda r: float(r["CV_RMSE_um"]))
+    row = {"H": 2, "K_s": int(chosen["K_s"]), "K_C": int(chosen["K_C"]),
+           "lambda": float(chosen["lambda"]),
+           "CV_RMSE_um": float(chosen["CV_RMSE_um"]),
+           "CV_SE_um": float(chosen["CV_SE_um"]),
+           "table_residual_rms_um": float(chosen["residual_rms_um"])}
+    return row, summary
 
 
 def main() -> int:
@@ -52,13 +63,15 @@ def main() -> int:
     model = e2f.fit_selected(data, row, variant=VARIANT)
     reversal = e2f.reversal_fit(data, VARIANT)
     s = model["state"]
-    assert abs(model["rms"] - summary["selected_model"]["residual_rms_um"]) < 1e-9, \
-        "refit does not reproduce the E2 selected-model residual"
+    assert abs(model["rms"] - row["table_residual_rms_um"]) < 1e-9, \
+        "refit does not reproduce the selected E2 H=2 candidate"
     assert abs(reversal["mean_um"] - summary["reversal"][VARIANT]["mean_um"]) < 1e-9
 
     frozen = {
         "experiment": "E2_global_map",
-        "purpose": "E5 command pre-correction; frozen before E3 is analysed",
+        "purpose": "E5 v2 command pre-correction; H fixed from E3, coefficients fitted on E2 only",
+        "selection_basis": "minimum E2 CV RMSE among M_C candidates with H=2",
+        "cv_seed": CV_SEED,
         "source_log": e2f.LOG.name,
         "source_capture": "E2_Experimental_Run.csv",
         "variant": VARIANT,
@@ -74,7 +87,7 @@ def main() -> int:
         "cov": model["cov"].tolist(),
         "fit": {"residual_rms_um": model["rms"], "edf": model["edf"],
                 "sigma_um": model["sigma"],
-                "cv_rmse_um": summary["model_selection"]["M_C_one_se"]["CV_RMSE_um"]},
+                "cv_rmse_um": row["CV_RMSE_um"], "cv_se_um": row["CV_SE_um"]},
         "gain_ppm": float(model["beta"][1]) * 1000.0,
         "reversal": {"beta0_um": reversal["mean_um"],
                      "beta0_sigma_um": reversal["mean_sigma_um"],
@@ -82,7 +95,11 @@ def main() -> int:
     }
     MODEL_FILE.parent.mkdir(parents=True, exist_ok=True)
     candidate = MODEL_FILE.with_suffix(".candidate.json")
-    candidate.write_text(json.dumps(frozen, indent=1) + "\n", encoding="utf-8")
+    # LF on every platform: this file is hashed byte-for-byte into the firmware
+    # header, so a CRLF translation on Windows would change the hash and make
+    # the recorded value disagree with the same model checked out elsewhere.
+    candidate.write_text(json.dumps(frozen, indent=1) + "\n", encoding="utf-8",
+                         newline="\n")
 
     check = FrozenModel(candidate)
     x = np.linspace(s["domain"][0] - 3.0, s["domain"][1] + 3.0, 4001)

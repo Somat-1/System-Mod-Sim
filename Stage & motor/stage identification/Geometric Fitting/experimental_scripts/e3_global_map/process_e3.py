@@ -36,6 +36,12 @@ import e2_run                                          # noqa: E402
 import e3_run                                          # noqa: E402
 from e5_geometry import FrozenModel                    # noqa: E402
 
+# The model E3 is tested against is the one frozen BEFORE E3 was analysed.
+# e5_geometry.FrozenModel defaults to whichever model E5 currently uses, and
+# E5 v2 switched that default to an H=2 model whose H was chosen FROM E3, so
+# leaving it implicit would quietly make this test circular. Pin it.
+E2_FROZEN = E5 / "model" / "geom_model_E2_frozen.json"
+
 ANALYSIS = HERE / "analysis"
 SUMMARY = ANALYSIS / "e3_findings_summary.json"
 
@@ -157,7 +163,7 @@ def frozen_prediction(data: dict) -> dict:
     nothing here can have tuned it. `G_rel` is the model's error relative to
     its own intercept, which is what `ybar` is too once centred.
     """
-    model = FrozenModel()
+    model = FrozenModel(E2_FROZEN)
     x, theta = data["x"], data["theta"]
     inside = model.in_domain(x)
     predicted = model.G_rel(x[inside], theta[inside])
@@ -218,7 +224,7 @@ def transfer_table(d2: dict, d3: dict) -> list[dict]:
     selected are worth carrying: within a session they lower the residual, and
     the question is whether they lower it on a session they have not seen.
     """
-    model = FrozenModel()
+    model = FrozenModel(E2_FROZEN)
     inside = model.in_domain(d3["x"])
     xi, ti = d3["x"][inside], d3["theta"][inside]
     yi = d3["D2"]["ybar"][inside]

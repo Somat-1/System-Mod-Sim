@@ -40,6 +40,12 @@ import render_e2_findings as e2f                          # noqa: E402
 import e2_run                                             # noqa: E402
 import e3_run                                             # noqa: E402
 from e5_geometry import FrozenModel                       # noqa: E402
+
+# The model E3 is tested against is the one frozen BEFORE E3 was analysed.
+# e5_geometry.FrozenModel defaults to whichever model E5 currently uses, and
+# E5 v2 switched that default to an H=2 model whose H was chosen FROM E3, so
+# leaving it implicit would quietly make this test circular. Pin it.
+E2_FROZEN = E5 / "model" / "geom_model_E2_frozen.json"
 from process_e3 import reduce_session, M_C, own_fit       # noqa: E402
 
 OUT = HERE / "rendered" / "presentation"
@@ -106,7 +112,7 @@ def binned(x, values, edges, minimum=3):
 
 
 def figure_transfer(d3: dict, summary: dict, transfer: list[dict]) -> None:
-    model = FrozenModel()
+    model = FrozenModel(E2_FROZEN)
     x, ybar = d3["x"], d3["D2"]["ybar"]
     inside = model.in_domain(x)
     xi, yi = x[inside], ybar[inside]

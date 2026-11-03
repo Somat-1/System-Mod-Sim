@@ -1,6 +1,6 @@
 """Standalone evaluator for the frozen E2 geometric model.
 
-Reads model/geom_model_E2_frozen.json and evaluates G(x, theta) without the
+Reads model/geom_model_E5.json and evaluates G(x, theta) without the
 E2 pipeline: the same cubic B-spline bases and the same projected slow-trend
 transform that render_e2_findings.prepare_design() built when the model was
 fitted, stored as numbers. e5_freeze_model.py checks this evaluator against
@@ -19,7 +19,7 @@ import numpy as np
 from scipy.interpolate import BSpline
 
 HERE = Path(__file__).resolve().parent
-MODEL_FILE = HERE / "model" / "geom_model_E2_frozen.json"
+MODEL_FILE = HERE / "model" / "geom_model_E5.json"
 U_PER_MM = 1600
 SCREW_REV_U = 3200
 

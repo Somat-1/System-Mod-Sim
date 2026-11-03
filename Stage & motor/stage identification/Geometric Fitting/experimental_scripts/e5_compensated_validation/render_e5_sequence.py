@@ -37,10 +37,8 @@ V4_RESULTS = HERE.parents[2] / "iso230-2" / "analysis" / "iso230_2_v4_results_bl
 INK, INK2, GRID = "#252b30", "#59636b", "#dfe3e6"
 U_COL, C_COL, B3_COL, REF_COL = "#b5533a", "#2d6fa6", "#b8862b", "#7c5a9b"
 PASS_COL = "#2f6b4f"
-GAP_MIN = 3.0                      # drawn width of the operator pause between recordings
-
-# Acceptance criteria, as fixed in the procedure (§6).
-OFFLINE_M, OFFLINE_E, MARGIN = 1.335, 1.560, 0.4
+# Acceptance criteria fixed by procedure v2 (§6).
+PASS_M, PASS_E = 2.2, 2.6
 
 
 def style() -> None:
@@ -94,15 +92,9 @@ def load():
 
 
 def walk(plan: list[dict], c: dict):
-    """Trace points (t_min, x_mm) and validation windows on one continuous clock.
-
-    Recording 2 starts GAP_MIN after recording 1 ends, so the operator pause
-    is visible. A window is a contiguous stretch with one purpose: a reference
-    group, one ISO run (with E0 v4's own x_ref visit at its start), or one
-    B3 repetition.
-    """
+    """Trace position and validation windows on the single v2 session clock."""
     trace, windows = [], []
-    t, pos, rec = 0.0, c["x_ref_mm"], 1
+    t, pos = 0.0, c["park_mm"]
     purpose, start = None, 0.0
 
     def close(now):
@@ -110,18 +102,12 @@ def walk(plan: list[dict], c: dict):
             windows.append((purpose, start, now))
 
     for r in plan:
-        if r["recording"] != rec:
-            close(t); purpose = None
-            rec, t = r["recording"], t + GAP_MIN
-            windows.append((("gap",), t - GAP_MIN, t))
         if r["action"] == "state_enter":
             state = r["state"]
-            if state in ("DATUM", "MID_REF", "END_REF", "B3_REF", "B3_END_REF"):
+            if state in ("R1", "R2", "R3", "R4"):
                 new = ("ref", r["block"])
-            elif state == "ISO_REF":
+            elif state in ("B2A", "B2B"):
                 new = ("iso", c["b2_mode_order"][r["run"] - 1], r["run"])
-            elif state == "ISO":
-                new = purpose
             elif state == "B3":
                 new = ("b3", r["run"])
             else:
@@ -145,7 +131,6 @@ def walk(plan: list[dict], c: dict):
 # ---- F1: sequence with validation windows -----------------------------------
 def figure_sequence(config, summary, plan) -> None:
     trace, windows, end = walk(plan, config)
-    rec_min = {int(k): v for k, v in summary["recording_min"].items()}
     fig, ax = plt.subplots(figsize=(10.5, 4.8))
     fig.subplots_adjust(left=.06, right=.93, top=.66, bottom=.17)
 
@@ -156,8 +141,6 @@ def figure_sequence(config, summary, plan) -> None:
 
     ts = np.array([p[0] for p in trace]); xs = np.array([p[1] for p in trace])
     for p, a, b in windows:
-        if p[0] == "gap":
-            continue
         m = (ts >= a - 1e-9) & (ts <= b + 1e-9)
         ax.plot(ts[m], xs[m], color=colour_of(p), lw=.75, solid_joinstyle="round")
 
@@ -174,10 +157,6 @@ def figure_sequence(config, summary, plan) -> None:
                         fontsize=7.6, color=REF_COL, fontweight="bold",
                         arrowprops=dict(arrowstyle="-", color=REF_COL, lw=.8),
                         annotation_clip=False)
-        elif p[0] == "gap":
-            ax.axvspan(a, b, color="#eef0f2", lw=0)
-            ax.text(mid, 62, "pause: save IDS file 1, start file 2 (no re-home)",
-                    ha="center", va="center", fontsize=6.8, color=INK2, rotation=90)
 
     def bracket(a, b, y, colour, head, body=""):
         tr = ax.get_xaxis_transform()
@@ -193,22 +172,22 @@ def figure_sequence(config, summary, plan) -> None:
     b3 = [(a, b) for p, a, b in windows if p[0] == "b3"]
     bracket(b2[0][0], b2[-1][1], 1.04, INK,
             "B2   ISO 230-2, paired U vs C   (5 U + 5 C, order ABBA)",
-            "§5.2  ISO metrics, U vs C     §5.3  achieved vs commanded correction (gain k)\n"
-            "§5.4  C residual vs screw angle θ and x, reversal B")
+            "§5.2  compensated rms     §5.3  ISO metrics, U vs C     §5.4  achieved correction (gain k)\n"
+            "§5.5  C residual vs x and screw angle θ     §5.7  reversal B")
     bracket(b3[0][0], b3[-1][1], 1.04, B3_COL, "B3   off-grid",
-            "§5.5  residual vs\nelectrical phase")
-    bracket(0, rec_min[1], 1.36, INK2, f"IDS recording 1   ({rec_min[1]:.1f} min)")
-    bracket(rec_min[1] + GAP_MIN, end, 1.36, INK2, f"recording 2   ({rec_min[2]:.1f} min)")
+            "§5.8  residual vs\nelectrical phase")
+    bracket(0, end, 1.36, INK2,
+            f"single IDS recording   ({summary['duration_min']:.1f} min predicted)")
 
     tr = ax.get_xaxis_transform()
-    ax.text(end + .8, -.03, "B1a–e\ndrift anchors\n(§5.1, D2)", transform=tr, ha="left",
+    ax.text(end + .8, -.03, "R1–R4\ntwo-point drift anchors\n(§5.1 / §5.6)", transform=tr, ha="left",
             va="top", fontsize=7.4, color=REF_COL, fontweight="bold", clip_on=False)
-    ax.text(end + .8, .5, "§5.6 settling:\nread at every\nstop from the\ncontinuous\nIDS stream",
+    ax.text(end + .8, .5, "§5.9 settling:\nread at every\nstop from the\ncontinuous\nIDS stream",
             transform=tr, ha="left", va="center", fontsize=7.2, color=INK2, clip_on=False)
 
-    ax.axhline(config["x_ref_mm"], color=REF_COL, lw=.5, ls=(0, (2, 3)), alpha=.6)
+    ax.axhline(config["park_mm"], color=REF_COL, lw=.5, ls=(0, (2, 3)), alpha=.6)
     ax.set_xlim(-.2, end + .2); ax.set_ylim(0, 132)
-    ax.set_yticks([0, 30, 61.35, 90, 120], ["0", "30", "x_ref", "90", "120"])
+    ax.set_yticks([0, 15, 61.35, 105, 120], ["0", "$x_{R1}$", "park", "$x_{R2}$", "120"])
     ax.set_xlabel("session time [min]", labelpad=16)
     ax.set_ylabel("position [mm]")
     ax.spines[["top", "right"]].set_visible(False)
@@ -318,7 +297,7 @@ def figure_result(config, summary, table, model) -> dict:
     uvals = [abs(U[k]) for _, k in keys]; cvals = [abs(C[k]) for _, k in keys]
     ax.bar(idx - .2, uvals, width=.38, color=U_COL, label="U (E0 v4)")
     ax.bar(idx + .2, cvals, width=.38, color=C_COL, label="C (expected)")
-    passes = [OFFLINE_E + MARGIN, OFFLINE_M + MARGIN, .3]
+    passes = [PASS_E, PASS_M, .3]
     for i, (v, c) in enumerate(zip(passes, cvals)):
         ax.plot([i - .45, i + .45], [v, v], color=INK, lw=1.4,
                 label="pass line (§6)" if i == 0 else None)
