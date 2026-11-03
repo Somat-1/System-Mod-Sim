@@ -1,333 +1,421 @@
 #!/usr/bin/env python3
-"""Render the E5 sequence, the command correction and the expected result.
+"""Two figures that explain what E5 does.
 
-    F1  rendered/e5_sequence_windows.png    the session on one time axis, each
-                                            window labelled with what it validates
-    F2  rendered/e5_command_correction.png  what C runs command at each ISO target
-    F3  rendered/e5_expected_result.png     U vs C as the frozen model predicts,
-                                            against the pass lines of §6
+`e5_sequence_overview.png` answers "how is the session executed" in the same
+form as the E1-E4 sequence renders: controller-state allocation, the complete
+commanded trajectory, and where the hour goes.
 
-The expected C result is an offline replay: E0 v4's measured deviations plus
-the correction the table commands at each target and direction (quantisation
-included). It is a prediction to hold E5 against, not a result.
+`e5_compensation_chain.png` answers "how does the model improve the stage".
+The correction is feed-forward and open loop - it is computed on the host
+before the run and baked into a command table, and the interferometer never
+enters the loop - so the figure is a signal path with a worked target on it,
+not a control loop with feedback.
 
-    DYLD_LIBRARY_PATH=/opt/homebrew/opt/expat/lib \
-      /opt/homebrew/bin/python3 render_e5_sequence.py
+    python render_e5_sequence.py
 """
 from __future__ import annotations
 
 import csv
 import json
-import sys
+import math
+import textwrap
 from pathlib import Path
 
-import matplotlib
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.collections import LineCollection
+from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 
 HERE = Path(__file__).resolve().parent
 OUT = HERE / "rendered"
-sys.path.insert(0, str(HERE))
-from e5_geometry import FrozenModel  # noqa: E402
-from e5_make_table import move_time_s  # noqa: E402
+SEQUENCE = OUT / "e5_sequence_overview.png"
+CHAIN = OUT / "e5_compensation_chain.png"
 
-V4_RESULTS = HERE.parents[2] / "iso230-2" / "analysis" / "iso230_2_v4_results_blind.json"
+# Chapter convention for E5: uncompensated grey, compensated blue.
+C_U, C_C = "#7b858c", "#176d8c"
+C_REF, C_B3 = "#73578f", "#a16a2d"
+C_INK, C_MUTED, C_GRID = "#20262b", "#566069", "#dde1e4"
+COL = {"HOME": "#4c5560", "INIT": "#69747c", "R1": C_REF, "R2": C_REF,
+       "R3": C_REF, "R4": C_REF, "B2A": C_C, "B2B": C_C, "B3": C_B3,
+       "PARK": "#4c5560", "settle": "#c59b50", "record": "#67527c",
+       "motion": "#697b86"}
+CHAR_INCH = 0.0455
 
-INK, INK2, GRID = "#252b30", "#59636b", "#dfe3e6"
-U_COL, C_COL, B3_COL, REF_COL = "#b5533a", "#2d6fa6", "#b8862b", "#7c5a9b"
-PASS_COL = "#2f6b4f"
-# Acceptance criteria fixed by procedure v2 (§6).
-PASS_M, PASS_E = 2.2, 2.6
+
+def caption(fig, left, text, bottom=0.013, size=6.9) -> None:
+    usable = fig.get_figwidth() * (1.0 - left) - 0.12
+    width = max(40, int(usable / CHAR_INCH))
+    lines = textwrap.wrap(" ".join(text.split()), width=width)
+    fig.text(left, bottom, "\n".join(lines), fontsize=size, color=C_MUTED,
+             va="bottom", linespacing=1.5)
 
 
 def style() -> None:
     plt.rcParams.update({
         "font.family": "serif",
         "font.serif": ["STIX Two Text", "Times New Roman", "DejaVu Serif"],
-        "mathtext.fontset": "stix", "font.size": 8.5,
-        "axes.titlesize": 10, "axes.labelsize": 9,
+        "mathtext.fontset": "stix",
+        "font.size": 8, "axes.titlesize": 10, "axes.labelsize": 9,
         "xtick.labelsize": 8, "ytick.labelsize": 8,
         "axes.edgecolor": "#7d858c", "axes.labelcolor": "#2d3338",
         "xtick.color": "#41474c", "ytick.color": "#41474c",
         "figure.facecolor": "white", "savefig.facecolor": "white",
-        "legend.fontsize": 7.8, "axes.unicode_minus": True,
     })
 
 
-def finish(ax) -> None:
-    ax.grid(color=GRID, lw=.45)
+def tidy(ax) -> None:
     ax.spines[["top", "right"]].set_visible(False)
-
-
-def save(fig, stem: str) -> None:
-    OUT.mkdir(parents=True, exist_ok=True)
-    fig.savefig(OUT / f"{stem}.png", dpi=300)
-    plt.close(fig)
-
-
-# ---- data ------------------------------------------------------------------
-def num(v: str):
-    if v == "":
-        return None
-    try:
-        return int(v)
-    except ValueError:
-        return float(v)
+    ax.grid(color=C_GRID, lw=0.5)
 
 
 def load():
-    config = json.loads((HERE / "e5_config.json").read_text())
-    summary = json.loads((HERE / "sequence" / "e5_plan_summary.json").read_text())
-    text = ("state", "action", "block", "mode", "note")
-    with (HERE / "sequence" / "e5_measurement_plan.csv").open(newline="") as fh:
-        plan = [{k: (v if k in text else num(v)) for k, v in r.items()}
-                for r in csv.DictReader(fh)]
-    with (HERE / "sequence" / "e5_command_table.csv").open(newline="") as fh:
-        table = [{k: (v if k in ("block", "mode") else num(v)) for k, v in r.items()}
-                 for r in csv.DictReader(fh)]
-    model = FrozenModel((HERE / config["model_file"]).resolve())
-    assert model.sha256 == summary["model_sha256"], "model changed since the table was made"
-    return config, summary, plan, table, model
+    config = json.loads((HERE / "e5_config.json").read_text(encoding="utf-8"))
+    summary = json.loads((HERE / "sequence/e5_plan_summary.json")
+                         .read_text(encoding="utf-8"))
+    with (HERE / "sequence/e5_measurement_plan.csv").open(
+            newline="", encoding="utf-8") as fh:
+        plan = list(csv.DictReader(fh))
+    with (HERE / "sequence/e5_command_table.csv").open(
+            newline="", encoding="utf-8") as fh:
+        table = list(csv.DictReader(fh))
+    return config, summary, plan, table
 
 
-def walk(plan: list[dict], c: dict):
-    """Trace position and validation windows on the single v2 session clock."""
-    trace, windows = [], []
-    t, pos = 0.0, c["park_mm"]
-    purpose, start = None, 0.0
+def move_time(distance_mm: float, c: dict) -> float:
+    distance = abs(distance_mm)
+    v, a = c["velocity_mm_s"], c["acceleration_mm_s2"]
+    ramp = v * v / a
+    return 2.0 * math.sqrt(distance / a) if distance <= ramp else 2.0 * v / a + (distance - ramp) / v
 
-    def close(now):
-        if purpose is not None and now > start:
-            windows.append((purpose, start, now))
 
-    for r in plan:
-        if r["action"] == "state_enter":
-            state = r["state"]
-            if state in ("R1", "R2", "R3", "R4"):
-                new = ("ref", r["block"])
-            elif state in ("B2A", "B2B"):
-                new = ("iso", c["b2_mode_order"][r["run"] - 1], r["run"])
-            elif state == "B3":
-                new = ("b3", r["run"])
-            else:
-                new = None
-            if new != purpose:
-                close(t); purpose, start = new, t
+def fill_modes(plan: list[dict]) -> list[str]:
+    """Mode for every row, carried back onto the moves that lead into a stop.
+
+    Moves have no mode of their own, but a move belongs to the run it is
+    approaching: without this the whole of B2 draws in one colour and the
+    U/C alternation - the reason the session is built this way - disappears.
+    """
+    modes = [row["mode"] for row in plan]
+    pending = ""
+    for i in range(len(plan) - 1, -1, -1):
+        if plan[i]["action"] == "state_enter":
+            pending = ""
+        elif modes[i]:
+            pending = modes[i]
+        else:
+            modes[i] = pending
+    return modes
+
+
+def schedule(plan: list[dict], c: dict):
+    """Replay the plan on the generator's own timing model."""
+    modes = fill_modes(plan)
+    now, position, state = 0.0, c["park_mm"], "HOME"
+    segments, blocks, stops = [], [], []
+    block_start, block_mode, block_run = 0.0, "", ""
+    for row, mode in zip(plan, modes):
+        if row["action"] == "state_enter":
+            if now > block_start:
+                blocks.append((block_start, now, state, block_mode, block_run))
+            state, block_start = row["state"], now
+            block_mode, block_run = "", ""
             continue
-        if r["u_cmd"] is None:
-            continue
-        x = r["u_cmd"] / c["ustep_per_mm"]
-        t1 = t + move_time_s(x - pos, c) / 60
-        trace.append((t, pos)); trace.append((t1, x))
-        t, pos = t1, x
-        if r["action"] == "stop":
-            t += (c["settle_s"] + c["record_s"]) / 60
-            trace.append((t, x))
-    close(t)
-    return trace, windows, t
+        if not block_mode:
+            block_mode, block_run = mode, row["run"]
+        if row["x_nom_mm"]:
+            target = float(row["x_nom_mm"])
+            end = now + move_time(target - position, c)
+            segments.append((now, end, position, target, state, mode))
+            now, position = end, target
+        if row["action"] == "stop":
+            hold = c["settle_s"] + c["record_s"]
+            segments.append((now, now + hold, position, position, state, mode))
+            stops.append((now, now + hold, position, state, mode))
+            now += hold
+    if now > block_start:
+        blocks.append((block_start, now, state, block_mode, block_run))
+    return segments, blocks, stops, now
 
 
-# ---- F1: sequence with validation windows -----------------------------------
-def figure_sequence(config, summary, plan) -> None:
-    trace, windows, end = walk(plan, config)
-    fig, ax = plt.subplots(figsize=(10.5, 4.8))
-    fig.subplots_adjust(left=.06, right=.93, top=.66, bottom=.17)
+def segment_colour(state: str, mode: str) -> str:
+    """ISO runs are coloured by what they command, everything else by block."""
+    if state.startswith("B2"):
+        return C_C if mode == "C" else C_U
+    return COL.get(state, "#7a7f84")
 
-    def colour_of(p):
-        if p[0] == "iso":
-            return U_COL if p[1] == "U" else C_COL
-        return {"b3": B3_COL, "ref": REF_COL}.get(p[0], INK2)
 
-    ts = np.array([p[0] for p in trace]); xs = np.array([p[1] for p in trace])
-    for p, a, b in windows:
-        m = (ts >= a - 1e-9) & (ts <= b + 1e-9)
-        ax.plot(ts[m], xs[m], color=colour_of(p), lw=.75, solid_joinstyle="round")
+# ------------------------------------------------------------- figure 1
 
-    for p, a, b in windows:
-        mid = .5 * (a + b)
-        if p[0] in ("iso", "b3"):
-            label = f"{p[1]}{p[2]}" if p[0] == "iso" else f"B3·{p[1]}"
-            ax.text(mid, 126, label, ha="center", va="center", fontsize=8, color="white",
-                    fontweight="bold",
-                    bbox=dict(boxstyle="round,pad=.25", fc=colour_of(p), ec="none"))
-        elif p[0] == "ref":
-            ax.axvspan(a, b, color=REF_COL, alpha=.22, lw=0)
-            ax.annotate(p[1], xy=(mid, 0), xytext=(mid, -12), ha="center", va="top",
-                        fontsize=7.6, color=REF_COL, fontweight="bold",
-                        arrowprops=dict(arrowstyle="-", color=REF_COL, lw=.8),
-                        annotation_clip=False)
+def figure_sequence(c, summary, segments, blocks, stops, total) -> None:
+    minutes = total / 60.0
+    fig = plt.figure(figsize=(7.45, 6.6))
+    gs = fig.add_gridspec(3, 1, height_ratios=[0.74, 3.05, 0.92],
+                          left=0.100, right=0.975, top=0.862, bottom=0.150,
+                          hspace=0.52)
+    fig.text(0.100, 0.975, "Experiment E5 — compensated validation", fontsize=16,
+             weight="bold", color=C_INK, va="top")
+    fig.text(0.100, 0.932,
+             "Ten ISO 230-2 runs, five uncompensated and five compensated, "
+             "interleaved ABBA in one session",
+             fontsize=8.5, color=C_MUTED, va="top")
 
-    def bracket(a, b, y, colour, head, body=""):
-        tr = ax.get_xaxis_transform()
-        ax.plot([a, a, b, b], [y - .03, y, y, y - .03], color=colour, lw=1.2,
-                transform=tr, clip_on=False)
-        ax.text(.5 * (a + b), y + .015, head, transform=tr, ha="center", va="bottom",
-                fontsize=8.6, color=colour, fontweight="bold", clip_on=False)
-        if body:
-            ax.text(.5 * (a + b), y + .075, body, transform=tr, ha="center", va="bottom",
-                    fontsize=7.4, color=INK, clip_on=False, linespacing=1.3)
+    ax0 = fig.add_subplot(gs[0])
+    for start, end, state, mode, run in blocks:
+        width = (end - start) / 60.0
+        ax0.barh(0, width, left=start / 60.0, height=0.42,
+                 color=segment_colour(state, mode), edgecolor="white", linewidth=0.6)
+        if width > 1.1:
+            # Name the ISO runs by what they command, so the ABBA order reads
+            # straight off the bar rather than having to be taken on trust.
+            label = f"{mode}{run}" if state.startswith("B2") else state
+            ax0.text((start + end) / 120.0, 0, label, ha="center", va="center",
+                     fontsize=6.4, color="white", weight="bold")
+    ax0.set(xlim=(0, minutes), ylim=(-0.36, 0.36), yticks=[])
+    ax0.set_title("(a) Controller-state allocation", loc="left", pad=6)
+    ax0.tick_params(axis="x", bottom=False, labelbottom=False)
+    ax0.spines[:].set_visible(False)
 
-    b2 = [(a, b) for p, a, b in windows if p[0] == "iso"]
-    b3 = [(a, b) for p, a, b in windows if p[0] == "b3"]
-    bracket(b2[0][0], b2[-1][1], 1.04, INK,
-            "B2   ISO 230-2, paired U vs C   (5 U + 5 C, order ABBA)",
-            "§5.2  compensated rms     §5.3  ISO metrics, U vs C     §5.4  achieved correction (gain k)\n"
-            "§5.5  C residual vs x and screw angle θ     §5.7  reversal B")
-    bracket(b3[0][0], b3[-1][1], 1.04, B3_COL, "B3   off-grid",
-            "§5.8  residual vs\nelectrical phase")
-    bracket(0, end, 1.36, INK2,
-            f"single IDS recording   ({summary['duration_min']:.1f} min predicted)")
-
-    tr = ax.get_xaxis_transform()
-    ax.text(end + .8, -.03, "R1–R4\ntwo-point drift anchors\n(§5.1 / §5.6)", transform=tr, ha="left",
-            va="top", fontsize=7.4, color=REF_COL, fontweight="bold", clip_on=False)
-    ax.text(end + .8, .5, "§5.9 settling:\nread at every\nstop from the\ncontinuous\nIDS stream",
-            transform=tr, ha="left", va="center", fontsize=7.2, color=INK2, clip_on=False)
-
-    ax.axhline(config["park_mm"], color=REF_COL, lw=.5, ls=(0, (2, 3)), alpha=.6)
-    ax.set_xlim(-.2, end + .2); ax.set_ylim(0, 132)
-    ax.set_yticks([0, 15, 61.35, 105, 120], ["0", "$x_{R1}$", "park", "$x_{R2}$", "120"])
-    ax.set_xlabel("session time [min]", labelpad=16)
-    ax.set_ylabel("position [mm]")
+    ax = fig.add_subplot(gs[1], sharex=ax0)
+    grouped: dict[str, list] = {}
+    for a, b, x0, x1, st, mode in segments:
+        grouped.setdefault(segment_colour(st, mode), []).append(
+            [(a / 60.0, x0), (b / 60.0, x1)])
+    for colour, lines in grouped.items():
+        ax.add_collection(LineCollection(lines, colors=colour, linewidths=0.9))
+    for x in c["reference_positions_mm"]:
+        ax.axhline(x, color=C_REF, lw=0.6, ls=(0, (3, 2)), alpha=0.8)
+    ax.text(0.4, c["reference_positions_mm"][1] + 2.5,
+            "reference pair, 15 and 105 mm", fontsize=6.6, color=C_REF)
+    ax.set(xlim=(0, minutes), ylim=(0, 124), ylabel="commanded position [mm]")
+    ax.set_title("(b) Complete commanded trajectory", loc="left", pad=6)
+    ax.grid(axis="x", color=C_GRID, lw=0.55)
     ax.spines[["top", "right"]].set_visible(False)
-    fig.suptitle("E5 session: what each window validates", x=.06, ha="left",
-                 fontsize=12, color=INK, y=.985)
-    save(fig, "e5_sequence_windows")
+    handles = [plt.Line2D([], [], color=C_U, lw=1.6, label="uncompensated run"),
+               plt.Line2D([], [], color=C_C, lw=1.6, label="compensated run"),
+               plt.Line2D([], [], color=C_REF, lw=1.6, label="reference block"),
+               plt.Line2D([], [], color=C_B3, lw=1.6, label="B3 off-grid")]
+    ax.legend(handles=handles, frameon=False, fontsize=6.8, ncol=4,
+              loc="upper center", bbox_to_anchor=(0.5, -0.055),
+              handlelength=1.6, columnspacing=1.6)
+    box = (f"ISO targets  24 (E0 v4)\n"
+           f"runs  5 U + 5 C, order {c['b2_mode_order']}\n"
+           f"reference stops  {summary['stops']['reference']} in 4 blocks\n"
+           f"B3 off-grid stops  {summary['stops']['B3']}\n"
+           f"recorded stops  {summary['stops']['total']}\n"
+           f"predicted duration  {minutes:.1f} min")
+    ax.text(0.015, 0.975, box, transform=ax.transAxes, ha="left", va="top",
+            fontsize=7.2, linespacing=1.35,
+            bbox=dict(boxstyle="square,pad=0.48", fc="white", ec="#aeb4b9", lw=0.7))
+
+    ax2 = fig.add_subplot(gs[2], sharex=ax0)
+    n = summary["stops"]["total"]
+    parts = [("motion + transits", total - n * (c["settle_s"] + c["record_s"]),
+              COL["motion"]),
+             ("settle windows", n * c["settle_s"], COL["settle"]),
+             ("record", n * c["record_s"], COL["record"])]
+    left = 0.0
+    for label, seconds, colour in parts:
+        width = seconds / 60.0
+        ax2.barh(0, width, left=left, height=0.50, color=colour, edgecolor="white")
+        if width > 2.0:
+            ax2.text(left + width / 2.0, 0, f"{label}\n{width:.1f} min",
+                     ha="center", va="center", fontsize=6.7, color="white",
+                     weight="bold")
+        left += width
+    ax2.axvline(c["watchdog_gate_min"], color="#b4473f", lw=1.0, ls="--")
+    ax2.text(c["watchdog_gate_min"] - 0.4, -0.40,
+             f"{c['watchdog_gate_min']:.0f} min gate", ha="right", va="top",
+             fontsize=6.5, color="#8d3934")
+    ax2.set(yticks=[], xlabel="elapsed session time [min]", ylim=(-0.45, 0.45),
+            xlim=(0, max(minutes, c["watchdog_gate_min"]) * 1.06))
+    ax2.set_title("(c) Where the session goes", loc="left", pad=6)
+    ax2.spines[["left", "right", "top"]].set_visible(False)
+
+    caption(fig, 0.100,
+            f"One session, {minutes:.1f} min, {summary['stops']['total']} recorded stops. The ten "
+            f"ISO runs alternate {c['b2_mode_order']} so that any drift over the session falls "
+            f"equally on both modes and the U/C comparison stays paired. Four reference blocks "
+            f"bracket the ISO blocks; each visits 15 and 105 mm from both directions, giving drift "
+            f"anchors, a session gain estimate, and reversal at fixed positions against time. B3 "
+            f"then sweeps the electrical cycle off the 64-µstep grid. Only the C runs and B3 carry "
+            f"a correction; U and the references are commanded at their nominal targets.")
+    OUT.mkdir(parents=True, exist_ok=True)
+    fig.savefig(SEQUENCE, dpi=320)
+    plt.close(fig)
 
 
-# ---- F2: command correction -------------------------------------------------
-def figure_correction(config, summary, table, model) -> None:
-    rows = [r for r in table if r["block"] == "B2" and r["mode"] == "C" and r["run"] == 2]
-    up = sorted((r for r in rows if r["dir"] == 1), key=lambda r: r["x_nom_mm"])
-    dn = sorted((r for r in rows if r["dir"] == -1), key=lambda r: r["x_nom_mm"])
-    x = np.array([r["x_nom_mm"] for r in up])
-    cu = np.array([r["corr_um"] for r in up]); cd = np.array([r["corr_um"] for r in dn])
-    fig, ax = plt.subplots(figsize=(7.2, 3.9))
-    fig.subplots_adjust(left=.1, right=.97, top=.82, bottom=.14)
-    ax.axhline(0, color=U_COL, lw=1.4, label="U runs: commanded = nominal")
-    ax.plot(x, cu, "-o", color=C_COL, ms=4, lw=1.1, label="C, approached from below (up)")
-    ax.plot(x, cd, "--o", color=C_COL, mfc="white", ms=4, lw=1.1,
-            label="C, approached from above (down)")
-    i = int(np.argmax(np.abs(np.r_[cu, cd])))
-    xi, ci = np.r_[x, x][i], np.r_[cu, cd][i]
-    ax.annotate(f"largest {ci:+.2f} µm", xy=(xi, ci), xytext=(xi - 28, ci + .3),
-                fontsize=7.6, color=INK, va="center",
-                arrowprops=dict(arrowstyle="-", color=INK2, lw=.7))
-    j = 9
-    ax.annotate("", xy=(x[j], cu[j]), xytext=(x[j], cd[j]),
-                arrowprops=dict(arrowstyle="<->", color=INK, lw=.9, shrinkA=3, shrinkB=3))
-    ax.annotate(f"up − down = {-model.beta0_um:.2f} µm\n= reversal correction −β₀",
-                xy=(x[j], .5 * (cu[j] + cd[j])), xytext=(x[j] + 4, -3.6),
-                fontsize=7.4, va="center", color=INK,
-                arrowprops=dict(arrowstyle="-", color=INK2, lw=.7))
-    ax.set_xlim(0, 122.8); ax.set_ylim(-5, 5.5)
-    ax.set_xlabel("ISO target x* [mm]")
-    ax.set_ylabel("commanded correction [µm]")
-    ax.legend(loc="upper left", frameon=False)
-    finish(ax)
-    fig.suptitle("E5 command: C runs pre-correct each ISO target with the frozen model",
-                 x=.1, ha="left", fontsize=11, color=INK, y=.97)
-    fig.text(.1, .875, "correction = −(Ĝ(x*) − a₀) − (d/2)·β₀, rounded to whole µsteps "
-             f"(0.625 µm)     model {summary['model_sha256'][:12]}", fontsize=7.3, color=INK2)
-    save(fig, "e5_command_correction")
+# ------------------------------------------------------------- figure 2
+
+def box(ax, x, y, w, h, text, fc, ec, fontsize=6.9, weight="normal"):
+    ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.006,rounding_size=0.012",
+                                fc=fc, ec=ec, lw=0.9, zorder=2))
+    ax.text(x + w / 2, y + h / 2, text, ha="center", va="center",
+            fontsize=fontsize, color=C_INK, zorder=3, linespacing=1.35,
+            weight=weight)
 
 
-# ---- F3: expected result ----------------------------------------------------
-def v4_baseline():
-    d = json.loads(V4_RESULTS.read_text())["per_target"]
-    rows = [d[k] for k in sorted(d, key=int)]
-    get = lambda key: np.array([r[key] for r in rows])
-    return {"x": get("cmd_mm"), "up": get("xbar_up"), "dn": get("xbar_dn"),
-            "s_up": get("s_up"), "s_dn": get("s_dn")}
+def arrow(ax, x0, y0, x1, y1, style="-|>", colour=C_INK, ls="-"):
+    ax.add_patch(FancyArrowPatch((x0, y0), (x1, y1), arrowstyle=style,
+                                 mutation_scale=9, lw=0.9, color=colour,
+                                 linestyle=ls, zorder=2,
+                                 shrinkA=0, shrinkB=0))
 
 
-def iso_metrics(up, dn, s_up, s_dn) -> dict:
-    mid = 0.5 * (up + dn)
-    return {"E": float(max(up.max(), dn.max()) - min(up.min(), dn.min())),
-            "M": float(np.ptp(mid)),
-            "A": float(np.max(np.maximum(up + 2*s_up, dn + 2*s_dn)) -
-                       np.min(np.minimum(up - 2*s_up, dn - 2*s_dn))),
-            "B": float(np.max(np.abs(up - dn))), "B_mean": float(np.mean(up - dn)),
-            "R_up": float(4*s_up.max()), "R_dn": float(4*s_dn.max()),
-            "R": float(max(np.max(2*s_up + 2*s_dn + np.abs(up - dn)),
-                           4*s_up.max(), 4*s_dn.max()))}
+def figure_chain(c, summary, table) -> None:
+    rows = [r for r in table if r["mode"] == "C" and r["block"] == "B2"]
+    # An interior target: the edge-flagged ones sit where the spline is weakly
+    # constrained, the worst place to take a worked example from.
+    interior = [r for r in rows if r.get("edge") != "1"] or rows
+    pick = max(interior, key=lambda r: abs(float(r["G_rel_um"])))
+    target = pick["target_id"]
+    pair = {r["dir"]: r for r in rows if r["target_id"] == target
+            and r["run"] == pick["run"]}
+    beta0 = summary["up_minus_down_um"]["expected"]
+    x_nom = float(pair["1"]["x_nom_mm"])
+    g = float(pair["1"]["G_rel_um"])
 
+    fig = plt.figure(figsize=(7.8, 7.4))
+    gs = fig.add_gridspec(2, 3, height_ratios=[1.52, 1.0],
+                          left=0.085, right=0.975, top=0.885, bottom=0.215,
+                          hspace=0.40, wspace=0.34)
+    fig.text(0.085, 0.975, "E5 — how the model is applied to the stage",
+             fontsize=16, weight="bold", color=C_INK, va="top")
+    fig.text(0.085, 0.932,
+             "Feed-forward pre-correction: computed on the host before the run, "
+             "baked into a command table",
+             fontsize=8.5, color=C_MUTED, va="top")
 
-def replay(table: list[dict], base: dict) -> dict:
-    """E0 v4 deviations plus the correction each C row of run 2 commands."""
-    rows = [r for r in table if r["block"] == "B2" and r["mode"] == "C" and r["run"] == 2]
-    pick = lambda d: np.array([r["corr_um"] for r in sorted(
-        (r for r in rows if r["dir"] == d), key=lambda r: r["target_id"])])
-    up, dn = base["up"] + pick(1), base["dn"] + pick(-1)
-    return {"up": up, "dn": dn,
-            "U": iso_metrics(base["up"], base["dn"], base["s_up"], base["s_dn"]),
-            "C": iso_metrics(up, dn, base["s_up"], base["s_dn"])}
+    ax = fig.add_subplot(gs[0, :])
+    ax.set(xlim=(0, 1), ylim=(0, 1), xticks=[], yticks=[])
+    ax.spines[:].set_visible(False)
 
+    y, h = 0.745, 0.205
+    box(ax, 0.005, y, 0.135, h, "nominal\nISO target\n$x^*$", "#f2f4f5", "#9aa3a9")
+    box(ax, 0.175, y, 0.175, h,
+        "frozen model\n$\\hat{G}(x^*,\\theta)$\nH = 2, E2 only", "#e8f0f3", C_C)
+    box(ax, 0.385, y, 0.165, h,
+        "subtract\ngeometry\n$-[\\hat{G}-a_0]$", "#e8f0f3", C_C)
+    box(ax, 0.585, y, 0.165, h,
+        "subtract\nreversal\n$-\\frac{d}{2}\\beta_0$", "#e8f0f3", C_C)
+    box(ax, 0.785, y, 0.21, h,
+        "round to µstep\n$u_{cmd}=\\mathrm{round}(x_c\\!\\cdot\\!1600)$",
+        "#f6efe3", C_B3)
+    for x0, x1 in ((0.140, 0.175), (0.350, 0.385), (0.550, 0.585), (0.750, 0.785)):
+        arrow(ax, x0, y + h / 2, x1, y + h / 2)
 
-def figure_result(config, summary, table, model) -> dict:
-    base = v4_baseline(); rp = replay(table, base)
-    U, C = rp["U"], rp["C"]
-    fig = plt.figure(figsize=(9.6, 4.0))
-    gs = fig.add_gridspec(1, 2, width_ratios=[1.75, 1], wspace=.25,
-                          left=.07, right=.98, top=.79, bottom=.14)
-    fig.suptitle("E5 expected result: the frozen model replayed on the E0 v4 baseline",
-                 x=.07, ha="left", fontsize=11, color=INK, y=.97)
-    fig.text(.07, .875, "C = E0 v4 measured deviation + the correction this table commands. "
-             "A prediction to test E5 against, not a measurement.", fontsize=7.4, color=INK2)
+    y2, hh = 0.435, 0.175
+    box(ax, 0.785, y2, 0.21, hh, "ESP32 RMT\nstep pulses", "#f2f4f5", "#9aa3a9")
+    arrow(ax, 0.890, y, 0.890, y2 + hh)
+    box(ax, 0.515, y2, 0.21, hh, "stage\n(screw, nut, motor)", "#f2f4f5", "#9aa3a9")
+    arrow(ax, 0.785, y2 + hh / 2, 0.725, y2 + hh / 2)
+    box(ax, 0.235, y2, 0.22, hh,
+        "interferometer\nmeasures the result", "white", "#9aa3a9")
+    arrow(ax, 0.515, y2 + hh / 2, 0.455, y2 + hh / 2)
 
-    ax = fig.add_subplot(gs[0])
-    x = base["x"]
-    for up, dn, col, lab in ((base["up"], base["dn"], U_COL, "U (E0 v4)"),
-                             (rp["up"], rp["dn"], C_COL, "C (expected)")):
-        ax.fill_between(x, np.minimum(up, dn), np.maximum(up, dn), color=col, alpha=.18, lw=0)
-        ax.plot(x, .5 * (up + dn), color=col, lw=1.6, label=lab)
-    ax.axhline(0, color=INK2, lw=.5)
-    ax.text(121, 3.9, "line = mean of up and down;  band = up-to-down gap",
-            ha="right", fontsize=7.2, color=INK2)
-    ax.set_xlim(0, 122.8); ax.set_ylim(-5.5, 4.6)
-    ax.set_xlabel("ISO target x* [mm]"); ax.set_ylabel("deviation from x* [µm]")
-    ax.legend(loc="lower left", frameon=False)
-    finish(ax)
-    ax.set_title("Deviation along the travel", loc="left")
+    box(ax, 0.005, 0.015, 0.465, 0.265,
+        f"worked target {target}: $x^*$ = {x_nom:.3f} mm\n"
+        f"$\\hat{{G}}$ = {g:+.3f} µm,  $\\beta_0$ = −{beta0:.3f} µm\n"
+        f"up    $u$ {pair['1']['u_nom']} → {pair['1']['u_cmd']}"
+        f"   ({float(pair['1']['corr_um']):+.3f} µm)\n"
+        f"down  $u$ {pair['-1']['u_nom']} → {pair['-1']['u_cmd']}"
+        f"   ({float(pair['-1']['corr_um']):+.3f} µm)",
+        "#fbfbfc", "#aeb4b9", fontsize=6.9)
 
-    ax = fig.add_subplot(gs[1])
-    keys = [("E", "E"), ("M", "M"), ("|mean B|", "B_mean")]
-    idx = np.arange(len(keys))
-    uvals = [abs(U[k]) for _, k in keys]; cvals = [abs(C[k]) for _, k in keys]
-    ax.bar(idx - .2, uvals, width=.38, color=U_COL, label="U (E0 v4)")
-    ax.bar(idx + .2, cvals, width=.38, color=C_COL, label="C (expected)")
-    passes = [PASS_E, PASS_M, .3]
-    for i, (v, c) in enumerate(zip(passes, cvals)):
-        ax.plot([i - .45, i + .45], [v, v], color=INK, lw=1.4,
-                label="pass line (§6)" if i == 0 else None)
-        ok = c <= v
-        ax.text(i + .2, max(c, v) + .2, f"{c:.2f}\n{'pass' if ok else 'fail'}", ha="center",
-                va="bottom", fontsize=7.4, color=PASS_COL if ok else U_COL, fontweight="bold")
-    for i, v in enumerate(uvals):
-        ax.text(i - .2, v + .2, f"{v:.2f}", ha="center", va="bottom", fontsize=7.2, color=INK)
-    ax.set_xticks(idx, [k for k, _ in keys]); ax.set_ylim(0, 10.5)
-    ax.set_ylabel("µm")
-    ax.legend(loc="upper right", frameon=False)
-    finish(ax)
-    ax.set_title("ISO 230-2 headline metrics", loc="left")
-    save(fig, "e5_expected_result")
-    return rp
+    arrow(ax, 0.235, y2 + hh / 2, 0.152, y2 + hh / 2, style="-|>",
+          colour="#b4473f", ls=(0, (3, 2)))
+    ax.text(0.148, y2 + hh / 2, "validation only ", ha="right", va="center",
+            fontsize=6.6, color="#8d3934")
+    ax.text(0.515, 0.255,
+            "No feedback. The model is evaluated once per stop on the\n"
+            "host, before the session. During the run the board replays\n"
+            "step counts and nothing more; the interferometer records\n"
+            "the outcome without ever influencing a command.",
+            ha="left", va="top", fontsize=6.9, color="#8d3934",
+            linespacing=1.55, style="italic")
+    ax.set_title("(a) The signal path for one commanded stop", loc="left", pad=4)
+
+    # (b) what gets commanded along the travel
+    ax = fig.add_subplot(gs[1, 0])
+    up = sorted(((float(r["x_nom_mm"]), float(r["corr_um"]))
+                 for r in rows if r["dir"] == "1"), key=lambda t: t[0])
+    dn = sorted(((float(r["x_nom_mm"]), float(r["corr_um"]))
+                 for r in rows if r["dir"] == "-1"), key=lambda t: t[0])
+    geo = sorted(((float(r["x_nom_mm"]), -float(r["G_rel_um"]))
+                  for r in rows if r["dir"] == "1"), key=lambda t: t[0])
+    ax.plot([a for a, _ in geo], [b for _, b in geo], lw=1.1, color=C_INK,
+            label=r"$-\hat{G}(x)$")
+    ax.plot([a for a, _ in up], [b for _, b in up], ls="none", marker="^", ms=3.2,
+            color=C_C, label="commanded, up")
+    ax.plot([a for a, _ in dn], [b for _, b in dn], ls="none", marker="v", ms=3.2,
+            mfc="none", mec=C_C, mew=0.9, label="commanded, down")
+    ax.set(xlabel="target position [mm]", ylabel="correction [µm]")
+    ax.set_title("(b) What each run commands", loc="left", pad=6)
+    ax.legend(frameon=False, fontsize=6.4, loc="upper left", handlelength=1.5,
+              labelspacing=0.25)
+    tidy(ax)
+
+    # (c) quantisation
+    ax = fig.add_subplot(gs[1, 1])
+    q = [float(r["q_um"]) for r in table if r["mode"] == "C"]
+    ax.hist(q, bins=24, color=C_B3, edgecolor="white", linewidth=0.5)
+    limit = 1000.0 / 1600.0 / 2.0
+    for sign in (-1, 1):
+        ax.axvline(sign * limit, color=C_INK, lw=0.9, ls=(0, (3, 2)))
+    ax.text(0.5, 0.96, f"half a µstep = ±{limit:.3f} µm", transform=ax.transAxes,
+            ha="center", va="top", fontsize=6.5, color=C_INK)
+    ax.set(xlabel="quantisation residual q [µm]", ylabel="stops")
+    ax.set_title("(c) The price of whole µsteps", loc="left", pad=6)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.grid(axis="y", color=C_GRID, lw=0.5)
+
+    # (d) what that should leave
+    ax = fig.add_subplot(gs[1, 2])
+    q_rms = summary["quantisation_um"]["rms"]
+    e3_transfer, e3_floor = 0.522, 0.369
+    expected = math.hypot(e3_transfer, q_rms / math.sqrt(2))
+    bars = [("uncompensated\n(E3 measured)", 1.489, C_U),
+            ("expected after\ncompensation", expected, C_C),
+            ("E3 transfer\n(offline)", e3_transfer, "#9aa3a9"),
+            ("same-day limit", e3_floor, "#c3c9cd")]
+    ypos = np.arange(len(bars))[::-1]
+    ax.barh(ypos, [v for _, v, _ in bars], height=0.6,
+            color=[col for _, _, col in bars])
+    for yy, (_, v, _) in zip(ypos, bars):
+        ax.text(v + 0.03, yy, f"{v:.2f}", va="center", fontsize=6.4, color=C_INK)
+    ax.set_yticks(ypos)
+    ax.set_yticklabels([n for n, _, _ in bars], fontsize=6.3)
+    ax.set(xlabel="µm rms", xlim=(0, 1.75))
+    ax.set_title("(d) What it should leave", loc="left", pad=6)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.grid(axis="x", color=C_GRID, lw=0.5)
+
+    caption(fig, 0.085,
+            f"(a) The correction is computed once per stop on the host and stored as a step count; "
+            f"the board replays the table and never evaluates the model, so nothing measured during "
+            f"the run changes what is commanded. The two correction terms are separate: "
+            f"$-[\\hat{{G}}-a_0]$ depends on position and screw angle, $-\\frac{{d}}{{2}}\\beta_0$ "
+            f"only on approach direction, which is why the up and down commands for one target "
+            f"differ by {beta0:.3f} µm. (b) Across the travel the correction spans "
+            f"{summary['correction_um']['min']:+.2f} to {summary['correction_um']['max']:+.2f} µm; "
+            f"the up and down markers straddle the geometry curve by half the reversal term each. "
+            f"(c) Commands are whole µsteps, so a residual of up to ±{limit:.3f} µm is unavoidable "
+            f"({q_rms:.3f} µm rms here). (d) Adding that to E3's measured cross-day transfer error "
+            f"predicts roughly {expected:.2f} µm rms — above the same-day limit, and the number E5 "
+            f"is really testing.")
+    OUT.mkdir(parents=True, exist_ok=True)
+    fig.savefig(CHAIN, dpi=320)
+    plt.close(fig)
 
 
 def main() -> int:
+    config, summary, plan, table = load()
     style()
-    config, summary, plan, table, model = load()
-    for stale in ("e5_session_sequence", "e5_command_table_checks", "e5_validation_plan"):
-        (OUT / f"{stale}.png").unlink(missing_ok=True)
-    figure_sequence(config, summary, plan)
-    figure_correction(config, summary, table, model)
-    rp = figure_result(config, summary, table, model)
-    out = {"U_E0_v4": rp["U"], "C_expected": rp["C"],
-           "note": "offline replay: E0 v4 deviations + commanded correction; R unchanged by construction"}
-    (HERE / "sequence" / "e5_expected_metrics.json").write_text(json.dumps(out, indent=2) + "\n")
-    print("U (E0 v4): " + "  ".join(f"{k} {rp['U'][k]:.3f}" for k in ("E", "M", "A", "B_mean")))
-    print("C expect : " + "  ".join(f"{k} {rp['C'][k]:.3f}" for k in ("E", "M", "A", "B_mean")))
+    segments, blocks, stops, total = schedule(plan, config)
+    if abs(total / 60.0 - summary["duration_min"]) > 1e-6:
+        raise RuntimeError("render schedule disagrees with the generated plan")
+    figure_sequence(config, summary, segments, blocks, stops, total)
+    figure_chain(config, summary, table)
+    print(f"wrote {SEQUENCE.name} and {CHAIN.name}")
     return 0
 
 
