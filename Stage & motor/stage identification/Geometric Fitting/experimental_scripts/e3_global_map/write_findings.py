@@ -20,6 +20,7 @@ def main() -> int:
     fits = s["fits"]
     el = s["electrical_phase"]
     floor = fits["E3_M_C"]["rms_um"]
+    s_validity = s["validity"]
     passed = sum(1 for row in s["validity"] if row["pass"])
 
     delta_b = r3["beta0_um"] - r2["beta0_um"]
@@ -71,7 +72,10 @@ def main() -> int:
         f"{abs(h[0]['mean_phase_shift_deg']):.1f}° in phase; k = 2 to "
         f"{abs(h[1]['amplitude_ratio'] - 1) * 100:.1f}% and "
         f"{abs(h[1]['mean_phase_shift_deg']):.0f}°.",
-        "k = 3 and k = 4 do not repeat, and both sit at or below the own-fit residual.",
+        "k = 3 and k = 4 do not repeat. In E2 both are resolved above zero at 2σ;",
+        "in E3 both are consistent with zero. Present one day, gone the next — and",
+        "their phases are undefined wherever the amplitude is not resolved, so the",
+        "large phase shifts in the table above should not be read as measurements.",
         "",
         "Two independent lines of evidence agree:",
         "",
@@ -144,10 +148,20 @@ def main() -> int:
         f"  replay's predicted M of 2.04 µm and not with the 1.335 µm the lines are built on.",
         f"- β₀ moved {abs(delta_b):.2f} µm between sessions. E5 commands a fixed −β₀ from E2.",
         "",
+        "## Appendix — validity checks",
+        "",
+        "| check | value | criterion | |",
+        "|---|---|---|---|",
+    ]
+    for row in s_validity:
+        lines.append(f"| {row['check']} | {row['value']} | {row['criterion']} | "
+                     f"{'pass' if row['pass'] else '**FAIL**'} |")
+    lines += [
+        "",
         "---",
         "",
-        "Figures: `rendered/findings/`. Tables: `analysis/`.",
-        "Regenerate with `python process_e3.py --select && python render_e3_findings.py`.",
+        "Figures: `rendered/presentation/`. Tables: `analysis/`.",
+        "Regenerate with `python process_e3.py --select && python render_e3_presentation.py`.",
     ]
     OUT.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"wrote {OUT.name} ({len(lines)} lines)")

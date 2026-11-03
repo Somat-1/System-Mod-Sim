@@ -162,6 +162,32 @@
       "max_phase_shift_deg": 71.61044759245397
     }
   ],
+  "transfer_table": [
+    {
+      "name": "M_B  H2, stationary",
+      "edf": 10.0,
+      "e2_rms_um": 0.5441,
+      "e3_residual_um": 0.6198
+    },
+    {
+      "name": "H2, varying",
+      "edf": 35.28,
+      "e2_rms_um": 0.3876,
+      "e3_residual_um": 0.515
+    },
+    {
+      "name": "H3, varying",
+      "edf": 37.26,
+      "e2_rms_um": 0.3846,
+      "e3_residual_um": 0.5136
+    },
+    {
+      "name": "M_C  H4, varying (selected)",
+      "edf": 39.24,
+      "e2_rms_um": 0.3685,
+      "e3_residual_um": 0.522
+    }
+  ],
   "fits": {
     "E2_M_C": {
       "rms_um": 0.36853646053835093,

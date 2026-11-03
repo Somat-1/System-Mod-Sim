@@ -211,6 +211,35 @@ def harmonic_comparison(model_a: dict, model_b: dict, grid: np.ndarray,
     return rows
 
 
+def transfer_table(d2: dict, d3: dict) -> list[dict]:
+    """E2 fitted on E2, predicting E3, at a few harmonic orders.
+
+    This is what decides whether the extra harmonics E2's cross-validation
+    selected are worth carrying: within a session they lower the residual, and
+    the question is whether they lower it on a session they have not seen.
+    """
+    model = FrozenModel()
+    inside = model.in_domain(d3["x"])
+    xi, ti = d3["x"][inside], d3["theta"][inside]
+    yi = d3["D2"]["ybar"][inside]
+    yi = yi - yi.mean()
+    dom2 = domain_of(d2)
+    rows = []
+    for name, H, Ks, Kc, lam in [("M_B  H2, stationary", 2, 2, None, None),
+                                 ("H2, varying", 2, 2, 8, 1.0),
+                                 ("H3, varying", 3, 2, 8, 1.0),
+                                 ("M_C  H4, varying (selected)", 4, 2, 8, 1.0)]:
+        fit = e2f.fit_linear(d2["x"], d2["theta"], d2["D2"]["ybar"], H, Ks, Kc,
+                             dom2, robust=True, penalty=lam)
+        predicted = e2f.predict(fit, xi, ti)
+        predicted = predicted - predicted.mean()
+        rows.append({"name": name, "edf": round(float(fit["edf"]), 2),
+                     "e2_rms_um": round(float(fit["rms"]), 4),
+                     "e3_residual_um": round(
+                         float(np.sqrt(np.mean((yi - predicted)**2))), 4)})
+    return rows
+
+
 def reversal(data: dict, variant: str = "D2") -> dict:
     fit = e2f.reversal_fit(data, variant)
     B = data[variant]["B"]
@@ -270,14 +299,22 @@ def main() -> int:
     harmonics = harmonic_comparison(model2_c, model3_c, grid, int(M_C["H"]))
     write_csv(ANALYSIS / "e3_harmonic_comparison.csv", harmonics)
 
+    transfer = transfer_table(d2, d3)
+    write_csv(ANALYSIS / "e3_transfer_table.csv", transfer)
+
     rev2, rev3 = reversal(d2), reversal(d3)
 
-    selection = {}
     if select:
         print("running E3's own model selection (slow) ...", flush=True)
         rows, best_b, best_c = e2f.blocked_cv(d3)
         write_csv(ANALYSIS / "e3_model_selection.csv", rows)
         selection = {"M_B": best_b, "M_C": best_c}
+    else:
+        # The selection takes minutes; a plain run keeps the stored result
+        # rather than silently dropping it from the summary.
+        previous = (json.loads(SUMMARY.read_text(encoding="utf-8"))
+                    if SUMMARY.exists() else {})
+        selection = previous.get("own_selection", {})
 
     summary = {
         "session": "E3_global_map",
@@ -292,6 +329,7 @@ def main() -> int:
         "drift": drift,
         "frozen_E2_prediction_on_E3": frozen,
         "harmonic_comparison": harmonics,
+        "transfer_table": transfer,
         "fits": {
             "E2_M_C": {"rms_um": model2_c["rms"], "edf": model2_c["edf"],
                        "p": model2_c["p"], "gain_ppm": model2_c.get("gain_ppm")},

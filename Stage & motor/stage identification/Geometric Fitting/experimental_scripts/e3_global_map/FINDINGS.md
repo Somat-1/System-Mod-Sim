@@ -32,7 +32,10 @@ within-session noise.
 | 4 | 0.165 | 0.051 | 0.309 | -71.6° |
 
 k = 1 repeats to 0.8% in amplitude and 0.3° in phase; k = 2 to 1.7% and 19°.
-k = 3 and k = 4 do not repeat, and both sit at or below the own-fit residual.
+k = 3 and k = 4 do not repeat. In E2 both are resolved above zero at 2σ;
+in E3 both are consistent with zero. Present one day, gone the next — and
+their phases are undefined wherever the amplitude is not resolved, so the
+large phase shifts in the table above should not be read as measurements.
 
 Two independent lines of evidence agree:
 
@@ -90,7 +93,25 @@ the constant — and E5 corrects absolute position, so it lands on the datum.
   replay's predicted M of 2.04 µm and not with the 1.335 µm the lines are built on.
 - β₀ moved 0.13 µm between sessions. E5 commands a fixed −β₀ from E2.
 
+## Appendix — validity checks
+
+| check | value | criterion | |
+|---|---|---|---|
+| stops matched to the plan | 807 | 807 | pass |
+| targets with both directions | 400 | 400 | pass |
+| missing targets | 0 | 0 | pass |
+| reference MSCNT identical (no lost steps) | [520] | one value | pass |
+| map MSCNT identical (all targets on one electrical phase) | [264] | one value | pass |
+| reference-to-map MSCNT offset | 256 | 256 from x_ref's 48-ustep grid offset | pass |
+| serial stop count | 807 | 807 | pass |
+| firmware summary | elapsed_ms=2320566,stops=807,complete=1,down_complete=1,time_limited=0,aborted=0,unsafe=0,x_usteps=98160 | complete=1, aborted=0 | pass |
+| worst record-window std [um] | 0.0229 | < 0.20 | pass |
+| worst record-window slope [um/s] | 0.0338 | < 0.50 | pass |
+| saturated increments | 0 | 0 | pass |
+| reference spread over the session [um] | 0.639 | reported, not a gate | pass |
+| drift datum to end [um] | 0.394 | reported, not a gate | pass |
+
 ---
 
-Figures: `rendered/findings/`. Tables: `analysis/`.
-Regenerate with `python process_e3.py --select && python render_e3_findings.py`.
+Figures: `rendered/presentation/`. Tables: `analysis/`.
+Regenerate with `python process_e3.py --select && python render_e3_presentation.py`.
