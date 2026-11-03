@@ -49,6 +49,7 @@ C_E2, C_E3 = "#176d8c", "#b4473f"
 C_INK, C_MUTED, C_GRID = "#2d3338", "#566069", "#dde1e4"
 C_EDGE = "#eceff1"                 # weakly constrained ends
 WINDOWS = ((4.0, 16.0), (74.0, 86.0))
+SOFT_MIN_MM, SOFT_MAX_MM = 2.0, 120.695
 EDGE_LOW, EDGE_HIGH = 5.0, 110.0
 CHAR_INCH = 0.0455
 
@@ -126,14 +127,31 @@ def figure_transfer(d3: dict, summary: dict, transfer: list[dict]) -> None:
     gain_ppm = float(coefficients[1] * 1000.0)
     rms = lambda v: float(np.sqrt(np.mean(v ** 2)))
 
-    fig = plt.figure(figsize=(7.45, 5.9))
-    gs = fig.add_gridspec(2, 2, height_ratios=[2.15, 2.0],
-                          left=0.092, right=0.975, top=0.955, bottom=0.235,
-                          hspace=0.46, wspace=0.08)
+    fig = plt.figure(figsize=(7.45, 6.25))
+    gs = fig.add_gridspec(3, 2, height_ratios=[0.26, 2.15, 2.0],
+                          left=0.092, right=0.975, top=0.975, bottom=0.222,
+                          hspace=0.44, wspace=0.08)
+
+    # Where on the stage the two windows sit. The spans in c say the same
+    # thing against the residual; this says it against the travel itself.
+    travel = fig.add_subplot(gs[0, :])
+    travel.hlines(0, SOFT_MIN_MM, SOFT_MAX_MM, color="#9aa3a9", lw=2.2,
+                  capstyle="butt")
+    for i, (lo, hi) in enumerate(WINDOWS):
+        travel.hlines(0, lo, hi, color=C_E3, lw=6.0, capstyle="butt")
+        travel.text((lo + hi) / 2, 0.75, "ab"[i], ha="center", va="bottom",
+                    fontsize=7.0, weight="bold", color=C_E3)
+    travel.set(xlim=(0, 137), ylim=(-1.3, 2.1), yticks=[])
+    travel.set_xticks([2, 20, 40, 60, 80, 100, 120])
+    travel.tick_params(axis="x", labelsize=6.3, pad=1.5, length=2.5,
+                       colors="#41474c")
+    travel.text(122.5, 0, "  mm of travel", fontsize=6.3, color=C_MUTED,
+                va="center", ha="left")
+    travel.spines[:].set_visible(False)
 
     shared = None
     for i, (lo, hi) in enumerate(WINDOWS):
-        ax = fig.add_subplot(gs[0, i], sharey=shared)
+        ax = fig.add_subplot(gs[1, i], sharey=shared)
         shared = shared or ax
         fine = np.linspace(lo, hi, 4000)
         ax.plot(fine, model.G_rel(fine, theta_of_x(fine)) - offset_model,
@@ -151,7 +169,7 @@ def figure_transfer(d3: dict, summary: dict, transfer: list[dict]) -> None:
         letter(ax, "ab"[i], dx=-0.12 if i == 0 else -0.05)
         tidy(ax)
 
-    ax = fig.add_subplot(gs[1, :])
+    ax = fig.add_subplot(gs[2, :])
     for i, (lo, hi) in enumerate(WINDOWS):
         ax.axvspan(lo, hi, color="#e9ecee", zorder=0)
         ax.text((lo + hi) / 2, 1.42, "ab"[i], ha="center", va="top",
@@ -187,7 +205,8 @@ def figure_transfer(d3: dict, summary: dict, transfer: list[dict]) -> None:
     caption(fig, 0.092,
             f"E2's geometric model, frozen before this session was captured, predicting "
             f"{f['targets_in_domain']} positions drawn from an independent seed (r = "
-            f"{f['correlation']:.3f}). (a, b) Two 12 mm windows: the line is the model evaluated "
+            f"{f['correlation']:.3f}). (a, b) Two 12 mm windows, marked on the travel bar above: "
+            f"the line is the model evaluated "
             f"continuously, the circles are measured means. (c) The residual over the whole "
             f"travel, with the two windows shaded. It is not flat: it runs from "
             f"{means.min():+.2f} µm at {centres[means.argmin()]:.0f} mm to "
