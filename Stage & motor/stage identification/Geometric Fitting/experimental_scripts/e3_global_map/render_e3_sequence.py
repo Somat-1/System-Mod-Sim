@@ -175,7 +175,7 @@ def render_overview(c, summary, segments, blocks, stops, total) -> None:
             bbox=dict(boxstyle="square,pad=0.48", fc="white", ec="#aeb4b9", lw=0.7))
 
     # (c) a coarse zoom: enough stops to show the staircase as a recording sees it.
-    ax = fig.add_subplot(gs[2, 0:2])
+    ax = fig.add_subplot(gs[2, 0:3])
     ax.plot(coarse_t - coarse_t[0], coarse_x, color=COL["UP"], lw=1.0,
             solid_joinstyle="miter")
     fine_t, fine_x, fine_stops = staircase(stops, FINE_FIRST, FINE_LAST, "up")
@@ -193,65 +193,45 @@ def render_overview(c, summary, segments, blocks, stops, total) -> None:
             transform=ax.transAxes, va="top", fontsize=6.8, color="#566069")
 
     # (d) the fine zoom: individual risers, labelled in mm and in grid points.
-    # The single-grid-point riser is 40 µm against a 2.4 mm span, so it gets a
-    # panel of its own rather than an arrow that would collapse to a glyph.
-    ax = fig.add_subplot(gs[2, 2:4])
+    # Every riser is labelled, the single-grid-point one included: at 40 µm
+    # against a 2.4 mm span it is nearly invisible, which is the point.
+    ax = fig.add_subplot(gs[2, 3:6])
     base = fine_x[0]
     ax.plot(fine_t - fine_t[0], (fine_x - base) * 1000.0, color=COL["UP"], lw=1.25,
             solid_joinstyle="miter")
-    smallest = None
     for j in range(len(fine_stops) - 1):
         x_lo = (fine_stops[j][2] - base) * 1000.0
         x_hi = (fine_stops[j + 1][2] - base) * 1000.0
         grid_points = int(round((x_hi - x_lo) / 40.0))
         when = fine_stops[j + 1][0] - fine_t[0]
-        if grid_points == 1:
-            smallest = (j, when, x_lo, x_hi)
-            continue
-        ax.text(when + 0.55, (x_lo + x_hi) / 2.0,
+        smallest = grid_points == 1
+        # A 1 gp riser is thinner than the line, so its label clears the trace.
+        ax.text(when + (-0.4 if smallest else 0.5),
+                (x_lo + x_hi) / 2.0 + (190.0 if smallest else 0.0),
                 f"{grid_points * 0.04:.2f} mm · {grid_points} gp",
-                fontsize=6.1, va="center", color="#4b5257")
+                fontsize=6.1, va="bottom" if smallest else "center",
+                ha="right" if smallest else "left",
+                color=COL["small"] if smallest else "#4b5257",
+                weight="bold" if smallest else "normal",
+                bbox=dict(fc="white", ec="none", alpha=0.85, pad=0.8)
+                if smallest else None)
     ax.set(xlabel="time within the up pass [s]",
            ylabel=f"position − {base:.2f} mm [µm]")
     ax.set_title(f"(d) Nine stops, targets {FINE_FIRST}–{FINE_LAST}",
                  loc="left", pad=6)
-    ax.margins(x=0.34, y=0.10)
+    span = fine_t[-1] - fine_t[0]
+    ax.set_xlim(-span * 0.03, span * 1.34)
+    ax.margins(y=0.12)
     ax.grid(color=COL["grid"], lw=0.5)
     ax.spines[["top", "right"]].set_visible(False)
+    up_positions = np.array([s[2] for s in stops if s[5] == "up" and s[3] == "UP"])
+    single = int((np.round(np.diff(up_positions) / 0.04).astype(int) == 1).sum())
     ax.text(0.035, 0.965,
-            "1 gp = 64 µsteps = 0.040 mm\n= one motor electrical cycle",
-            transform=ax.transAxes, va="top", fontsize=6.6, color="#566069",
-            linespacing=1.3)
-
-    # (e) the last zoom level: one riser, at the scale it actually occupies.
-    ax = fig.add_subplot(gs[2, 4:6])
-    if smallest is not None:
-        j, when, x_lo, x_hi = smallest
-        pair = fine_stops[j:j + 2]
-        t_in, x_in = [], []
-        for start, end, pos, *_ in pair:
-            t_in += [start, end]
-            x_in += [(pos - base) * 1000.0 - x_lo, (pos - base) * 1000.0 - x_lo]
-        ax.plot(np.array(t_in) - pair[0][0], x_in, color=COL["small"], lw=1.4,
-                solid_joinstyle="miter")
-        ax.axhline(0, color="#aeb4b9", lw=0.6, ls=(0, (3, 2)))
-        ax.axhline(40, color="#aeb4b9", lw=0.6, ls=(0, (3, 2)))
-        ax.annotate("", xy=(0.55, 40), xytext=(0.55, 0),
-                    arrowprops=dict(arrowstyle="<->", lw=0.9, color=COL["small"]))
-        ax.text(0.95, 20, "40 µm\n= 64 µsteps\n= 1 grid point", fontsize=6.6,
-                va="center", color=COL["small"], linespacing=1.35, weight="bold")
-        ax.set_ylim(-14, 54)
-        ax.set(xlabel="time within the up pass [s]",
-               ylabel=f"position − {base + x_lo / 1000.0:.2f} mm [µm]")
-        ax.set_title(f"(e) One step: {FINE_FIRST + j}→{FINE_FIRST + j + 1}",
-                     loc="left", pad=6)
-        ax.grid(color=COL["grid"], lw=0.5)
-        ax.spines[["top", "right"]].set_visible(False)
-        up_positions = np.array([s[2] for s in stops if s[5] == "up" and s[3] == "UP"])
-        single = int((np.round(np.diff(up_positions) / 0.04).astype(int) == 1).sum())
-        ax.text(0.035, 0.965,
-                f"{single} such steps in the 400-target list",
-                transform=ax.transAxes, va="top", fontsize=6.5, color="#566069")
+            "gp = grid point = 64 µsteps = 0.040 mm\n"
+            "     = one motor electrical cycle\n"
+            f"the 1 gp step is one of {single} in the 400-target list",
+            transform=ax.transAxes, va="top", fontsize=6.4, color="#566069",
+            linespacing=1.45)
 
     ax2 = fig.add_subplot(gs[3, 0:6], sharex=ax0)
     n_records = summary["analysis_stops"] + summary["reference_stops"]
@@ -269,7 +249,7 @@ def render_overview(c, summary, segments, blocks, stops, total) -> None:
                      va="center", fontsize=6.7, color="white", weight="bold")
         left += width
     ax2.set(yticks=[], xlabel="elapsed experiment time [min]", ylim=(-0.42, 0.42))
-    ax2.set_title("(f) Recording-time budget", loc="left", pad=6)
+    ax2.set_title("(e) Recording-time budget", loc="left", pad=6)
     ax2.spines[["left", "right", "top"]].set_visible(False)
 
     OUT.mkdir(parents=True, exist_ok=True)
