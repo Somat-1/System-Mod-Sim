@@ -14,7 +14,11 @@ OVERVIEW = OUT / "e2_global_map_sequence.png"
 DETAIL = OUT / "e2_target_design_and_rmt.png"
 COL = {"INIT": "#6b7280", "DATUM": "#7c5a9b", "UP": "#176d8c",
        "TURN_REF": "#a56a2a", "DOWN": "#b4473f", "END_REF": "#7c5a9b",
-       "PARK": "#4c5560", "record": "#6d4c91", "settle": "#c49a54"}
+       "PARK": "#4c5560", "record": "#6d4c91", "settle": "#c49a54",
+       "small": "#b4473f", "grid": "#dde1e4"}
+# The fine zoom sits on a single-grid-point gap flanked by typical ones, so the
+# smallest and the median step appear at the same scale.
+FINE_FIRST, FINE_LAST = 167, 175
 
 def load():
     config = json.loads((ROOT / "e2_config.json").read_text(encoding="utf-8"))
@@ -34,7 +38,7 @@ def move_time(distance, c):
 
 def schedule(plan, c):
     now, pos, state = 0.0, c["x_ref_mm"], "INIT"
-    segments, blocks, records = [], [], []
+    segments, blocks, records, stops = [], [], [], []
     block_start = 0.0
     for row in plan:
         if row["action"] == "state_enter":
@@ -48,6 +52,7 @@ def schedule(plan, c):
             segments.append((now, end, pos, target, state, "move"))
             now, pos = end, target
         settle, record = float(row["settle_s"] or 0), float(row["record_s"] or 0)
+        hold_start = now
         if settle:
             segments.append((now, now + settle, pos, pos, state, "settle")); now += settle
         if record:
@@ -55,9 +60,22 @@ def schedule(plan, c):
             segments.append((now, now + record, pos, pos, state, "record")); now += record
             if state in ("UP", "DOWN"):
                 records.append((int(row["index"]), state, (start + now) / 2))
+        if row["record"] == "True":
+            stops.append((hold_start, now, pos, state,
+                          int(row["index"]) if row["index"] else 0, row["direction"]))
     if now > block_start:
         blocks.append((block_start, now, state))
-    return segments, blocks, records, now
+    return segments, blocks, records, stops, now
+
+
+def staircase(stops, lo_index, hi_index, direction):
+    """The commanded position against session time over a run of stops."""
+    chosen = [s for s in stops if s[5] == direction and lo_index <= s[4] <= hi_index]
+    time, position = [], []
+    for start, end, pos, _state, _index, _dir in chosen:
+        time += [start, end]
+        position += [pos, pos]
+    return np.array(time), np.array(position), chosen
 
 def style():
     plt.rcParams.update({
@@ -69,18 +87,19 @@ def style():
         "figure.facecolor": "white", "savefig.facecolor": "white",
     })
 
-def render_overview(c, summary, segments, blocks, total):
+def render_overview(c, summary, segments, blocks, stops, total):
     total_min = total / 60
-    fig = plt.figure(figsize=(7.45, 6.0))
-    gs = fig.add_gridspec(3, 1, height_ratios=[0.7, 3.1, 0.9],
-                          left=0.105, right=0.97, top=0.865, bottom=0.105, hspace=0.30)
-    fig.text(0.105, 0.975, "Experiment E2 — global geometric map", fontsize=16,
+    fig = plt.figure(figsize=(7.45, 8.7))
+    gs = fig.add_gridspec(4, 6, height_ratios=[0.62, 2.45, 1.75, 0.80],
+                          left=0.095, right=0.975, top=0.895, bottom=0.068,
+                          hspace=0.52, wspace=1.05)
+    fig.text(0.095, 0.978, "Experiment E2 — global geometric map", fontsize=16,
              weight="bold", color="#20262b", va="top")
-    fig.text(0.105, 0.925,
+    fig.text(0.095, 0.942,
              "400 stratified targets · mirrored directional passes · seven drift references · buffered RMT motion",
              fontsize=8.5, color="#566069", va="top")
 
-    ax0 = fig.add_subplot(gs[0])
+    ax0 = fig.add_subplot(gs[0, :])
     for start, end, state in blocks:
         width = (end - start) / 60
         ax0.barh(0, width, left=start / 60, height=0.38, color=COL.get(state, "#777"),
@@ -94,7 +113,7 @@ def render_overview(c, summary, segments, blocks, total):
     ax0.tick_params(axis="x", bottom=False, labelbottom=False)
     ax0.spines[:].set_visible(False)
 
-    ax = fig.add_subplot(gs[1], sharex=ax0)
+    ax = fig.add_subplot(gs[1, :], sharex=ax0)
     for state in ("DATUM", "UP", "TURN_REF", "DOWN", "END_REF", "PARK"):
         lines = [[(a / 60, x0), (b / 60, x1)] for a, b, x0, x1, st, _ in segments if st == state]
         if lines:
@@ -106,16 +125,97 @@ def render_overview(c, summary, segments, blocks, total):
     ax.set(xlim=(0, total_min), ylim=(0, 123), ylabel="commanded position [mm]")
     ax.set_title("(b) Complete commanded trajectory", loc="left", pad=6)
     ax.grid(axis="x", color="#dde1e4", lw=0.55); ax.spines[["top", "right"]].set_visible(False)
+    coarse_t, coarse_x, _ = staircase(stops, FINE_FIRST - 25, FINE_LAST + 25, "up")
+    ax.axvspan(coarse_t[0] / 60, coarse_t[-1] / 60, color=COL["UP"], alpha=0.14, lw=0)
+    ax.annotate("(c)", xy=(coarse_t[0] / 60, coarse_x.max() + 8), fontsize=7.4,
+                color=COL["UP"], weight="bold", ha="center")
+
+    step_mm = np.diff(np.array([float(row) for row in
+                                [s[2] for s in stops if s[3] == "UP"]]))
     box = (f"seed  {summary['seed_used']}\n"
            f"targets  {summary['targets']} × 2 directions\n"
            f"reference records  {summary['reference_stops']}\n"
+           f"step  {step_mm.min():.2f}–{step_mm.max():.2f} mm "
+           f"(mean {step_mm.mean():.2f})\n"
            f"nominal duration  {total_min:.1f} min\n"
            f"hard limit  {c['time_limit_min']:.0f} min")
-    ax.text(0.985, 0.965, box, transform=ax.transAxes, ha="right", va="top",
-            fontsize=7.4, linespacing=1.35,
+    # Top left: the up pass climbs away from this corner, so it stays clear.
+    ax.text(0.015, 0.965, box, transform=ax.transAxes, ha="left", va="top",
+            fontsize=7.2, linespacing=1.35,
             bbox=dict(boxstyle="square,pad=0.48", fc="white", ec="#aeb4b9", lw=0.7))
 
-    ax2 = fig.add_subplot(gs[2], sharex=ax0)
+    # (c) a coarse zoom: enough stops to show the staircase as a recording sees it.
+    ax = fig.add_subplot(gs[2, 0:2])
+    ax.plot(coarse_t - coarse_t[0], coarse_x, color=COL["UP"], lw=1.0,
+            solid_joinstyle="miter")
+    fine_t, fine_x, fine_stops = staircase(stops, FINE_FIRST, FINE_LAST, "up")
+    ax.axvspan(fine_t[0] - coarse_t[0], fine_t[-1] - coarse_t[0],
+               color=COL["small"], alpha=0.13, lw=0)
+    ax.annotate("(d)", xy=((fine_t[0] + fine_t[-1]) / 2 - coarse_t[0], fine_x.max() + 1.6),
+                fontsize=7.4, color=COL["small"], weight="bold", ha="center")
+    ax.set(xlabel="time within the up pass [s]", ylabel="position [mm]")
+    ax.set_title(f"(c) Up pass, targets {FINE_FIRST - 25}–{FINE_LAST + 25}",
+                 loc="left", pad=6)
+    ax.grid(color=COL["grid"], lw=0.5)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.text(0.035, 0.955,
+            f"each tread = {c['settle_s']:.1f} s settle + {c['record_s']:.1f} s record",
+            transform=ax.transAxes, va="top", fontsize=6.8, color="#566069")
+
+    # (d) individual risers, labelled in mm and in grid points.
+    ax = fig.add_subplot(gs[2, 2:4])
+    base = fine_x[0]
+    ax.plot(fine_t - fine_t[0], (fine_x - base) * 1000, color=COL["UP"], lw=1.25,
+            solid_joinstyle="miter")
+    smallest = None
+    for j in range(len(fine_stops) - 1):
+        x_lo = (fine_stops[j][2] - base) * 1000
+        x_hi = (fine_stops[j + 1][2] - base) * 1000
+        grid_points = int(round((x_hi - x_lo) / 40.0))
+        when = fine_stops[j + 1][0] - fine_t[0]
+        if grid_points == 1:
+            smallest = (j, when, x_lo, x_hi)
+            continue
+        ax.text(when + 0.55, (x_lo + x_hi) / 2, f"{grid_points * 0.04:.2f} mm · {grid_points} gp",
+                fontsize=6.1, va="center", color="#4b5257")
+    ax.set(xlabel="time within the up pass [s]", ylabel=f"position − {base:.2f} mm [µm]")
+    ax.set_title(f"(d) Nine stops, targets {FINE_FIRST}–{FINE_LAST}", loc="left", pad=6)
+    ax.margins(x=0.34, y=0.10)
+    ax.grid(color=COL["grid"], lw=0.5)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.text(0.035, 0.965, "1 gp = 64 µsteps = 0.040 mm\n= one motor electrical cycle",
+            transform=ax.transAxes, va="top", fontsize=6.6, color="#566069",
+            linespacing=1.3)
+
+    # (e) the last zoom level: one riser, at the scale it actually occupies.
+    ax = fig.add_subplot(gs[2, 4:6])
+    if smallest is not None:
+        j, when, x_lo, x_hi = smallest
+        pair = fine_stops[j:j + 2]
+        t_in, x_in = [], []
+        for start, end, pos, *_ in pair:
+            t_in += [start, end]
+            x_in += [(pos - base) * 1000 - x_lo, (pos - base) * 1000 - x_lo]
+        ax.plot(np.array(t_in) - pair[0][0], x_in, color=COL["small"], lw=1.4,
+                solid_joinstyle="miter")
+        ax.axhline(0, color="#aeb4b9", lw=0.6, ls=(0, (3, 2)))
+        ax.axhline(40, color="#aeb4b9", lw=0.6, ls=(0, (3, 2)))
+        ax.annotate("", xy=(0.55, 40), xytext=(0.55, 0),
+                    arrowprops=dict(arrowstyle="<->", lw=0.9, color=COL["small"]))
+        ax.text(0.95, 20, "40 µm\n= 64 µsteps\n= 1 grid point", fontsize=6.6,
+                va="center", color=COL["small"], linespacing=1.35, weight="bold")
+        ax.set_ylim(-14, 54)
+        ax.set(xlabel="time within the up pass [s]",
+               ylabel=f"position − {base + x_lo / 1000:.2f} mm [µm]")
+        ax.set_title(f"(e) One step: {FINE_FIRST + j}→{FINE_FIRST + j + 1}",
+                     loc="left", pad=6)
+        ax.grid(color=COL["grid"], lw=0.5)
+        ax.spines[["top", "right"]].set_visible(False)
+        single = int((np.round(step_mm / 0.04).astype(int) == 1).sum())
+        ax.text(0.035, 0.965, f"{single} such steps in the 400-target list",
+                transform=ax.transAxes, va="top", fontsize=6.5, color="#566069")
+
+    ax2 = fig.add_subplot(gs[3, 0:6], sharex=ax0)
     dwell = c["settle_s"] + c["record_s"]
     components = [("motion + transits", total - 807 * dwell, "#6d7d88"),
                   ("settle windows", 807 * c["settle_s"], COL["settle"]),
@@ -128,11 +228,8 @@ def render_overview(c, summary, segments, blocks, total):
             ax2.text(left + width / 2, 0, f"{label}\n{width:.1f} min", ha="center",
                      va="center", fontsize=6.7, color="white", weight="bold")
         left += width
-    ax2.axvline(c["watchdog_projection_min"], color="#b4473f", lw=0.9, ls="--")
-    ax2.text(c["watchdog_projection_min"] - 0.25, -0.37, "58 min watchdog", ha="right",
-             va="top", fontsize=6.5, color="#8d3934")
     ax2.set(yticks=[], xlabel="elapsed recording time [min]", ylim=(-0.42, 0.42))
-    ax2.set_title("(c) Recording-time budget", loc="left", pad=6)
+    ax2.set_title("(f) Recording-time budget", loc="left", pad=6)
     ax2.spines[["left", "right", "top"]].set_visible(False)
     OUT.mkdir(parents=True, exist_ok=True)
     fig.savefig(OVERVIEW, dpi=320); plt.close(fig)
@@ -229,8 +326,8 @@ def render_detail(c, summary, targets, iso, records, total):
 def main() -> int:
     c, summary, plan, targets, iso = load()
     style()
-    segments, blocks, records, total = schedule(plan, c)
-    render_overview(c, summary, segments, blocks, total)
+    segments, blocks, records, stops, total = schedule(plan, c)
+    render_overview(c, summary, segments, blocks, stops, total)
     render_detail(c, summary, targets, iso, records, total)
     print(f"wrote {OVERVIEW.relative_to(ROOT)}")
     print(f"wrote {DETAIL.relative_to(ROOT)}")
