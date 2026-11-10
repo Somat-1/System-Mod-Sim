@@ -1,0 +1,84 @@
+{
+  "_source": "F0b_scoping_procedure.md sections 1.1, 2 and 3. Every number here is read off the procedure; nothing is invented.",
+
+  "drive": {
+    "mres": 256,
+    "full_steps_per_rev": 200,
+    "screw_lead_mm": 2.0,
+    "usteps_per_mm": 25600,
+    "ustep_um": 0.0390625,
+    "electrical_cycle_usteps": 1024,
+    "electrical_cycle_um": 40.0,
+    "max_step_rate_hz": 25600,
+    "driver": "TMC2209, SpreadCycle, interpolation off, IRUN = IHOLD (400 mA class)"
+  },
+
+  "session": {
+    "x0_mm": 60.0,
+    "u0": 1536000,
+    "transit_velocity_mm_s": 1.0,
+    "transit_acceleration_mm_s2": 40.0,
+    "wipe_mm": 3.0,
+    "wipe_settle_s": 2.0,
+    "turn_pause_s": 0.5,
+    "stop_settle_s": 2.0,
+    "stop_record_s": 0.5,
+    "soft_limits_mm": [0.0, 120.0],
+    "watchdog_gate_min": 58.0,
+    "scope_record_min": 60.0,
+    "order": ["R1", "N", "L", "R2", "S", "D", "V", "R3"]
+  },
+
+  "reference": {
+    "positions_mm": [15.0, 105.0],
+    "overrun_mm": 3.0,
+    "stop_order": "15 up, 15 down, 105 up, 105 down"
+  },
+
+  "N": {
+    "n1_hold_s": 300.0,
+    "n2_offset_mm": 20.0,
+    "n2_hold_s": 180.0
+  },
+
+  "L": {
+    "strokes_usteps": [1, 2, 5, 13, 26, 51, 128, 256, 512, 1280, 2560, 12800, 76800],
+    "step_mode_max_usteps": 5,
+    "step_dwell_s": 0.5,
+    "half_cycle_s": 4.0,
+    "rate_cap_mm_s": 0.75,
+    "passes": ["increasing", "decreasing"]
+  },
+
+  "S": {
+    "ramp_um": 20.0,
+    "ramp_rate_um_s": 0.25,
+    "repeats": 2,
+    "ramps": [
+      {"name": "S1", "wipe_from_below": true,  "direction": -1, "kind": "reverse"},
+      {"name": "S2", "wipe_from_below": false, "direction": 1,  "kind": "reverse"},
+      {"name": "S3", "wipe_from_below": true,  "direction": 1,  "kind": "continue"},
+      {"name": "S4", "wipe_from_below": false, "direction": -1, "kind": "continue"}
+    ]
+  },
+
+  "D": {
+    "probe_um": 5.0,
+    "probe_rate_um_s": 0.25,
+    "dwells_s": [1.0, 60.0, 60.0, 1.0]
+  },
+
+  "V": {
+    "segment_mm": 1.0,
+    "fast_mm_s": 1.0,
+    "slow_mm_s": 0.01,
+    "order": ["fast", "fast", "slow", "fast", "fast"]
+  },
+
+  "reference_values": {
+    "beta0_um": 1.757,
+    "beta0_note": "frozen E2 reversal constant; block L's saturation level is expected to land here",
+    "interferometer_floor_um": 0.002,
+    "interferometer_floor_note": "about 1-2 nm for a 0.5 s window mean; block N measures the real figure for this session"
+  }
+}
