@@ -1,0 +1,66 @@
+{
+  "experiment": "F2",
+  "title": "dwell (frictional ageing and creep)",
+  "variant": "full",
+  "_variant_note": "'full' is procedure 4.1 (B, A, L); 'reduced' is procedure 4.3. F2 is conditional: run 'full' only if F0b's dwell probe (1 s vs 60 s) exceeded 3*d_min. Override on the command line with --variant.",
+
+  "f0b_dependent": {
+    "s90_um": 3.0,
+    "d_min_um": 0.005,
+    "dwell_probe_delta_um": null,
+    "dwell_probe_significant": null,
+    "note": "placeholder defaults from the procedure; F0b is not processed yet. dwell_probe_delta_um is the 1 s vs 60 s difference measured by F0b's D block; it decides full vs reduced against 3*d_min. Replace all three, then rerun both builders and reflash."
+  },
+
+  "beta_0_um": 1.757,
+  "ustep_um": 0.0390625,
+  "electrical_cycle_um": 40.0,
+
+  "positions_mm": {"B": 60.0, "A": 25.0},
+  "reference_mm": [15.0, 105.0],
+  "travel_mm": 122.79,
+  "constrained_span_mm": [5.0, 110.0],
+
+  "transit_mm_s": 1.0,
+  "accel_mm_s2": 40.0,
+  "wipe_mm": 3.0,
+  "pre_dwell_settle_s": 0.5,
+  "post_ramp_hold_s": 2.0,
+  "reference_settle_s": 2.0,
+  "reference_record_s": 0.5,
+
+  "ramp_factor_of_s90": 2.0,
+  "ramp_rate_um_s": 0.5,
+
+  "blocks": [
+    {"name": "B", "position": "B", "modes": ["R", "C"], "shuffle": true,
+     "dwells": [{"s": 0.1, "reps": 3}, {"s": 0.5, "reps": 3}, {"s": 2.0, "reps": 3},
+                {"s": 10.0, "reps": 3}, {"s": 30.0, "reps": 3}, {"s": 120.0, "reps": 2}]},
+    {"name": "A", "position": "A", "modes": ["R"], "shuffle": true,
+     "dwells": [{"s": 0.5, "reps": 2}, {"s": 10.0, "reps": 2}, {"s": 120.0, "reps": 2}]},
+    {"name": "L", "position": "B", "modes": ["R"], "shuffle": false,
+     "dwells": [{"s": 300.0, "reps": 1}]}
+  ],
+
+  "reduced_blocks": [
+    {"name": "B", "position": "B", "modes": ["R"], "shuffle": true,
+     "dwells": [{"s": 0.1, "reps": 2}, {"s": 2.0, "reps": 2},
+                {"s": 30.0, "reps": 2}, {"s": 120.0, "reps": 2}]}
+  ],
+  "reduced_includes_references": true,
+
+  "shuffle_seed": 20261110,
+  "max_dwell_time_correlation": 0.45,
+
+  "baseline_dwell_s": 0.1,
+  "operational_dwell_range_s": [0.5, 60.0],
+  "earlier_dwells_s": {"f0b_probe_lo": 1.0, "f0b_probe_hi": 60.0,
+                       "f1_virgin_settle": 2.0, "e5_iso_stop": 2.5},
+
+  "gate_min": 52.0,
+  "scope_record_min": 60.0,
+  "dwell_timing_tolerance_ms": 10.0,
+
+  "colors": {"dwell_light": "#b7dcc3", "dwell_dark": "#174a2c", "ramp": "#2b3640",
+             "R": "#73578f", "setup": "#b8bec2", "transit": "#8b969c"}
+}
