@@ -6,7 +6,7 @@
 #pragma once
 #include <stdint.h>
 
-constexpr char CFG_HASH[] = "58cbb68982d0b4900ec9062717ff6a22422503884bca426b3053516b07d628b6";
+constexpr char CFG_HASH[] = "51791ea9da8b689cb40fb6d1a8ed79e8b92851af6010d16bd43e78ffb98fa928";
 constexpr char CFG_TABLE_HASH[] = "05c2215147138edd8ccf8780fb8f34660ad6b099129d0f6d964ac03859f22ed9";
 constexpr char CFG_EXPERIMENT[] = "F1_reversal_sweep";
 constexpr uint8_t CFG_PROVISIONAL = 1;
@@ -33,7 +33,7 @@ constexpr int32_t CFG_SOFT_MAX_U = 3089792;
 constexpr uint16_t CFG_MOTOR_CYCLE_U = 1024;
 constexpr uint32_t CFG_SCREW_REV_U = 51200UL;
 constexpr uint32_t CFG_TIME_LIMIT_MS = 3600000UL;
-constexpr uint32_t CFG_WATCHDOG_MS = 3120000UL;
+constexpr uint32_t CFG_WATCHDOG_MS = 3480000UL;
 constexpr uint16_t CFG_AQUADB_CLOCK_NS = 120;
 constexpr uint32_t CFG_RMT_HZ = 1000000UL;
 constexpr uint16_t CFG_RMT_CHUNK = 128;

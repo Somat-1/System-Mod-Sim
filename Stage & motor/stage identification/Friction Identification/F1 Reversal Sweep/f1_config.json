@@ -37,6 +37,7 @@
   "q_half_cycle_s": [4.0, 1.3, 12.0, 4.0],
   "q_cycles": 3,
   "gate_min": 52.0,
+  "watchdog_min": 58.0,
   "scope_record_min": 60.0,
   "colors": {"V": "#2b3640", "P": "#1a6478", "M": "#c48a33", "Q": "#b5473a",
              "R": "#73578f", "setup": "#b8bec2"}

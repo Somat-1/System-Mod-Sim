@@ -167,7 +167,10 @@ bool stepAllowed(bool positive, uint32_t count, bool seeking) {
     return false;
   }
   const int32_t next = positionU + (positive ? (int32_t)count : -(int32_t)count);
-  if (!seeking && (next > CFG_SOFT_MAX_U || next < CFG_SOFT_MIN_U)) {
+  // Homing leaves the stage on the positive switch, outside the soft window,
+  // so only a step that goes further out is a fault.
+  if (!seeking && ((positive && next > CFG_SOFT_MAX_U) ||
+                   (!positive && next < CFG_SOFT_MIN_U))) {
     unsafeFault = true;
     return false;
   }
@@ -337,8 +340,11 @@ bool homeAndCentre() {
   }
   positionArmed = true;
   const int32_t pre = CFG_PARK_U - ustepsOf(3.0);
-  if (!travelTo(pre, TRANSIT_RATE_HZ) || !travelTo(CFG_PARK_U, TRANSIT_RATE_HZ))
+  if (!travelTo(pre, TRANSIT_RATE_HZ) || !travelTo(CFG_PARK_U, TRANSIT_RATE_HZ)) {
+    Serial.printf("# ERR,reason=centre_failed,x_mm=%.4f,unsafe=%u\n",
+                  mmOf(positionU), unsafeFault);
     return false;
+  }
   centreMscnt = (uint16_t)driver.MSCNT();
   homePhaseValid = true;
   Serial.printf("# CENTRED,x_usteps=%ld,x_mm=%.6f,MSCNT=%u,"

@@ -308,6 +308,7 @@ def checks(s: Session, r2: bool) -> dict[str, bool]:
             v * 1000.0 / USTEP_PER_MM >= 5.0 * c["f0b_dependent"]["d_min_um"]
             for v in grid),
         "inside_gate": s.t / 60.0 <= c["gate_min"],
+        "inside_watchdog": s.t / 60.0 <= c["watchdog_min"] <= c["scope_record_min"],
         "inside_scope_record": s.t / 60.0 <= c["scope_record_min"],
     }
 
@@ -398,7 +399,9 @@ def write_header(path: Path, c: dict, s: Session, r2: bool, cfg_hash: str,
         f"constexpr uint16_t CFG_MOTOR_CYCLE_U = {MOTOR_CYCLE_U};",
         f"constexpr uint32_t CFG_SCREW_REV_U = {SCREW_REV_U}UL;",
         f"constexpr uint32_t CFG_TIME_LIMIT_MS = {round(TIME_LIMIT_MIN * 60000)}UL;",
-        f"constexpr uint32_t CFG_WATCHDOG_MS = {round(c['gate_min'] * 60000)}UL;",
+        # The firmware's hard stop, not the 52 min planning gate: a run a few
+        # seconds over plan must not be cut off (F0b uses the same 58 min).
+        f"constexpr uint32_t CFG_WATCHDOG_MS = {round(c['watchdog_min'] * 60000)}UL;",
         f"constexpr uint16_t CFG_AQUADB_CLOCK_NS = {AQUADB_CLOCK_NS};",
         f"constexpr uint32_t CFG_RMT_HZ = {RMT_HZ}UL;",
         f"constexpr uint16_t CFG_RMT_CHUNK = {RMT_CHUNK};",

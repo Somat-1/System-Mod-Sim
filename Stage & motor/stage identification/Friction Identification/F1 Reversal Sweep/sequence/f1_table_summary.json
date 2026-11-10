@@ -72,8 +72,9 @@
   "strokes_monotonic": true,
   "strokes_above_5_dmin": true,
   "inside_gate": true,
+  "inside_watchdog": true,
   "inside_scope_record": true
  },
- "config_sha256": "58cbb68982d0b4900ec9062717ff6a22422503884bca426b3053516b07d628b6",
+ "config_sha256": "51791ea9da8b689cb40fb6d1a8ed79e8b92851af6010d16bd43e78ffb98fa928",
  "table_sha256": "05c2215147138edd8ccf8780fb8f34660ad6b099129d0f6d964ac03859f22ed9"
 }
