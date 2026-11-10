@@ -74,3 +74,15 @@ Stage & motor/noise and drift identification/data/
 
 # npz parse caches of the two files above; derived data, not source.
 Stage & motor/noise and drift identification/analysis/cache/
+
+# 10 November 2026 friction captures: raw hardware exports, local-only like
+# the captures above. NOT regenerable -- keep backups outside git. The ESP
+# terminal log from each session is committed beside them.
+#   F0b_Experimental_Run.csv : TwinCAT EL5101 counter, 1 kHz, 50.1 min (59 MB)
+#   F1_Experimental_Run.csv  : same, 53.6 min (63 MB)
+Stage & motor/stage identification/Friction Identification/F0b Friction Scoping/data/F0b_Experimental_Run.csv
+Stage & motor/stage identification/Friction Identification/F1 Reversal Sweep/data/F1_Experimental_Run.csv
+
+# npz parse caches of the two files above; derived data, not source.
+# Rebuilt in ~10 s by Friction Identification/analysis/run_data.py.
+Stage & motor/stage identification/Friction Identification/analysis/cache/

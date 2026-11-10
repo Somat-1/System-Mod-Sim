@@ -4,14 +4,16 @@ The friction layer of the stage model: pre-sliding, sliding and the
 reversal error that the geometric layer could only handle as one constant.
 
 Nothing is measured here yet. This folder holds the roadmap for the
-F-series and the two sessions that are planned so far.
+F-series and the three sessions that are planned so far.
 
 ## Layout
 
 | Folder | What it is |
 |---|---|
 | [`F0b Friction Scoping/`](F0b%20Friction%20Scoping/) | the scoping session: procedure, config, renders and the sequence overview |
-| [`F1 Reversal Sweep/`](F1%20Reversal%20Sweep/) | the reversal sweep: procedure, sequence generator and companion figures |
+| [`F1 Reversal Sweep/`](F1%20Reversal%20Sweep/) | the reversal sweep: procedure, sequence generator, the V1 companion figure and the three plain-language animations (P, M, Q) |
+| [`F2 Dwell/`](F2%20Dwell/) | the dwell test, conditional on F0b: procedure, sequence generators, overview figure, command table and firmware. Companion plots not rendered yet |
+| [`analysis/`](analysis/) | the first look at the F0b and F1 captures of 10 November 2026: alignment, noise floor, resolution, and whether each block measured what it was meant to |
 | [`Preliminary/`](Preliminary/) | the existing stage-identification material, kept as an exploratory baseline while the friction workflow is developed — not a final identification campaign |
 
 The roadmap itself lives at this level:

@@ -1,5 +1,13 @@
 # F0b — friction scoping
 
+**Status: run on 10 November 2026 and complete — 346/346 segments in
+48.05 min, not aborted or time-limited.** The capture and the ESP terminal
+log are in [`data/`](data/); the raw CSV is local-only, as every hardware
+export in this repository is. A first look at it is in
+[`../analysis/README.md`](../analysis/README.md), which puts s₉₀ near 7.5 µm,
+β₀ near 2.28 µm and the measurement floor at 0.6 nm — all of them well away
+from the placeholders F1 and F2 were planned on.
+
 The [L friction-loop animation](rendered/sequence_details/f0b_L_friction_loops.gif)
 uses three representative strokes and two cycles per stroke, in increasing
 and decreasing order. It is an illustrative Maxwell-slip response, not

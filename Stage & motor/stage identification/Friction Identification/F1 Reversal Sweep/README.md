@@ -7,11 +7,20 @@ travel, so that the GMS pre-sliding elements can be identified and checked for
 independence from position. The procedure is
 [`F1_reversal_sweep_procedure.md`](F1_reversal_sweep_procedure.md).
 
-**Status: sequence planned and overview rendered. There is no command table,
-firmware or data yet.** The values marked ⟨…⟩ in the procedure depend on F0b
-(s₉₀, d_min). [`f1_config.json`](f1_config.json) carries the procedure's
-defaults, s₉₀ = 3 µm and d_min = 5 nm, under `f0b_dependent`. Replace those two
-numbers once F0b is processed, then rerun both scripts.
+**Status: run on 10 November 2026 and complete — 1119/1119 segments in
+51.31 min, not aborted or time-limited.** The capture and the ESP terminal
+log are in [`data/`](data/); the raw CSV is local-only, as every hardware
+export in this repository is. A first look at it is in
+[`../analysis/README.md`](../analysis/README.md).
+
+**The run used the provisional stroke grid.** The values marked ⟨…⟩ in the
+procedure depend on F0b (s₉₀, d_min), and
+[`f1_config.json`](f1_config.json) still carries the procedure's defaults,
+s₉₀ = 3 µm and d_min = 5 nm, under `f0b_dependent`; the firmware said so twice
+in the log. The preliminary check puts the real s₉₀ near 7.5 µm, so the dense
+part of the grid sits about a factor of two low. Replace those two numbers
+once F0b is properly processed, rerun both scripts, and decide then whether
+this loop set stands or the sweep is repeated on the corrected grid.
 
 ## Files
 
@@ -23,10 +32,22 @@ numbers once F0b is processed, then rerun both scripts.
 | `sequence/f1_segments.csv` | the plan, one row per segment, with tags for group, sub-block, stroke, cycle and half |
 | `sequence/f1_plan_summary.json` | segment count, duration, the stroke list as rounded, and time per group, sub-block and segment kind |
 | `render_f1_sequence.py` | the overview figure, `rendered/f1_sequence.png` |
+| `render_f1_companions.py` | the shared illustrative solver and the V1 figure, as PNG |
+| `f1_gif_common.py` | colours, canvas, palette and GIF writer shared by the three animations |
+| `render_f1_P_gif.py` | the P animation, `rendered/companion/f1_P_loops.gif` |
+| `render_f1_M_gif.py` | the M animation, `rendered/companion/f1_M_memory.gif` |
+| `render_f1_Q_gif.py` | the Q animation, `rendered/companion/f1_Q_speed.gif` |
+| `check_f1_companions.py` | the physical invariants of the shared illustrative solver |
 
 ```sh
 python3 f1_sequence.py
 python3 render_f1_sequence.py   # needs the E5 frozen geometric model for A1(x)
+
+python3 render_f1_companions.py # the V1 figure
+python3 render_f1_P_gif.py      # the three animations
+python3 render_f1_M_gif.py
+python3 render_f1_Q_gif.py
+python3 check_f1_companions.py  # the solver they all share
 ```
 
 ## Plan with the default values
@@ -110,31 +131,134 @@ from the plan.
 
 ## Companion figures
 
-`render_f1_companions.py` writes the static companion figures to
-`rendered/companion/`.
+Run python render_f1_companions.py to write the V1 PNG to
+rendered/companion/, and the three GIF renderers to write the animations
+beside it. The supplied design briefs are preserved in
+[COMPANION_DESIGN.md](COMPANION_DESIGN.md),
+[F1_P_loops_gif_brief.md](F1_P_loops_gif_brief.md) and
+[F1_M_Q_gifs_brief.md](F1_M_Q_gifs_brief.md), each with a record of where
+the build departs from it.
 
-| File | Shows |
+| Figure | Reading sequence |
 |---|---|
-| `f1_V1_virgin_curve.png` | V1: the virgin-curve anatomy. Reversal curves in both directions on a log travel axis, with the stuck, pre-sliding and sliding regimes, s₉₀, the slow/fast ramp strip and a sketch of the V command |
-| `f1_P1_loops_and_width.png` | P1: loops at 0.3 s₉₀, s₉₀ and 100 µm on a normalised position axis, and loop width against stroke at the 14 F1 strokes |
-| `f1_P2_masing_overlay.png` | P2: a loop with a 6 µm stroke, overlaid with 2·f(Δu/2) from each turning point, and a residual strip against ±d_min |
-| `f1_M1_nested_loop.png` | M1: the outer and inner loop against the uninterrupted outer branch, with a zoom on the branch-off and rejoin point |
-| `f1_Q1_rate_check.png` | Q1: the s₉₀ loop at half-cycle times of 1.3, 4 and 12 s plus the repeat, and loop width against half-cycle time with a ±d_min band |
+| V1 | Wipe and reversal sketch, then positive lost motion with nearly-stuck, pre-sliding and sliding regions; a grey direction-dependent alternative |
+| **P · GIF** | **What the motor is told to do, what the stage does, and the gap for each size of move: 1, 3 and 100 µm, drawn live, then summarised** |
+| **M · GIF** | **A big move with a small detour halfway back, and a zoom on the moment it rejoins the path it left; a stage without memory would not** |
+| **Q · GIF** | **The same small move done fast, medium and slow, each loop tracing over the last, and the gap for each speed** |
 
-All the curves are illustrative and are labelled as such. They come from the
-quasi-static Maxwell-slip model used for the F0b S animation, imported from
-`../F0b Friction Scoping/render_f0b_s_animation.py`, with placeholder slip
-limits and a saturation of β₀/2 per side. The model's own s₉₀ is 2.92 µm,
-close to the 3 µm placeholder.
+The three animations are meant to be shown in that order — P, M, Q — which
+is how the brief sequences the three plain-language points: the gap depends
+on the size of the move, the stage remembers its past, and speed does not
+change it.
 
-This model is rate-independent, obeys the Masing rule exactly and has exact
-return-point memory. The overlays in P2, M1 and Q1 therefore coincide by
-construction, and the script asserts both the Masing match and the zero
-return-point error. These figures show what a GMS-type stage would produce;
-they are not evidence for one.
+All plots are explicitly illustrative, not measured. The hardware sequence and
+f1_config.json are unchanged. No processed F0b result was available here;
+s90 = 3 um and d_min = 0.005 um remain configuration placeholders.
 
-X1 (position comparison and hold-out) is data-only and is not drawn. The
-animations V2, P3 and M2 are not built yet.
+### The animations
+
+Four of the five technical companion PNGs are now animations: P1 (loops and
+width) and P2 (Masing overlay) became `f1_P_loops.gif`, M1 (nested loop)
+became `f1_M_memory.gif`, and Q1 (rate check) became `f1_Q_speed.gif`. Those
+four PNGs are deleted, as are the PDF copies of every companion figure: the
+renderer writes PNG only, and `render_f1_companions.py` now holds the shared
+solver and V1. What the three animations have in common lives in
+`f1_gif_common.py`.
+
+| Animation | Frames | Length | Size |
+|---|---|---|---|
+| `f1_P_loops.gif` | 573 | 28.6 s | 0.67 MB |
+| `f1_M_memory.gif` | 390 | 19.5 s | 0.42 MB |
+| `f1_Q_speed.gif` | 490 | 24.5 s | 0.44 MB |
+
+All three are 1000 × 560 px at 20 fps, loop with a pause on the finished
+picture, and are written for a reader with no background: no symbols, no
+equations, numbers only where they help. Pillow merges identical consecutive
+frames as it writes, so each file holds fewer stored frames carrying the same
+total duration.
+
+What survives from the technical figures is one panel each: P1's gap against
+the size of the move, M1's return-point detail, and Q1's nested line weights.
+What is no longer drawn is P2's Masing construction, Q1's ±d_min band and its
+drift-check ring. The invariants behind them are still asserted by
+`check_f1_companions.py`, whose solver all three animations share, and the
+drift check is still in the Q block itself and in the procedure.
+
+Each renderer asserts the claim its animation makes before a frame is drawn:
+
+- **M**: the detour returns to the lag it left, and what follows it is the
+  branch the big move was on rather than something close to it — **0 µm** and
+  **4 × 10⁻¹⁶ µm** respectively. The grey alternative has to miss by enough to
+  be worth drawing (0.090 µm) and then close most of it.
+- **Q**: the three loops agree to **3 × 10⁻¹⁵ µm** at coincident commanded
+  positions, and the three gaps are the same floating-point number,
+  0.904447 µm, which is also `width_at_centre(3 µm)`.
+- **P**: the two drawn cycles of each move agree to 1e-9, and each move's gap
+  lands on the summary curve to better than 2 nm.
+
+Choices worth knowing about, all recorded in the briefs:
+
+- **Each move is settled before it is drawn.** The first back-and-forth after
+  a change of stroke inherits the state the previous one left: for the 1 µm
+  move its gap is 0.475 µm against the settled 0.037 µm. Drawing it would
+  contradict the message on screen and make the gap arrow collapse halfway
+  through the move, so one cycle is run through the solver before the two
+  that are shown — as the bench does, with three cycles per stroke and the
+  later ones read. The footer says so, and the two drawn cycles are asserted
+  to agree to 1e-9.
+  The same settling is run for M's big move and for Q's three passes.
+- **The solver is imported, not re-implemented.** All three renderers take
+  `run`, the element limits and the weights from `render_f1_companions.py`,
+  so the animations and V1 cannot drift apart. The P brief's own §5 snippet
+  is explicitly a placeholder and is not used.
+- **M's "stage that forgets" is the same solver with the outer excursion
+  erased**, not the exponential its brief sketches. That formula needs the
+  lag at the end of the detour to differ from the big path's, and with
+  return-point memory those are the same number, so it would draw nothing.
+- **Q's panel (A) is drawn against animation time, not real time.** Against
+  real time the slow pass would be twelve times as wide and its dot would
+  cross the panel three times faster than the fast one's, which is backwards.
+  The labels carry the real 1 s / 4 s / 12 s and the footer states that the
+  drawing stretches time 1 : 2 : 4.
+- **Q's gap panel starts at zero**, so the 10 percent rate-dependent
+  alternative looks like the 10 percent it is rather than like a large
+  effect.
+
+### Model and technical choices
+
+The new self-contained solver advances 30 Maxwell-slip elements exactly from
+one slip event to the next. Limits are log-spaced from 0.01 to 20 um. The model
+satisfies equilibrium, saturation beta0 = 1.757 um, sum(gamma) = 20, initial
+lost-motion slope 20/21, and the illustrative s90 = 3 um.
+
+The design brief's fixed log-normal centre near s90/3 and width near 1 cannot
+also satisfy all these constraints. Both log-normal parameters are therefore
+solved numerically instead; the actual values are recorded in
+rendered/companion/illustrative_model.json. This is a broad, truncated
+illustrative distribution, not an inferred friction-element distribution.
+
+Masing's f is the initial-loading response from unstrained elements. The
+saturated reversal response in V1 already contains the factor-two
+transformation and is not doubled again. Small-loop vertical bias is retained
+from the wipe history, rather than artificially recentering the loops; this
+is why the small loop in the P animation sits low on its axis instead of in
+the middle.
+
+The M animation enlarges the detour to 3 um against a 10 um move, as its
+brief asks, which is larger than the planned test; the footer says so. One
+consequence: halfway down a 10 um move the stage is 5 um past the reversal
+and s90 is 3 um, so the branch it rejoins is already most of the way to
+saturation and only gently curved, which is why the rejoin is argued in the
+zoom panel rather than left to the eye in the loop. Its no-memory example is
+one way to lack memory, not a claim about every model. The Q rate ghost is
+deliberately illustrative, 10 percent from fast to slow.
+
+Run python check_f1_companions.py to check reversal symmetry, saturation,
+equilibrium, loop-width bounds, Masing and return-point memory. The renderer
+also checks equilibrium on every incremental solve. Those checks cover all
+three animations, which use the same solver.
+
+X1 remains data-only.
 
 ## Running the session
 
