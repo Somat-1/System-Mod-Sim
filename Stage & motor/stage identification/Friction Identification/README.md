@@ -3,8 +3,31 @@
 The friction layer of the stage model: pre-sliding, sliding and the
 reversal error that the geometric layer could only handle as one constant.
 
-Nothing is measured here yet. This folder currently holds the roadmap — the
-plan for the F-series, and the figure that presents it.
+Nothing is measured here yet. This folder holds the roadmap for the
+F-series and the two sessions that are planned so far.
+
+## Layout
+
+| Folder | What it is |
+|---|---|
+| [`F0b Friction Scoping/`](F0b%20Friction%20Scoping/) | the scoping session: procedure, config, renders and the sequence overview |
+| [`F1 Reversal Sweep/`](F1%20Reversal%20Sweep/) | the reversal sweep: procedure, sequence generator and companion figures |
+| [`Preliminary/`](Preliminary/) | the existing stage-identification material, kept as an exploratory baseline while the friction workflow is developed — not a final identification campaign |
+
+The roadmap itself lives at this level:
+
+| File | What it is |
+|---|---|
+| `ROADMAP_SPEC.md` | the render instructions the figure works to, plus what was dropped and why |
+| `render_friction_roadmap.py` | draws the roadmap figure |
+| `rendered/fig_friction_roadmap.png` | **the roadmap figure**, 180 × 75 mm at 600 dpi |
+
+```sh
+python render_friction_roadmap.py
+```
+
+The run prints two checks: any run of text wider than the box it sits in
+(currently none), and what the fills are worth in grayscale.
 
 ## Why this layer is next
 
@@ -30,23 +53,7 @@ micron is here, not in the motor LUT and not in a finer screw map.
 See [`../Geometric Fitting/experimental_scripts/e5_compensated_validation/FINDINGS.md`](../Geometric%20Fitting/experimental_scripts/e5_compensated_validation/FINDINGS.md)
 and [`../Geometric Fitting/experimental_scripts/geometric_model/README.md`](../Geometric%20Fitting/experimental_scripts/geometric_model/README.md).
 
-## Files
-
-| File | What it is |
-|---|---|
-| `ROADMAP_SPEC.md` | the render instructions this figure works to, plus what was dropped and why |
-| `render_friction_roadmap.py` | draws the roadmap figure |
-| `rendered/fig_friction_roadmap.png` | **the roadmap figure**, 180 × 75 mm at 600 dpi |
-| `experimental_scripts/f0b_friction_scoping/` | the F0b session: procedure, plan, checks and sequence figure |
-
-```sh
-python render_friction_roadmap.py
-```
-
-The run prints two checks: any run of text wider than the box it sits in
-(currently none), and what the fills are worth in grayscale.
-
-## The figure
+## The roadmap figure
 
 Three rows, read left to right: the lab sequence on top, the one test that
 can run alongside it in the middle, the desk work underneath. The rows are
@@ -120,9 +127,7 @@ along with the F-series, and will not happen otherwise.
 
 ## Status
 
-Nothing is measured. What exists is the roadmap and the first experiment's
-plan: [`experimental_scripts/f0b_friction_scoping/`](experimental_scripts/f0b_friction_scoping/)
-holds F0b's procedure, its generated command table, the checks on it, and a
-sequence figure of the session. It predicts 45.3 min against the 58 min gate.
-`data/` and `analysis/` arrive when F0b is run; F1-F5 get folders of their own
-beside it.
+Nothing is measured. What exists is the roadmap and two planned sessions.
+F0b scopes the effects and predicts 48.2 min against the 58 min watchdog
+gate; F1 is the reversal sweep it feeds. `data/` and `analysis/` arrive
+when the sessions are run; F2-F5 get folders of their own beside them.

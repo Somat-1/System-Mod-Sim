@@ -21,8 +21,8 @@ from scipy import signal, stats
 
 ROOT = Path(__file__).resolve().parents[1]
 STAGE = ROOT.parent
-DEFAULT_RESULTS = STAGE / "iso230-2" / "analysis" / "iso230_2_v3_results.json"
-DEFAULT_LOG = STAGE / "iso230-2" / "data" / "terminal_20261021_183115.log"
+DEFAULT_RESULTS = STAGE / "Friction Identification/Preliminary/iso230-2" / "analysis" / "iso230_2_v3_results.json"
+DEFAULT_LOG = STAGE / "Friction Identification/Preliminary/iso230-2" / "data" / "terminal_20261021_183115.log"
 LEAD_MM = 2.0
 
 

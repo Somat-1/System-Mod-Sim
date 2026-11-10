@@ -19,15 +19,16 @@ import numpy as np
 
 _HERE = Path(__file__).resolve().parent
 _E2 = _HERE.parent / "e2_global_map"
-_ISO = _HERE.parents[2] / "iso230-2" / "analysis"
+_ISO = _HERE.parents[2] / "Friction Identification/Preliminary/iso230-2" / "analysis"
 for p in (str(_E2), str(_ISO)):
     if p not in sys.path:
         sys.path.insert(0, p)
 import e2_run                                               # noqa: E402
 from iso230_2_evaluate import load_stops, load_scope        # noqa: E402
 
-LOG = _HERE.parents[2] / "iso230-2" / "data" / "terminal_20261021_183115.log"
-SCOPE = _HERE.parents[2] / "ISO230-2_v3.csv"
+LOG = _HERE.parents[2] / "Friction Identification/Preliminary/iso230-2" / "data" / "terminal_20261021_183115.log"
+SCOPE = (_HERE.parents[2] / "Friction Identification" / "Preliminary" /
+         "ISO230-2_v3.csv")
 EDGE_MARGIN_MS = 50
 
 # The ISO grid is 4.9 mm apart, so the matcher can be given a wide tolerance;

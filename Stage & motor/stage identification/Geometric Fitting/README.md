@@ -8,7 +8,7 @@ in `instructions/G_step_A_linear_processing.md`.
 
 - `instructions/` — preserved analysis specification supplied with the task.
 - `data/` — source inventory and data-availability notes; source data remain in
-  the existing `iso230-2` project to avoid duplication.
+  the existing `Friction Identification/Preliminary/iso230-2` project to avoid duplication.
 - `scripts/` — reproducible processing and rendering code.
 - `experimental_scripts/` — hardware-experiment sequence definitions, separated
   by experiment; E1, E2, and E4 are in `e1_spectral_windows/`,
@@ -33,8 +33,8 @@ DYLD_LIBRARY_PATH=/opt/homebrew/opt/expat/lib python3 scripts/process_iso_v3_ste
 
 The current analysis reads:
 
-- `../iso230-2/analysis/iso230_2_v3_results.json`
-- `../iso230-2/data/terminal_20261021_183115.log`
+- `../Friction Identification/Preliminary/iso230-2/analysis/iso230_2_v3_results.json`
+- `../Friction Identification/Preliminary/iso230-2/data/terminal_20261021_183115.log`
 
 ## Experimental sequences
 
@@ -47,7 +47,7 @@ specification and the compiled E4 specification are stored as
 `instructions/E2_global_map_procedure.md` and
 `instructions/E4_stationarity_windows_procedure.md`.
 
-The raw `../ISO230-2_v3.csv` capture is absent from the workspace. Therefore,
+The raw `../Friction Identification/Preliminary/ISO230-2_v3.csv` capture is absent from the workspace. Therefore,
 the present run exactly reconstructs the per-target weighted fit, direction
 fits, leave-one-target-out sensitivity, error-power shares, reversal trend and
 predicted ISO metrics from the saved aggregate statistics. It does not claim a

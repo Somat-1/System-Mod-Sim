@@ -12,7 +12,7 @@ difference. Dropping the moving tail brings the published -0.365 um to
 The direction average is almost untouched (the two biases cancel), so the gain
 fit built on it survives: -24.17 ppm becomes -24.10 ppm. B, R, E and A do not.
 
-Needs the raw ISO capture at stage identification/ISO230-2_v3.csv.
+Needs the raw ISO capture at stage identification/Friction Identification/Preliminary/ISO230-2_v3.csv.
 
 Writes rendered/reversal_reconciliation.png.
 """
@@ -29,14 +29,15 @@ from e1_run import WINDOWS
 _HERE = Path(__file__).resolve().parent
 _STAGE = _HERE.parents[2]
 for extra in (_HERE.parents[3] / "motor identification" / "scripts",
-              _STAGE / "iso230-2" / "analysis"):
+              _STAGE / "Friction Identification/Preliminary/iso230-2" / "analysis"):
     if str(extra) not in sys.path:
         sys.path.insert(0, str(extra))
 from staircase_figures import INK, INK2, style                    # noqa: E402
 from iso230_2_evaluate import load_scope, load_stops, fit_clock   # noqa: E402
 
-ISO_SCOPE = _STAGE / "ISO230-2_v3.csv"
-ISO_LOG = _STAGE / "iso230-2" / "data" / "terminal_20261021_183115.log"
+ISO_SCOPE = (_STAGE / "Friction Identification" / "Preliminary" /
+             "ISO230-2_v3.csv")
+ISO_LOG = _STAGE / "Friction Identification/Preliminary/iso230-2" / "data" / "terminal_20261021_183115.log"
 OUT = Path(os.environ.get("E1_OUT", _HERE / "rendered"))
 COLOURS = {"W1": "#4c78a8", "W2": "#598a76", "W3": "#9d6770"}
 ISO_COLOUR = "#161616"

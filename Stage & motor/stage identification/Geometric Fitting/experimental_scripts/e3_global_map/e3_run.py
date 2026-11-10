@@ -26,7 +26,7 @@ from e2_run import (Plan, Run, find_holds, match,   # noqa: E402,F401
                     load_plan, SETTLE_MS, RECORD_MS, EDGE_MARGIN_MS,
                     MATCH_TOL_MM, X_REF_MM)
 
-_ISO = _HERE.parents[2] / "iso230-2" / "analysis"
+_ISO = _HERE.parents[2] / "Friction Identification/Preliminary/iso230-2" / "analysis"
 if str(_ISO) not in sys.path:
     sys.path.insert(0, str(_ISO))
 from render_raw_measurement import read_scope       # noqa: E402

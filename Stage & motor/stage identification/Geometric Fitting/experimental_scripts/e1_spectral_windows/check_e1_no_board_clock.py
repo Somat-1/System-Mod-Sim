@@ -23,7 +23,7 @@ import numpy as np
 
 _HERE = Path(__file__).resolve().parent
 _E2 = _HERE.parent / "e2_global_map"
-_ISO = _HERE.parents[2] / "iso230-2" / "analysis"
+_ISO = _HERE.parents[2] / "Friction Identification/Preliminary/iso230-2" / "analysis"
 for p in (str(_E2), str(_ISO)):
     if p not in sys.path:
         sys.path.insert(0, p)

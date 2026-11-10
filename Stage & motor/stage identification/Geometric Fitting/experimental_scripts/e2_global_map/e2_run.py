@@ -23,7 +23,7 @@ import sys
 import numpy as np
 
 _HERE = Path(__file__).resolve().parent
-_ISO = _HERE.parents[2] / "iso230-2" / "analysis"
+_ISO = _HERE.parents[2] / "Friction Identification/Preliminary/iso230-2" / "analysis"
 if str(_ISO) not in sys.path:
     sys.path.insert(0, str(_ISO))
 from render_raw_measurement import read_scope   # noqa: E402

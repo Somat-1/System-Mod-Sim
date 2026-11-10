@@ -1,9 +1,9 @@
 {
   "analysis": "ISO 230-2 v3 Step A linear geometric identification",
   "source": {
-    "aggregate_results": "..\\..\\iso230-2\\analysis\\iso230_2_v3_results_blind.json",
+    "aggregate_results": "..\\..\\Friction Identification/Preliminary/iso230-2\\analysis\\iso230_2_v3_results_blind.json",
     "controller_log": "\\\\192.168.2.5\\external\\tomasV\\System-Mod-Sim\\Stage & motor\\stage identification\\iso230-2\\data\\terminal_20261021_183115.log",
-    "raw_scope_csv": "../../ISO230-2_v3.csv",
+    "raw_scope_csv": "../../Friction Identification/Preliminary/ISO230-2_v3.csv",
     "limitation": "Per-target means re-derived from the raw capture by iso230_2_evaluate_blind.py: holds found in the trace, averaging window placed inside the measured hold, board clock not used. This supersedes iso230_2_v3_results.json, whose windows were placed by a fitted clock and closed ~38 ms into the following move. Drift correction and per-run slopes are still not computed."
   },
   "convention": {

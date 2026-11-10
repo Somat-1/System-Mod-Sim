@@ -31,7 +31,7 @@ from scipy.stats import f as f_dist
 
 HERE = Path(__file__).resolve().parent
 E2_DIR = HERE.parent / "e2_global_map"
-ISO_DIR = HERE.parents[2] / "iso230-2" / "analysis"
+ISO_DIR = HERE.parents[2] / "Friction Identification/Preliminary/iso230-2" / "analysis"
 for directory in (E2_DIR, ISO_DIR):
     if str(directory) not in sys.path:
         sys.path.insert(0, str(directory))

@@ -30,10 +30,10 @@ position between moves.
 
 Sketches changed:
 
-- `stage identification/firmware/stage_identification/stage_identification.ino`
-- `stage identification/chirp/firmware/stage_chirp_sweep/stage_chirp_sweep.ino`
+- `stage identification/Friction Identification/Preliminary/firmware/stage_identification/stage_identification.ino`
+- `stage identification/Friction Identification/Preliminary/chirp/firmware/stage_chirp_sweep/stage_chirp_sweep.ino`
 - `motor identification/firmware/motor_identification/motor_identification.ino`
-- `stage identification/jog/firmware/esp32s3_tmc2209_jog/esp32s3_tmc2209_jog.ino`
+- `stage identification/Friction Identification/Preliminary/jog/firmware/esp32s3_tmc2209_jog/esp32s3_tmc2209_jog.ino`
 
 > **Not yet updated:** `CONNECTIONS.md`, the jog `README.md` and the stage
 > identification `README.md` still describe the old pin map. This file is the
@@ -78,7 +78,7 @@ Drive mode, unchanged:
 
 ---
 
-## 3. Jog tool (`stage identification/jog/`)
+## 3. Jog tool (`stage identification/Friction Identification/Preliminary/jog/`)
 
 ### Firmware: `esp32s3_tmc2209_jog.ino`
 
@@ -164,7 +164,7 @@ python3 scripts/run_campaign.py --port /dev/cu.usbmodem3101 --flash --blind
 # then centre the stage and type the RUN confirmation it asks for
 ```
 
-Logs go to `stage identification/recordings/`.
+Logs go to `stage identification/Friction Identification/Preliminary/recordings/`.
 
 ---
 
@@ -173,9 +173,9 @@ Logs go to `stage identification/recordings/`.
 Rebuilt from the current sketches, and the manifests updated (sketch hash,
 image hash, core version, pin map, current mode):
 
-- `stage identification/firmware/prebuilt/`
-- `stage identification/chirp/firmware/prebuilt/`
-- `stage identification/jog/firmware/prebuilt/`
+- `stage identification/Friction Identification/Preliminary/firmware/prebuilt/`
+- `stage identification/Friction Identification/Preliminary/chirp/firmware/prebuilt/`
+- `stage identification/Friction Identification/Preliminary/jog/firmware/prebuilt/`
 
 The images were built with `esp32:esp32@3.3.10`. That version pads merged
 images to the full 4 MB of flash; the trailing erased bytes (0xFF) were trimmed,
@@ -250,7 +250,7 @@ cd "Stage & motor/motor identification"
 |---|---|---|
 | jog firmware + `jog_stepper.py` | yes | yes |
 | stage identification | yes | flashed; campaign started blind |
-| chirp sweep | yes | yes: 8 HIGH runs, no encoder; see `stage identification/chirp/data/2026-10-13_chirp/`. The amplitude was changed to a constant ±1.5–2.5 full steps at MRES 16/8, 400–1000 mA (see the chirp README), with an on-board generator check, a ±100-full-step pre-check and a 1 kHz turn-around marker |
+| chirp sweep | yes | yes: 8 HIGH runs, no encoder; see `stage identification/Friction Identification/Preliminary/chirp/data/2026-10-13_chirp/`. The amplitude was changed to a constant ±1.5–2.5 full steps at MRES 16/8, 400–1000 mA (see the chirp README), with an on-board generator check, a ±100-full-step pre-check and a 1 kHz turn-around marker |
 | motor identification | yes | yes: encoder bring-up passed; full campaign started 15:50 |
 
 None of these changes are committed.

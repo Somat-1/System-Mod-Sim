@@ -22,7 +22,7 @@
   "seed_start": 5200,
   "phase_min_count": 5,
   "iso_exclusion_grid_points": 1,
-  "iso_target_source": "../../../iso230-2/sequence/iso_targets_seed2302_rom122.695.csv",
+  "iso_target_source": "../../../Friction Identification/Preliminary/iso230-2/sequence/iso_targets_seed2302_rom122.695.csv",
   "x_ref_mm": 61.35,
   "ref_preapproach_mm": 58.35,
   "requested_overrun_mm": 3.0,

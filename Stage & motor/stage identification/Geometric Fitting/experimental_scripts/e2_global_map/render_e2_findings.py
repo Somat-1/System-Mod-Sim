@@ -46,7 +46,7 @@ STEP_A = Path(os.environ.get(
     "E2_STEP_A", HERE.parents[1] / "results_v3_corrected" / "step_a_results.json"))
 ISO_RESULTS = Path(os.environ.get(
     "E2_ISO_RESULTS",
-    HERE.parents[2] / "iso230-2" / "analysis" / "iso230_2_v3_results_blind.json"))
+    HERE.parents[2] / "Friction Identification/Preliminary/iso230-2" / "analysis" / "iso230_2_v3_results_blind.json"))
 E1_DIR = HERE.parent / "e1_spectral_windows"
 E4_DIR = HERE.parent / "e4_stationarity_windows"
 for directory in (E1_DIR, E4_DIR):
