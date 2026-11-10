@@ -33,7 +33,7 @@ _HERE = Path(__file__).resolve().parent
 _STAGE = _HERE.parents[2]
 for extra in (_HERE.parent / "e2_global_map",
               _HERE.parents[3] / "motor identification" / "scripts",
-              _STAGE / "iso230-2" / "analysis"):
+              _STAGE / "Friction Identification/Preliminary/iso230-2" / "analysis"):
     if str(extra) not in sys.path:
         sys.path.insert(0, str(extra))
 import e2_run                                              # noqa: E402
@@ -43,7 +43,7 @@ from iso230_2_evaluate import load_scope, load_stops       # noqa: E402
 
 OUT = Path(os.environ.get("E1_OUT", _HERE / "rendered"))
 CACHE = _HERE / "data" / "_window_independence.npz"
-ISO_RESULTS = _STAGE / "iso230-2" / "analysis" / "iso230_2_v3_results.json"
+ISO_RESULTS = _STAGE / "Friction Identification/Preliminary/iso230-2" / "analysis" / "iso230_2_v3_results.json"
 EDGE_MARGIN_MS = 50
 MINUS = "−"
 
@@ -154,12 +154,13 @@ def e2_inputs():
 
 
 def iso_inputs():
-    stops, _ = load_stops(_STAGE / "iso230-2" / "data" /
+    stops, _ = load_stops(_STAGE / "Friction Identification/Preliminary/iso230-2" / "data" /
                           "terminal_20261021_183115.log")
     iso = [s for s in stops if s["state"] == "ISO"]
     target = np.array([s["cmd_mm"] for s in iso])
     direction = np.array([1 if s["dir"] > 0 else -1 for s in iso])
-    return (load_scope(_STAGE / "ISO230-2_v3.csv"), target, direction, 1.0,
+    return (load_scope(_STAGE / "Friction Identification" / "Preliminary" /
+                       "ISO230-2_v3.csv"), target, direction, 1.0,
             np.ones(target.size, bool))
 
 

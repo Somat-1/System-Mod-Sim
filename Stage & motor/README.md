@@ -38,8 +38,8 @@ the two existing sketches** and how it is resolved.
 
 | | |
 |---|---|
-| [`stage identification/`](stage%20identification/) | the 43-minute identification sequence, its firmware, and the jog/calibration tool |
-| [`stage identification/jog/`](stage%20identification/jog/) | run-in oscillation between two set-points, and the microstep calibration oscillation |
+| [`stage identification/`](stage%20identification/) | geometric fitting and friction identification work |
+| [`stage identification/Friction Identification/Preliminary/`](stage%20identification/Friction%20Identification/Preliminary/) | the preliminary 43-minute identification sequence, its firmware, and the jog/calibration tool |
 | [`motor identification/`](motor%20identification/) | 37-minute rotor-error campaign, native-microstep firmware, host runner, and rendered plan |
 
 ## Scale, once

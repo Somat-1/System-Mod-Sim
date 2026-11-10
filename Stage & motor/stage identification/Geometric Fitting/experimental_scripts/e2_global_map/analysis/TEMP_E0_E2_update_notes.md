@@ -34,8 +34,8 @@ direction, so each window mean is dragged by:
 B shifts by +1.235 µm. `(xbar_up + xbar_dn)/2` sums them, so they cancel — which
 is why the gain, the residual and M looked fine all along.
 
-Full diagnosis: `iso230-2/analysis/ISO230_2_V3_REVERSAL_WINDOWING_POSTMORTEM.md`.
-Evidence figure: `iso230-2/analysis/plots/temp/v3_record_windows.png`.
+Full diagnosis: `Friction Identification/Preliminary/iso230-2/analysis/ISO230_2_V3_REVERSAL_WINDOWING_POSTMORTEM.md`.
+Evidence figure: `Friction Identification/Preliminary/iso230-2/analysis/plots/temp/v3_record_windows.png`.
 
 The correction is not a reinterpretation — keeping the published pipeline and
 merely dropping the **last 40 ms** of each logged window reproduces the blind
@@ -236,8 +236,8 @@ Changed:
 
 Not changed:
 
-- `iso230-2/analysis/iso230_2_evaluate.py` — still has the 51-sample detector
-- `iso230-2/analysis/iso230_2_v3_results.json` — still the defective table
+- `Friction Identification/Preliminary/iso230-2/analysis/iso230_2_evaluate.py` — still has the 51-sample detector
+- `Friction Identification/Preliminary/iso230-2/analysis/iso230_2_v3_results.json` — still the defective table
 - `Geometric Fitting/results/` and `E0/TABLES.md` — still the old numbers
 - E1 and E4 — see below
 

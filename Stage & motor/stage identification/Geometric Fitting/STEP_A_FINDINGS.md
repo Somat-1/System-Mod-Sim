@@ -159,7 +159,7 @@ temperature, pressure, interferometer compensation state) and the screw accuracy
 class.
 
 **The raw capture is not actually missing.** It is present in this workspace as
-`stage identification/ISO230-2_v3.csv`, 43.8 MB, dated 2026-10-22, untracked by
+`stage identification/Friction Identification/Preliminary/ISO230-2_v3.csv`, 43.8 MB, dated 2026-10-22, untracked by
 git — which is why the Mac could not see it. The drift-corrected fit, per-run
 slopes, per-stop settling checks and in-window saturation checks are all
 runnable without new measurements.

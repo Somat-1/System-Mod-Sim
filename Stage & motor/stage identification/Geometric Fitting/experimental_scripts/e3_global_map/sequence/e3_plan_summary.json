@@ -122,7 +122,7 @@
     "iso_exclusion_grid_points": 1,
     "e2_target_source": "../e2_global_map/sequence/e2_targets_seeded_grid64.csv",
     "e2_exclusion_grid_points": 1,
-    "iso_target_source": "../../../iso230-2/sequence/iso_targets_seed2302_rom122.695.csv",
+    "iso_target_source": "../../../Friction Identification/Preliminary/iso230-2/sequence/iso_targets_seed2302_rom122.695.csv",
     "x_ref_mm": 61.35,
     "ref_preapproach_mm": 58.35,
     "requested_overrun_mm": 3.0,

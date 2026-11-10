@@ -1,8 +1,8 @@
 {
   "analysis": "ISO 230-2 v3 Step A linear geometric identification",
   "source": {
-    "aggregate_results": "/Users/tomasvalentinas/Documents/System-Mod-Sim/Stage & motor/stage identification/iso230-2/analysis/iso230_2_v3_results.json",
-    "controller_log": "/Users/tomasvalentinas/Documents/System-Mod-Sim/Stage & motor/stage identification/iso230-2/data/terminal_20261021_183115.log",
+    "aggregate_results": "/Users/tomasvalentinas/Documents/System-Mod-Sim/Stage & motor/stage identification/Friction Identification/Preliminary/iso230-2/analysis/iso230_2_v3_results.json",
+    "controller_log": "/Users/tomasvalentinas/Documents/System-Mod-Sim/Stage & motor/stage identification/Friction Identification/Preliminary/iso230-2/data/terminal_20261021_183115.log",
     "raw_scope_csv": null,
     "limitation": "Raw ISO230-2_v3.csv was not present; drift correction, settling checks and per-run slopes cannot be recomputed."
   },

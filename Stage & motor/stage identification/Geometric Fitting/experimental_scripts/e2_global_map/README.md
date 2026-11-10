@@ -21,7 +21,7 @@ python3 render_e2_sequence.py
 ```
 
 The generator reads the executed E0 target list from
-`../../../iso230-2/sequence/iso_targets_seed2302_rom122.695.csv`. It divides
+`../../../Friction Identification/Preliminary/iso230-2/sequence/iso_targets_seed2302_rom122.695.csv`. It divides
 2–120 mm into 400 equal strata and selects one 64-microstep-grid target from
 each, excluding every point within ±64 microsteps of an E0 target. Seeds start
 at 5200 and increment until all 50 screw-phase bins contain at least five

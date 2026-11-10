@@ -28,7 +28,7 @@ would fire on every STEP pulse.
 
 **Resolution used here: the encoder moves, the driver stays.** The TMC pins
 (5, 6, 17, 18) appear in every campaign sketch from v2 to v6 and in the prebuilt
-binary under `stage identification/jog/firmware/prebuilt/`. Moving them would
+binary under `stage identification/Friction Identification/Preliminary/jog/firmware/prebuilt/`. Moving them would
 invalidate all of it. The encoder appears in one recent sketch, so it is the
 cheaper side to change — two jumper wires.
 
