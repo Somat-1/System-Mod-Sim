@@ -55,3 +55,62 @@ Regenerate the figure from this directory with:
 python3 render_f0b_sequence.py
 ```
 
+
+## Running the session
+
+The board replays a host-generated table; nothing is computed on the ESP32
+but step timing. `f0b_make_table.py` turns
+[`f0b_sequence_config.json`](f0b_sequence_config.json) into the table, the
+checks and the firmware header:
+
+```bash
+python3 f0b_make_table.py            # writes sequence/ and the firmware header
+```
+
+It reports **346 segments, 48.1 min**, 9.9 min inside the 58 min watchdog
+gate and 11.9 min inside the 60 min scope record. All ten plan checks pass.
+The segment count matches the 346 in `f0b_config.json` and the duration its
+48.2 min, so the figure and the bench table agree.
+
+| File | What it is |
+|---|---|
+| `f0b_sequence_config.json` | bench and firmware parameters (procedure sections 2 and 3) |
+| `f0b_make_table.py` | builds the table, times it, checks it, writes the header |
+| `sequence/f0b_command_table.csv` | the table, in the procedure's section 2.1 format |
+| `sequence/f0b_plan_summary.json` | durations, counts, hashes and the checks |
+| `firmware/f0b_friction_scoping/f0b_config.h` | generated; do not edit |
+| `firmware/f0b_friction_scoping/f0b_friction_scoping.ino` | the sketch |
+
+### Five segment types
+
+| Type | Meaning |
+|---|---|
+| `move` | trapezoidal transit at 1 mm/s |
+| `ramp` | trapezoidal profile peaking at the segment's own rate |
+| `step` | n single microsteps, dwelling after each (the L ladder's 1, 2 and 5 µstep strokes) |
+| `dwell` | hold in place, motor energised at hold current |
+| `mark` | the recorded window of a reference stop |
+
+`ramp` covers 3.25 Hz to 25.6 kHz in one mechanism. Below about 1 kHz the
+acceleration phase is shorter than a single microstep, so a measurement ramp
+is constant-rate in practice; at the top it is a real trapezoid, which is
+what stops the stage being asked to start at 1 mm/s from standstill.
+
+### Two step paths
+
+Rates at or above **33.3 Hz** go through the buffered RMT path proven in
+E1–E5. Below that one period no longer fits in an RMT symbol (30 ms maximum),
+so pulses are emitted one at a time against a `micros()` deadline. This is
+not a corner case: **block S runs at 6.4 Hz and the L ladder's 13 µstep
+stroke at 3.25 Hz**, so the timed path carries real measurement segments.
+
+### At the bench
+
+1. E0 warm-up, then start the IDS recording and the scope (**≥ 60 min record**).
+2. Flash `firmware/f0b_friction_scoping/`.
+3. `t` to confirm the table hash matches `sequence/f0b_plan_summary.json`.
+4. `g` to home, centre and run, or `p` then `r` if already homed and parked
+   at 60.000 mm. Ctrl+C aborts.
+5. Capture the serial output end to end — the `# SEG,...` dump after
+   `SEQ_DONE` is the firmware log the analysis needs, and E5 lost four
+   validity checks for want of it.

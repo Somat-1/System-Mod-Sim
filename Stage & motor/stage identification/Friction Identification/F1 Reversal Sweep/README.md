@@ -135,3 +135,46 @@ they are not evidence for one.
 
 X1 (position comparison and hold-out) is data-only and is not drawn. The
 animations V2, P3 and M2 are not built yet.
+
+## Running the session
+
+> **The table is provisional.** The P, M and Q strokes are built from s₉₀ and
+> d_min, which F0b measures. Until F0b is processed, `f1_config.json` carries
+> the procedure's placeholder defaults (s₉₀ = 3 µm, d_min = 5 nm), the
+> generated header sets `CFG_PROVISIONAL = 1`, and the firmware says so at
+> boot and in the session header. **Re-run `f1_make_table.py` after F0b and
+> reflash before treating an F1 run as final.**
+
+`f1_sequence.py` plans the session in time, for the overview figure.
+`f1_make_table.py` builds the table the board replays, in the same five
+segment types as F0b:
+
+```bash
+python3 f1_make_table.py             # writes sequence/ and the firmware header
+```
+
+It reports **1119 segments, 51.8 min** with R2 included — which reproduces
+`f1_sequence.py`'s independent 51.78 min and its per-group times to within
+0.01 min. Two separately written builders agreeing is the check that the
+sub-block definitions were read the same way twice.
+
+**The margin is 0.2 min.** The procedure's gate is 52 min and the plan lands
+at 51.8. `f1_make_table.py` drops R2 automatically if the session would
+exceed the gate, exactly as `f1_sequence.py` does, but any growth in the
+stroke grid when F0b's real s₉₀ arrives will trip that. Expect to run without
+R2, or to shorten P, once the grid is regenerated.
+
+| File | What it is |
+|---|---|
+| `f1_make_table.py` | builds the table, times it, checks it, writes the header |
+| `sequence/f1_command_table.csv` | the table |
+| `sequence/f1_table_summary.json` | durations, counts, hashes and the checks |
+| `firmware/f1_reversal_sweep/f1_config.h` | generated; do not edit |
+| `firmware/f1_reversal_sweep/f1_reversal_sweep.ino` | the sketch |
+
+The segment types, the two step paths and the bench procedure are the same
+as F0b's — see
+[`../F0b Friction Scoping/README.md`](../F0b%20Friction%20Scoping/README.md).
+F1's slowest measurement ramp is 2 Hz, at the smallest loop stroke, so it
+leans on the timed path more than F0b does. The session parks at
+x_B = 60.00 mm, the position F0b also uses.
