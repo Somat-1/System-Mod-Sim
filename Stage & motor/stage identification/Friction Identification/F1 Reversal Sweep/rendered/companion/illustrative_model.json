@@ -1,0 +1,12 @@
+{
+  "elements": 30,
+  "beta_um": 1.757,
+  "initial_stiffness": 19.99999999999928,
+  "initial_lost_motion_slope": 0.9523809523809508,
+  "lognormal_centre_um": 3.986426377858012e-05,
+  "lognormal_sigma": 2.616871124021842,
+  "s90_um": 3.0,
+  "d_min_um": 0.005,
+  "illustrative": true,
+  "note": "Both log-normal parameters fitted to saturation, stiffness and placeholder s90; not identified from data."
+}
