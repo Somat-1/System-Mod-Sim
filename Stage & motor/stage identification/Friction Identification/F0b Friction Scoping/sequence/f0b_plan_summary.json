@@ -1,0 +1,46 @@
+{
+ "segments": 346,
+ "duration_min": 48.06358334635419,
+ "gate_min": 58.0,
+ "margin_to_gate_min": 9.936416653645807,
+ "blocks_min": {
+  "R1": 2.72,
+  "N": 12.202499999999997,
+  "L": 7.6205737630208015,
+  "R2": 2.720000000000012,
+  "S": 12.490334166666688,
+  "D": 3.902750416666663,
+  "V": 3.687425000000015,
+  "R3": 2.720000000000012
+ },
+ "segment_types_min": {
+  "dwell": 12.95,
+  "mark": 0.1,
+  "move": 13.673833333333388,
+  "ramp": 20.80641667968747,
+  "step": 0.5333333333333333
+ },
+ "segment_type_counts": {
+  "dwell": 150,
+  "mark": 12,
+  "move": 58,
+  "ramp": 102,
+  "step": 24
+ },
+ "slowest_ramp_hz": 3.25,
+ "fastest_ramp_hz": 25600.0,
+ "checks": {
+  "x0_on_electrical_grid": true,
+  "x0_matches_60mm": true,
+  "inside_soft_limits": true,
+  "under_driver_limit": true,
+  "ladder_under_cap": true,
+  "strokes_monotonic": true,
+  "ustep_above_floor": true,
+  "ladder_brackets_beta0": true,
+  "inside_watchdog_gate": true,
+  "inside_scope_record": true
+ },
+ "config_sha256": "5a98252c8aaa7aeaeb29eb656c4ff38a052043efb49ea1682f04ea16d3cdbde0",
+ "table_sha256": "1572d59cf562bafba5a7cc38c49441c4a3a730c48595c032017cdbddb411cc52"
+}

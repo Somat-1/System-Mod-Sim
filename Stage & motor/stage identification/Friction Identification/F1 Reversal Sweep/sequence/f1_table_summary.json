@@ -1,0 +1,79 @@
+{
+ "segments": 1119,
+ "duration_min": 51.786115103498986,
+ "r2_included": true,
+ "gate_min": 52.0,
+ "margin_to_gate_min": 0.21388489650101405,
+ "provisional": true,
+ "s90_um": 3.0,
+ "d_min_um": 0.005,
+ "strokes_usteps": [
+  4,
+  8,
+  16,
+  24,
+  38,
+  54,
+  76,
+  116,
+  154,
+  230,
+  384,
+  2560,
+  25600,
+  76800
+ ],
+ "groups_min": {
+  "R1": 2.72,
+  "A": 12.095358125,
+  "B": 21.367990650373923,
+  "R2": 2.720000000000012,
+  "C": 10.837358125000037,
+  "R3": 2.0454082031250134
+ },
+ "sub_blocks_min": {
+  "R1.R": 2.72,
+  "A.V": 3.971824791666666,
+  "A.P": 7.3726191406250035,
+  "A.M": 0.7509141927083325,
+  "B.V": 3.1218996614583316,
+  "B.P": 14.60940494791664,
+  "B.M": 0.7509141927083457,
+  "B.Q": 2.8857718482906005,
+  "R2.R": 2.720000000000012,
+  "C.V": 2.713824791666669,
+  "C.P": 7.3726191406250186,
+  "C.M": 0.7509141927083495,
+  "R3.R": 2.0454082031250134
+ },
+ "segment_types_min": {
+  "dwell": 5.083333333333329,
+  "mark": 0.1,
+  "move": 10.19846614583337,
+  "ramp": 35.47098229099895,
+  "step": 0.9333333333333333
+ },
+ "segment_type_counts": {
+  "dwell": 535,
+  "mark": 12,
+  "move": 50,
+  "ramp": 490,
+  "step": 32
+ },
+ "slowest_ramp_hz": 2.0,
+ "fastest_ramp_hz": 19200.0,
+ "checks": {
+  "positions_on_electrical_grid": true,
+  "positions_inside_constrained_span": true,
+  "inside_soft_limits": true,
+  "under_driver_limit": true,
+  "loops_under_rate_cap": true,
+  "strokes_even_usteps": true,
+  "strokes_monotonic": true,
+  "strokes_above_5_dmin": true,
+  "inside_gate": true,
+  "inside_scope_record": true
+ },
+ "config_sha256": "58cbb68982d0b4900ec9062717ff6a22422503884bca426b3053516b07d628b6",
+ "table_sha256": "05c2215147138edd8ccf8780fb8f34660ad6b099129d0f6d964ac03859f22ed9"
+}
