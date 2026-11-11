@@ -218,9 +218,13 @@ def slow_ramps(run) -> list[dict]:
 def transport_delay(run) -> dict:
     """F0b's V block: the lag mid-move, at 1 mm/s and at 0.01 mm/s.
 
-    A pure pipeline delay shows up as a lag proportional to speed and
-    cancels between two settled endpoints, which is why the ladder is
-    unaffected by it. Anything left over is sliding friction.
+    Whatever its cause, it is proportional to speed and cancels between two
+    settled endpoints, which is why the ladder is unaffected by it. The
+    full F0b analysis (f0b_process.py) shows it cannot be identified from
+    this logging: the segment log gives only segment start and end times,
+    the end timestamp carries up to 26 ms of overhead beyond the step
+    train, and no single timing offset reconciles the ladder with the speed
+    probe. It is reported here as an uncertainty, not as a delay.
     """
     rows = []
     for i, s in enumerate(run.segments):
@@ -545,8 +549,8 @@ def main() -> int:
           f"{d['long_s']:g} s over {d['short_s']:g} s, "
           f"within-condition sd {s['dwell_within_sd_nm']:.0f} nm "
           f"-> no ageing detectable on 2 repetitions")
-    print(f"  pipeline delay mid-move: {s['transport_delay_ms']:.0f} ms "
-          f"(cancels between settled endpoints)")
+    print(f"  mid-move timing uncertainty: {s['transport_delay_ms']:.0f} ms "
+          f"(cancels between settled endpoints; see f0b_process.py)")
     print(f"  wrote {quality.name}, {physics.name}, preliminary_check.json")
     return 0
 

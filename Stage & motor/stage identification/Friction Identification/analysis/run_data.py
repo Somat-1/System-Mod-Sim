@@ -99,6 +99,9 @@ class Segment:
     dwell_ms: int
     t0_ms: int         # rebased on the first segment
     t1_ms: int
+    mscnt0: int = 0    # microstep counter at the segment start
+    mscnt1: int = 0    # and at its end
+    status: int = 0    # TMC2209 DRV_STATUS
 
 
 def load_segments(log: Path) -> list[Segment]:
@@ -115,7 +118,8 @@ def load_segments(log: Path) -> list[Segment]:
             continue
         out.append(Segment(int(row), block, sub, kind, int(rest[0]),
                            int(rest[1]), int(rest[2]), int(rest[6]),
-                           int(rest[7])))
+                           int(rest[7]), int(rest[4]), int(rest[5]),
+                           int(rest[8], 16)))
     if not out:
         raise ValueError(f"no SEG lines in {log}")
     base = out[0].t0_ms

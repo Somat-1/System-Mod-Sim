@@ -24,6 +24,74 @@ terminal log from the same session. They are ~60 MB each and are local-only,
 like every other hardware export in this repository; the npz parse caches in
 `cache/` are rebuilt from them in about 10 s.
 
+## F0b results figures
+
+`python3 f0b_process.py` turns the run into `f0b/f0b_noise.json`,
+`f0b/f0b_ladder.csv` and `f0b/f0b_summary.json`; `python3
+render_f0b_results.py` draws the figures of the results-plot instructions
+into `rendered/f0b/`, as vector PDF and 300 dpi PNG, with the captions in
+`rendered/f0b/captions.md` and the scales card in
+`f0b/f0b_scales_card.md`. `thesis_style.py` holds the shared style.
+
+| Figure | What it shows |
+|---|---|
+| F0b-1 | the measurement floor: Allan deviation at three positions, d_min, one microstep |
+| F0b-2 | lost motion and fraction arriving against stroke, from 1 µstep to 100 µm |
+| F0b-3 | the four slow-ramp cases, their difference, and the first 30 microsteps |
+| F0b-4 | the dwell probe that decides F2, and the sliding lag |
+| F0b-A1 | drift anchors, record-window quality, MSCNT, checks (appendix) |
+
+### Three decisions the data forced
+
+**Lost motion is `s − Δx`, not the loop width.** The instructions ask for
+the width of the hysteresis loop read at one commanded position, because
+the screw's geometric error is then common to both branches and cancels.
+That is the better definition in general and it is computed
+(`loop_width_um` in `f0b_ladder.csv`), but it cannot be used here: each
+ladder rung runs at stroke / 4 s, so every stroke is measured at a
+different speed between 10 nm/s and 750 µm/s, and anything read part-way
+through a move carries the rate with it. The loop width consequently never
+saturates — 2.0 µm at the 20 µm rung, 3.2 µm at 100 µm, 41 µm at 3 mm —
+while `s − Δx`, read between settled window means, stays near 2 µm
+throughout. The geometric error that the loop width would have cancelled is
+under 0.6 µm for strokes below 100 µm and under 0.06 µm below 10 µm
+(procedure §5.1), well under the lost motion itself.
+
+**The speed question is not answered.** Reading a lag part-way through a
+move needs the commanded position at that instant. The segment log gives
+only the start and end times, and the end timestamp carries up to 26 ms of
+overhead beyond the step train itself; the alignment of the two clocks is
+itself flat to tens of milliseconds. At 10 µm/s that is sub-micron and the
+sliding lag comes out at 0.70 µm, close to β₀/2. At 1 mm/s it is tens of
+microns, larger than any friction effect, so the two speeds cannot be
+compared. F3 needs the step-train end logged, or the speeds compared
+between settled endpoints rather than mid-move. This also rules out an
+earlier reading of the same effect as a mechanical rate-dependent lag: a
+single timing offset cannot reconcile the ladder and the speed probe, so
+neither can be taken at face value.
+
+**Every window mean is read with a 50 ms trailing guard.** Without it,
+three of the twelve reference record windows have standard deviations of
+2.1–2.9 µm rather than 4–8 nm, because by the end of a 48 min session the
+two free-running clocks have slipped far enough for the next move to begin
+inside the window.
+
+### What F0b sets
+
+| | Placeholder | Measured |
+|---|---|---|
+| `d_min` | 5 nm | **2.1 nm** (3·√2·σ, σ = 0.50 nm at 0.5 s) |
+| `s90` | 3 µm | **7.5 µm** |
+| `beta_0` | 1.757 µm (E2–E5) | **2.30 µm** |
+
+The deadband after a reversal is 40–55 nm, about one microstep, and every
+39 nm step produces a visible move: there is no stick-slip, the carriage
+simply arrives short, at 20 nm per 39 nm step early in a reversal ramp. The
+increasing and decreasing ladder passes agree to 126 nm, so F1 needs no
+extra memory wipes between strokes. The dwell probe gives −40 ± 66 nm,
+which is above d_min but not separable from the trial scatter on two
+repetitions, so F2 stays undecided.
+
 ## The runs
 
 | | F0b | F1 |
@@ -72,10 +140,11 @@ few ms. The check that it worked: the ladder's 3 mm rungs then come out
 
 Two things to carry into the real analysis:
 
-- **A ~24 ms pipeline delay** sits between command and capture. It is
-  visible as a mid-move lag proportional to speed (24 µm at 1 mm/s, 0.2 µm
-  at 10 µm/s) and it **cancels between two settled endpoints**, which is why
-  the ladder is unaffected. Anything read mid-motion must remove it first.
+- **A mid-move lag proportional to speed**, worth about 24 ms of travel
+  (24 µm at 1 mm/s, 0.2 µm at 10 µm/s). It **cancels between two settled
+  endpoints**, which is why the ladder is unaffected. The F0b results
+  analysis below shows it cannot be separated into instrument and mechanism
+  from this logging, so nothing is read mid-motion at high rate.
 - **Post-move creep inside the 0.5 s pause.** After the fastest ladder rungs
   the stage is still 2 µm short when the pause begins and catches up during
   it; after the slow rungs it is 0.3 µm. The lost motion you measure
