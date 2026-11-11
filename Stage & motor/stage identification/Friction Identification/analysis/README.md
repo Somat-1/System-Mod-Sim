@@ -35,11 +35,16 @@ into `rendered/f0b/`, as vector PDF and 300 dpi PNG, with the captions in
 
 | Figure | What it shows |
 |---|---|
-| F0b-1 | the measurement floor: Allan deviation at three positions, d_min, one microstep |
-| F0b-2 | lost motion and fraction arriving against stroke, from 1 µstep to 100 µm |
-| F0b-3 | the four slow-ramp cases, their difference, and the first 30 microsteps |
-| F0b-4 | the dwell probe that decides F2, and the sliding lag |
-| F0b-A1 | drift anchors, record-window quality, MSCNT, checks (appendix) |
+| F0b-1 · reversal | (a) lost motion against stroke, 1 µstep to 100 µm; (b) the same as the fraction that arrives; (c) the same again measured continuously from the slow ramps, with the ladder points laid over it |
+| F0b-2 · decisions | (a) the measurement floor at three positions; (b) the first 30 microsteps; (c) the dwell probe; (d) each F0b-dependent number against what F1 and F2 were planned on |
+| F0b-A1 · validity | drift anchors, record-window quality, MSCNT, checks (appendix) |
+
+Two figures carry the findings rather than the five of the first pass, one
+per block: the two slow-ramp panels became one, drawn as lost motion rather
+than lag so the ladder points can be laid straight over them, and the noise
+floor, microstep detail, dwell probe and the comparison with the plan now
+sit together. Each figure's headline claim is the first sentence of its
+caption in `rendered/f0b/captions.md`.
 
 ### Three decisions the data forced
 
