@@ -1,0 +1,36 @@
+{
+ "experiment": "F0b_pt2",
+ "segments": 901,
+ "arrivals": 248,
+ "marks": 248,
+ "mres_switches": 13,
+ "duration_min": 24.380998705991693,
+ "gate_min": 52.0,
+ "margin_to_gate_min": 27.619001294008307,
+ "blocks_min": {
+  "R1": 2.6226666666666665,
+  "M": 12.918748705991694,
+  "V": 6.216916666666667,
+  "R3": 2.6226666666666665
+ },
+ "fastest_step_rate_hz": 51200.0,
+ "slowest_step_rate_hz": 256.0,
+ "m_speed_mm_s": 2.0,
+ "config_sha256": "01ef4cc5063dbe2c3fd3bfbcba4a9bc9bca80acf448052271b3d4b8c6f96edcd",
+ "table_sha256": "d69c6de319069a4d6dc50b33448766d3db37137e06906c04be8e319df3a0dbac",
+ "checks": {
+  "all_targets_divisible_at_their_mres": true,
+  "all_turning_points_on_the_coarse_grid": true,
+  "saturated_points_on_the_electrical_grid": true,
+  "approach_sides_match_direction": true,
+  "inside_soft_limits": true,
+  "test_positions_inside_constrained_span": true,
+  "max_step_rate_within_bench": true,
+  "mres_switches_at_rest": true,
+  "inside_gate": true,
+  "gate_inside_watchdog": true,
+  "every_mres_level_visited_twice": true,
+  "mres_order_is_abba": true,
+  "speed_order_is_abba": true
+ }
+}

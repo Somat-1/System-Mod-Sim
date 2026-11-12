@@ -1,0 +1,63 @@
+{
+  "experiment": "F0b_pt2",
+  "title": "reversal vs microstep resolution, and speed",
+  "_note": "Procedure F0b_pt2_procedure.md. Every position is in 1/256 counts, the one internal unit; a target is legal at a given MRES only if it is divisible by 2^mres_code counts. The builder asserts that for every segment at the MRES in force.",
+
+  "lead_mm": 2.0,
+  "steps_per_rev": 200,
+  "ustep_per_mm": 25600,
+  "motor_cycle_u": 1024,
+  "electrical_cycle_um": 40.0,
+  "screw_rev_u": 51200,
+
+  "run_current_ma": 400,
+  "hold_current_ma": 400,
+  "tpowerdown": 0,
+  "iholddelay": 0,
+
+  "x0_mm": 60.0,
+  "park_mm": 60.0,
+  "reference_mm": [15.0, 105.0],
+  "travel_mm": 122.79,
+  "constrained_span_mm": [5.0, 110.0],
+  "soft_min_mm": 2.0,
+  "soft_max_mm": 120.695,
+
+  "transit_mm_s": 1.0,
+  "accel_mm_s2": 40.0,
+  "max_step_rate_hz": 51200,
+  "rmt_max_period_us": 30000,
+
+  "settle_ms": 2000,
+  "record_ms": 500,
+  "_window_note": "Both are offsets from t_last_edge, not durations from when the segment was issued: DWELL ends at t_last_edge + settle_ms, MARK at t_last_edge + settle_ms + record_ms. The analysis reads 0.3-0.5 s inside the settle and 2.0-2.5 s as the mark.",
+  "early_window_ms": [300, 500],
+
+  "mres_levels": [16, 32, 64, 128, 256],
+  "m_visit_order": [16, 32, 64, 128, 256, 256, 128, 64, 32, 16],
+  "m_speed_mm_s": 2.0,
+  "_m_speed_note": "E5 settings. 2 mm/s at 1/256 is 51200 Hz; the pre-run bench check must confirm the RMT path produces it cleanly. Fallback: set m_speed_mm_s to 1.0 and v_extra_coarse to true, which adds a 1/16 at 2 mm/s visit to block V.",
+  "m_overrun_mm": 3.0,
+  "m_approaches": 7,
+  "m_partial_strokes_um": [5.0, 20.0],
+  "m_partial_cycles": 3,
+
+  "v_mres": 256,
+  "v_speed_order_mm_s": [2.0, 1.0, 0.1, 0.01, 0.01, 0.1, 1.0, 2.0],
+  "v_overrun_um": 100.0,
+  "v_approaches": 5,
+  "v_wipe_mm": 3.0,
+  "v_extra_coarse": false,
+  "_v_extra_note": "Set true only with the m_speed_mm_s = 1.0 fallback: adds a 1/16 at 2 mm/s visit so the E5 condition is still covered somewhere in the session.",
+
+  "reference_mres": 16,
+  "reference_speed_mm_s": 2.0,
+  "reference_overrun_mm": 3.0,
+
+  "gate_min": 52.0,
+  "scope_record_min": 60.0,
+  "watchdog_min": 58.0,
+
+  "colors": {"R": "#6c5a8e", "M_light": "#bcd9e3", "M_dark": "#12414f",
+             "V": "#b5473a", "setup": "#b8bec2", "transit": "#8b969c"}
+}
