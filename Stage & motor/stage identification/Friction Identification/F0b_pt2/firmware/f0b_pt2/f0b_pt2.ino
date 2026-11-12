@@ -306,7 +306,18 @@ bool applyMres(uint8_t code, uint16_t *before, uint16_t *after,
   *chopAfter = driver.CHOPCONF();
   *after = (uint16_t)driver.MSCNT();
   const bool took = ((*chopAfter >> 24) & 0x0FUL) == code;
-  const bool still = (*after == *before);
+  // At a coarser MRES the TMC2209 only holds MSCNT at half-step positions
+  // (step/2 + k*step), and snaps to the nearest one when the field changes:
+  // 433 -> 440 at 1/16.  No MSCNT is on both the 1/16 and 1/32 grids, so an
+  // unchanged MSCNT cannot be required.  Accept that snap, nothing larger;
+  // MSCNT before/after is logged for every switch.  Going finer snaps too
+  // (421 -> 420 at 1/128 -> 1/256), so the bound is half the coarser step.
+  const uint8_t prev = currentMresCode > 8 ? 0 : currentMresCode;
+  const int16_t step = (int16_t)(1 << code);
+  const int16_t coarser = (int16_t)(1 << max(code, prev));
+  int16_t moved = (int16_t)((*after - *before + 1536) % 1024) - 512;
+  const bool onGrid = code == 0 || (*after % step) == step / 2;
+  const bool still = onGrid && abs(moved) <= coarser / 2;
   if (took && still) {
     currentMresCode = code;
     uStepPerDriverStep = 1UL << code;
@@ -336,15 +347,13 @@ void jog(double mm, double vMmS) {
 }
 
 bool homeEnd(bool positive, int32_t *trigger) {
-  const double limit = HOME_MAX_TRAVEL_MM * USTEP_PER_MM;
-  double travelled = 0;
-  while (!switchPressed(positive ? SW_POS_PIN : SW_NEG_PIN)) {
-    if (pollAbort() || travelled > limit) return false;
-    emitProfile(HOME_CHUNK, positive,
-                HOME_SEEK_MM_S * USTEP_PER_MM / (double)uStepPerDriverStep,
-                HOME_CHUNK, true);
-    travelled += HOME_CHUNK * uStepPerDriverStep;
-  }
+  // One seeking profile that the switch cuts short, as in F0b.  Issuing it
+  // as separate 16-step profiles ramps every chunk from rest and seeks at
+  // ~0.1 mm/s instead of HOME_SEEK_MM_S.
+  if (!switchPressed(positive ? SW_POS_PIN : SW_NEG_PIN))
+    jog(positive ? HOME_MAX_TRAVEL_MM : -HOME_MAX_TRAVEL_MM, HOME_SEEK_MM_S);
+  if (abortRequested || !switchPressed(positive ? SW_POS_PIN : SW_NEG_PIN))
+    return false;
   int32_t sum = 0;
   for (uint8_t touch = 0; touch < HOME_TOUCHES; ++touch) {
     jog(positive ? -HOME_BACKOFF_MM : HOME_BACKOFF_MM, HOME_SEEK_MM_S);
@@ -368,15 +377,10 @@ bool homeAndCentre() {
   positionArmed = false;
   if (!homeEnd(false, &negTrigger)) return false;
   homeNegMscnt = (uint16_t)driver.MSCNT();
-  int32_t span = 0;
-  const double limit = HOME_MAX_TRAVEL_MM * USTEP_PER_MM;
-  while (!switchPressed(SW_POS_PIN)) {
-    if (pollAbort() || span > limit) return false;
-    emitProfile(HOME_CHUNK, true,
-                HOME_SEEK_MM_S * USTEP_PER_MM / (double)uStepPerDriverStep,
-                HOME_CHUNK, true);
-    span += HOME_CHUNK * uStepPerDriverStep;
-  }
+  const int32_t crossStart = positionU;
+  if (!switchPressed(SW_POS_PIN)) jog(HOME_MAX_TRAVEL_MM, HOME_SEEK_MM_S);
+  if (abortRequested || !switchPressed(SW_POS_PIN)) return false;
+  const int32_t span = positionU - crossStart;
   if (!homeEnd(true, &posTrigger)) return false;
   homePosMscnt = (uint16_t)driver.MSCNT();
   Serial.printf("# HOMED,travel_mm=%.4f,soft_mm=%.3f..%.3f\n",
@@ -616,8 +620,7 @@ void rateSelfTest() {
   const uint16_t mscntAfter = (uint16_t)driver.MSCNT();
   Serial.printf("# RATE_TEST,target_hz=%.0f,pulses=%lu,done=%lu,"
                 "elapsed_us=%lu,achieved_hz=%.0f,mscnt_before=%u,"
-                "mscnt_after=%u,mscnt_restored=%u,moved=0
-",
+                "mscnt_after=%u,mscnt_restored=%u,moved=0\n",
                 wanted, (unsigned long)pulses, (unsigned long)done,
                 (unsigned long)(t1 - t0),
                 done ? done * 1e6 / (double)(t1 - t0) : 0.0,
