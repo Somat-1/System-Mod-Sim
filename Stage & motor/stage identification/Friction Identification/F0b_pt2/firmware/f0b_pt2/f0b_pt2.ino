@@ -618,13 +618,31 @@ void rateSelfTest() {
   digitalWrite(EN_PIN, LOW);
   positionU = savedPosition;
   const uint16_t mscntAfter = (uint16_t)driver.MSCNT();
-  Serial.printf("# RATE_TEST,target_hz=%.0f,pulses=%lu,done=%lu,"
-                "elapsed_us=%lu,achieved_hz=%.0f,mscnt_before=%u,"
-                "mscnt_after=%u,mscnt_restored=%u,moved=0\n",
-                wanted, (unsigned long)pulses, (unsigned long)done,
-                (unsigned long)(t1 - t0),
-                done ? done * 1e6 / (double)(t1 - t0) : 0.0,
-                mscntBefore, mscntAfter, mscntBefore == mscntAfter);
+  // Judge the train against the time its own symbols should take: dividing
+  // the pulse count by the elapsed time counts the 40 mm/s^2 ramps too, and
+  // caps out near 42 kHz however good the train is.  The cruise rate is what
+  // the 1 us period rounding leaves of the target (51.2 kHz -> 20 us, 50 kHz).
+  uint32_t nAccel = (uint32_t)(wanted * wanted / (2.0 * ACCEL_U_S2));
+  if (2 * nAccel > pulses) nAccel = pulses / 2;
+  double expectedUs = 0.0;
+  for (uint32_t i = 0; i < pulses; ++i) {
+    double rate = wanted;
+    if (i < nAccel) rate = sqrt(2.0 * ACCEL_U_S2 * (double)(i + 1));
+    else if (i >= pulses - nAccel) rate = sqrt(2.0 * ACCEL_U_S2 * (double)(pulses - i));
+    uint32_t period = (uint32_t)llround(1000000.0 / rate);
+    if (period < STEP_HIGH_US + 1) period = STEP_HIGH_US + 1;
+    expectedUs += period;
+  }
+  const double cruiseHz = 1000000.0 / (double)llround(1000000.0 / wanted);
+  const double ratio = (t1 > t0) ? expectedUs / (double)(t1 - t0) : 0.0;
+  const bool pass = done == pulses && ratio >= 0.98 && mscntBefore == mscntAfter;
+  Serial.printf("# RATE_TEST,target_hz=%.0f,cruise_hz=%.0f,pulses=%lu,done=%lu,"
+                "elapsed_us=%lu,expected_us=%.0f,timing_ratio=%.4f,"
+                "mscnt_before=%u,mscnt_after=%u,mscnt_restored=%u,moved=0,"
+                "pass=%u\n",
+                wanted, cruiseHz, (unsigned long)pulses, (unsigned long)done,
+                (unsigned long)(t1 - t0), expectedUs, ratio,
+                mscntBefore, mscntAfter, mscntBefore == mscntAfter, pass);
   applyMres(saved, &before, &after, &chop);
   unsafeFault = false;                         // the test is not a run fault
 }

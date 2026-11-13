@@ -1,23 +1,23 @@
 {
  "experiment": "F0b_pt2",
- "segments": 901,
+ "segments": 1149,
  "arrivals": 248,
  "marks": 248,
  "mres_switches": 13,
- "duration_min": 24.380998705991693,
+ "duration_min": 42.154332039325034,
  "gate_min": 52.0,
- "margin_to_gate_min": 27.619001294008307,
+ "margin_to_gate_min": 9.845667960674966,
  "blocks_min": {
-  "R1": 2.6226666666666665,
-  "M": 12.918748705991694,
-  "V": 6.216916666666667,
-  "R3": 2.6226666666666665
+  "R1": 2.9093333333333335,
+  "M": 27.252082039325032,
+  "V": 9.083583333333333,
+  "R3": 2.9093333333333335
  },
  "fastest_step_rate_hz": 51200.0,
  "slowest_step_rate_hz": 256.0,
  "m_speed_mm_s": 2.0,
- "config_sha256": "01ef4cc5063dbe2c3fd3bfbcba4a9bc9bca80acf448052271b3d4b8c6f96edcd",
- "table_sha256": "d69c6de319069a4d6dc50b33448766d3db37137e06906c04be8e319df3a0dbac",
+ "config_sha256": "da21788eb285afa2d8e6cf27a13e8da40a6622f46b3e66c94deb86a593a5700d",
+ "table_sha256": "3298f8d319dcd9492855c32759569eee88666c503c7485b70e93566e776bfbe0",
  "checks": {
   "all_targets_divisible_at_their_mres": true,
   "all_turning_points_on_the_coarse_grid": true,

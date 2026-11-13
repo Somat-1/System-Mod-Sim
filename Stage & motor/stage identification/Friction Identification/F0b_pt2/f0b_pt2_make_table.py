@@ -127,14 +127,20 @@ class Session:
         self.add(kind, target_u, rate_mm_s=mm_s, side=side, tag=tag)
 
     def stop(self, side: int, tag: str) -> None:
-        """A settle and a record window, both measured from the last edge."""
+        """Settle (W1, W2 inside it), settled window, guard: all from the last edge."""
         c = self.c
         self.add(DWELL, self.u, end_offset_ms=c["settle_ms"], side=side,
                  tag=tag + " settle", duration_ms=c["settle_ms"])
         self.add(MARK, self.u, end_offset_ms=c["settle_ms"] + c["record_ms"],
                  side=side, tag=tag + " record", duration_ms=c["record_ms"])
+        mark_row = len(self.segs) - 1
+        # Nothing moves for guard_ms after the settled window, so a window
+        # that the clock alignment places late still reads standing stage.
+        self.add(DWELL, self.u,
+                 end_offset_ms=c["settle_ms"] + c["record_ms"] + c["guard_ms"],
+                 side=side, tag=tag + " guard", duration_ms=c["guard_ms"])
         self.arrivals.append({
-            "row": len(self.segs) - 1, "block": self.block,
+            "row": mark_row, "block": self.block,
             "visit": self.visit, "mres": self.mres,
             "side": SIDE_NAMES[side], "u": self.u,
             "mm": self.u / self.c["ustep_per_mm"], "tag": tag,

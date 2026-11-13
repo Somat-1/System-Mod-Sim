@@ -6,7 +6,52 @@ exactly those three factors — resolution, settle time, approach speed — one 
 a time in one session, so the 30 % gap is attributed rather than argued about.
 The procedure is [`F0b_pt2_procedure.md`](F0b_pt2_procedure.md).
 
-**Status: sequence generated and firmware written. Not run, not compiled.**
+**Status: run once on 12 Nov (complete, but the windows did not settle).
+Sequence revised for a second run. Compiled; not yet run.**
+
+## Revision for the second run
+
+In the first run every arrival had a 2.0 s settle and a 0.5 s mark. The mark
+ended at the moment the next move began, and the analysis read W1
+(0.3–0.5 s) and W2 (2.0–2.5 s). Under the 20 nm/s settling screen, W2
+passed at about 75 % in M and almost nowhere in V. There were three
+problems:
+
+1. **W1 was screened.** At 0.3–0.5 s after the stop the stage is still
+   creeping at about 100–150 nm/s, and no pause length changes that, because
+   W1 is fixed relative to the stop. W1 measures the creep. It is a
+   measurement, not a settled reading.
+2. **W2 was marginal.** The log creep fitted to F1 (x = a·ln t) still gives
+   about 20 nm/s at 2.0–2.5 s after a saturated reversal.
+3. **No guard before the next move.** The scope and ESP clocks are aligned by
+   a single offset (`analysis/run_data.py`, `best_lag`), so a clock-rate
+   error grows through the session. A window that ends exactly where the next
+   move starts picks up that move once the error is a few tens of ms. This
+   hits V hardest, because V is the late block.
+
+The revised stop, all offsets measured from the last step edge:
+
+| Window | Offset from last edge | Use |
+|---|---|---|
+| W1 | 0.3–0.5 s | creep measurement, **not screened** |
+| W2 | 2.0–2.5 s | same window as the first run, for comparison, **not screened** |
+| **W3** | **6.0–6.5 s** | **the settled reading; the only window screened** (the MARK) |
+| guard | 6.5–6.8 s | nothing moves; absorbs up to ~110 ppm of clock-rate error over the session |
+
+Under log creep, W3 has 2.8 times less slope than W2. A turn that read
+20–55 nm/s at W2 should pass at W3. One stop contains all three windows, so
+the run measures the creep curve of every arrival as well as settling it.
+
+- **Session:** 1149 segments, 248 arrivals, **42.2 min**, inside the 52 min
+  gate, 58 min watchdog and 60 min record. The checker passes 31/31.
+- **Self-test `c` fixed:** the test now compares the measured time with the
+  expected time of the same symbols, and reports the real cruise rate (50.0 kHz
+  for a 51.2 kHz target, because of the 1 µs period rounding) and `pass=1/0`.
+  The first run's bench reading gives a timing ratio of 0.991, a pass.
+- **Still recommended in the analysis:** fit a clock rate as well as an
+  offset when aligning (lag at the start and at the end of the run, both
+  well defined by R1 and R3). The guard makes the sequence safe without this
+  fit, but the windows land more accurately with it.
 
 ## Files
 
@@ -27,7 +72,7 @@ python3 f0b_pt2_make_table.py        # table, arrivals, summary, firmware header
 python3 check_f0b_pt2_sequence.py    # the pre-run list, from the files
 ```
 
-## The session as generated
+## The session as first generated (12 Nov run)
 
 **901 segments, 248 arrivals, 24.4 min** against a 52 min gate — 27.6 minutes
 of margin, so the §4 fallback of dropping the 1/32 and 1/128 visits is not

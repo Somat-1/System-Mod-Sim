@@ -28,10 +28,13 @@
   "max_step_rate_hz": 51200,
   "rmt_max_period_us": 30000,
 
-  "settle_ms": 2000,
+  "settle_ms": 6000,
   "record_ms": 500,
-  "_window_note": "Both are offsets from t_last_edge, not durations from when the segment was issued: DWELL ends at t_last_edge + settle_ms, MARK at t_last_edge + settle_ms + record_ms. The analysis reads 0.3-0.5 s inside the settle and 2.0-2.5 s as the mark.",
+  "guard_ms": 300,
+  "_window_note": "Offsets from t_last_edge, not durations from when the segment was issued: DWELL ends at t_last_edge + settle_ms, MARK (the settled window) at + settle_ms + record_ms, and a guard DWELL at + settle_ms + record_ms + guard_ms, so nothing moves until 6.8 s after the stop. Inside the settle the analysis reads W1 = early_window_ms and W2 = mid_window_ms, the two windows of the first run, as measurements; only the settled window W3 (the MARK) is screened.",
   "early_window_ms": [300, 500],
+  "mid_window_ms": [2000, 2500],
+  "_settling_note": "First run: 2.0 s settle and 0.5 s mark, the mark ending exactly where the next move began. W2 passed the 20 nm/s screen at about 75 % in M and almost nowhere in V. Two causes: creep still at ~20 nm/s at 2.0-2.5 s after a saturated reversal, and the scope/ESP clock offset growing through the session with no guard before the next move, which matters most for V, the late block. W3 at 6.0-6.5 s cuts a log-creep slope by 2.8x against W2 (slope ~ 1/t), and the 300 ms guard absorbs a clock-rate error of up to ~110 ppm over the 45 min session.",
 
   "mres_levels": [16, 32, 64, 128, 256],
   "m_visit_order": [16, 32, 64, 128, 256, 256, 128, 64, 32, 16],

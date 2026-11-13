@@ -122,19 +122,27 @@ def main() -> int:
         f"{sum(1 for r in table if r['side'] != 'none')} declared")
 
     # -- windows measured from the last edge -----------------------------
-    settle, record = c["settle_ms"], c["record_ms"]
+    settle, record, guard = c["settle_ms"], c["record_ms"], c["guard_ms"]
+    w1, w2 = c["early_window_ms"], c["mid_window_ms"]
     dwells = [r for r in table if r["type"] == "dwell"]
-    marks = [r for r in table if r["type"] == "mark"]
+    marks = [i for i, r in enumerate(table) if r["type"] == "mark"]
+    settles = [r for r in dwells if r["end_offset_ms"] == settle]
+    guards = [r for r in dwells if r["end_offset_ms"] == settle + record + guard]
     add("settle_offsets_from_last_edge",
-        all(r["end_offset_ms"] == settle for r in dwells),
-        f"{len(dwells)} settles at {settle} ms")
+        len(settles) + len(guards) == len(dwells) and len(settles) == len(marks),
+        f"{len(settles)} settles at {settle} ms")
     add("record_offsets_from_last_edge",
-        all(r["end_offset_ms"] == settle + record for r in marks),
-        f"{len(marks)} marks at {settle + record} ms")
-    add("both_analysis_windows_fit",
-        c["early_window_ms"][1] <= settle and settle + record >= settle + 500,
-        f"{c['early_window_ms'][0]}-{c['early_window_ms'][1]} ms and "
-        f"{settle}-{settle + record} ms")
+        all(table[i]["end_offset_ms"] == settle + record for i in marks),
+        f"{len(marks)} settled windows at {settle}-{settle + record} ms")
+    add("every_settled_window_followed_by_guard",
+        all(i + 1 < len(table) and table[i + 1]["type"] == "dwell"
+            and table[i + 1]["end_offset_ms"] == settle + record + guard
+            for i in marks) and guard >= 200,
+        f"{len(guards)} guards, nothing moves until {settle + record + guard} ms")
+    add("all_analysis_windows_fit",
+        w1[1] <= w2[0] and w2[1] <= settle and record >= 300,
+        f"W1 {w1[0]}-{w1[1]}, W2 {w2[0]}-{w2[1]} ms inside the settle; "
+        f"W3 {settle}-{settle + record} ms")
 
     # -- MRES switching ---------------------------------------------------
     switches = [i for i, r in enumerate(table) if r["type"] == "setmres"]
